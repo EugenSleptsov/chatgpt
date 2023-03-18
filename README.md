@@ -18,7 +18,7 @@ To set up and run this bot, you'll need:
 go build -o gptbot
 ```
 
-3. Create a `bot.conf.sample` file to `bot.conf` in the project root directory and add your Telegram bot token, OpenAI API key, and other configuration values:
+3. Rename a `bot.conf.sample` file to `bot.conf` in the project root directory and add your Telegram bot token, OpenAI API key, and other configuration values:
 ```
 telegram_token = YOUR_TELEGRAM_BOT_TOKEN
 gpt_token = YOUR_OPENAI_API_KEY
