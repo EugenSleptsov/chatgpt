@@ -1,0 +1,5 @@
+telegram_token=YOUR_TG_TOKEN
+gpt_token=YOUR_OPENAI_TOKEN
+timeout_value=10
+max_messages=10
+admin_id=
