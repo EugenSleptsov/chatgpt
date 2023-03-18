@@ -55,8 +55,8 @@ func (botInstance *Bot) Answer(chatID int64, replyTo int, text string) {
 	}
 }
 
-func (botInstance *Bot) Admin(message string, adminId int64) {
-	msg := tgbotapi.NewMessage(adminId, message)
+func (botInstance *Bot) Admin(message string, adminId int) {
+	msg := tgbotapi.NewMessage(int64(adminId), message)
 	_, err := botInstance.api.Send(msg)
 	if err != nil {
 		log.Printf("Error sending message: %v", err)

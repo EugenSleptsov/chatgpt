@@ -14,11 +14,12 @@ import (
 var chatHistory = make(map[int64][]gpt.Message)
 
 type Config struct {
-	TelegramToken string
-	GPTToken      string
-	TimeoutValue  int
-	MaxMessages   int
-	AdminId       int64
+	TelegramToken   string
+	GPTToken        string
+	TimeoutValue    int
+	MaxMessages     int
+	AdminId         int
+	IgnoreReportIds []int
 }
 
 func main() {
@@ -109,6 +110,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	}
 
 	chatID := update.Message.Chat.ID
+	fromID := update.Message.From.ID
 
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
@@ -135,13 +137,29 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	log.Printf("[%s] %s", "ChatGPT", response)
 	bot.Answer(chatID, update.Message.MessageID, response)
 	if config.AdminId > 0 {
-		if chatID != config.AdminId {
-			adminMessage := fmt.Sprintf("[User: %s %s (%s, ID: %d)] %s\n[ChatGPT] %s\n",
-				update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID, update.Message.Text,
-				response)
+		if fromID != config.AdminId {
+			var adminMessage string
+			if !isIDInList(fromID, config.IgnoreReportIds) {
+				adminMessage = fmt.Sprintf("[User: %s %s (%s, ID: %d)] %s\n[ChatGPT] %s\n",
+					update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID, update.Message.Text,
+					response)
+			} else {
+				adminMessage = fmt.Sprintf("[User: %s %s (%s, ID: %d)] asked ChatGPT",
+					update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID)
+			}
 			bot.Admin(adminMessage, config.AdminId)
 		}
 	}
+}
+
+// Helper function to check if an ID is in a list of IDs
+func isIDInList(id int, idList []int) bool {
+	for _, listID := range idList {
+		if id == listID {
+			return true
+		}
+	}
+	return false
 }
 
 func readConfig(filename string) (*Config, error) {
@@ -170,19 +188,32 @@ func readConfig(filename string) (*Config, error) {
 		log.Fatalf("Error converting max_messages to integer: %v", err)
 	}
 
-	var adminID int64
+	var adminID int
 	if config["admin_id"] != "" {
-		adminID, err = strconv.ParseInt(config["admin_id"], 10, 64)
+		adminID, err = strconv.Atoi(config["admin_id"])
 		if err != nil {
 			log.Fatalf("Error converting admin_id to integer: %v", err)
 		}
 	}
 
+	ignoreReportIds := make([]int, 0)
+	if config["ignore_report_ids"] != "" {
+		ids := strings.Split(config["ignore_report_ids"], ",")
+		for _, id := range ids {
+			parsedID, err := strconv.Atoi(strings.TrimSpace(id))
+			if err != nil {
+				log.Fatalf("Error converting ignore_report_ids to integer: %v", err)
+			}
+			ignoreReportIds = append(ignoreReportIds, parsedID)
+		}
+	}
+
 	return &Config{
-		TelegramToken: config["telegram_token"],
-		GPTToken:      config["gpt_token"],
-		TimeoutValue:  timeoutValue,
-		MaxMessages:   maxMessages,
-		AdminId:       adminID,
+		TelegramToken:   config["telegram_token"],
+		GPTToken:        config["gpt_token"],
+		TimeoutValue:    timeoutValue,
+		MaxMessages:     maxMessages,
+		AdminId:         adminID,
+		IgnoreReportIds: ignoreReportIds,
 	}, scanner.Err()
 }
