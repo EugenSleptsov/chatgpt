@@ -37,10 +37,12 @@ After building the project and creating the bot.conf file, run the bot:
 
 The bot should now be running, and you can interact with it on Telegram. Send the `/start` command to begin using the bot.
 
-Bot Commands
+## Bot Commands
 * /start - Sends a welcome message and describes the bot's purpose
 * /help - Shows a list of available commands and their descriptions
 * /clear - Clears the chat history for the current chat
 * /history - Shows the current chat history in a formatted output
-Contributing
+
+
+## Contributing
 Contributions are welcome! Please feel free to submit issues or pull requests for enhancements or bug fixes.
