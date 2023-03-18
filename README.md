@@ -25,10 +25,10 @@ gpt_token = YOUR_OPENAI_API_KEY
 timeout_value = 60
 max_messages = 10
 admin_id = YOUR_TELEGRAM_ADMIN_USER_ID (optional)
-ignore_report_ids= = 
+ignore_report_ids = COMMA_SEPARATED_USER_IDS_TO_IGNORE (optional)
 ```
 
-Make sure to replace YOUR_TELEGRAM_BOT_TOKEN, YOUR_OPENAI_API_KEY, and other placeholders with your actual values.
+Replace YOUR_TELEGRAM_BOT_TOKEN with your actual Telegram bot token and YOUR_OPENAI_API_KEY with your OpenAI API key. Additionally, you can set the timeout_value, max_messages, admin_id, and ignore_report_ids to customize the bot's behavior. The admin_id and ignore_report_ids are optional and can be left empty if not needed.
 
 ## Running the bot
 After building the project and creating the bot.conf file, run the bot:
