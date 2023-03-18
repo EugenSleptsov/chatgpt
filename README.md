@@ -25,6 +25,7 @@ gpt_token = YOUR_OPENAI_API_KEY
 timeout_value = 60
 max_messages = 10
 admin_id = YOUR_TELEGRAM_ADMIN_USER_ID (optional)
+ignore_report_ids= = 
 ```
 
 Make sure to replace YOUR_TELEGRAM_BOT_TOKEN, YOUR_OPENAI_API_KEY, and other placeholders with your actual values.
