@@ -46,10 +46,9 @@ func (botInstance *Bot) GetUpdateChannel(timeout int) UpdatesChannel {
 	return ourChannel
 }
 
-func (botInstance *Bot) Answer(chatId int64, replyTo int, message string) {
-	msg := tgbotapi.NewMessage(chatId, message)
+func (botInstance *Bot) Answer(chatID int64, replyTo int, text string) {
+	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ReplyToMessageID = replyTo
-
 	_, err := botInstance.api.Send(msg)
 	if err != nil {
 		log.Printf("Error sending message: %v", err)

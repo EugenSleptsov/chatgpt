@@ -48,7 +48,7 @@ func main() {
 			command := update.Message.Command()
 			switch command {
 			case "start":
-				bot.Answer(chatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам!")
+				bot.Answer(chatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help")
 			case "clear":
 				chatHistory[chatID] = nil
 				bot.Answer(chatID, update.Message.MessageID, "История разговоров была очищена.")
@@ -124,7 +124,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		return
 	}
 
-	response := "I'm sorry, I don't have an answer for that."
+	response := "I'm sorry, there was a problem in answering. You can try again"
 	if len(responsePayload.Choices) > 0 {
 		response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
 	}
