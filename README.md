@@ -6,7 +6,7 @@ This repository contains the source code for a Telegram bot that utilizes OpenAI
 
 To set up and run this bot, you'll need:
 
-- Go (version 1.15 or higher)
+- Go (version 1.18 or higher)
 - A Telegram bot token
 - An OpenAI API key
 
