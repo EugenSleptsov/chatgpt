@@ -218,6 +218,11 @@ func readConfig(filename string) (*Config, error) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "#") {
+			continue // Ignore comment lines
+		}
+
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) == 2 {
 			config[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
