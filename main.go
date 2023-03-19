@@ -82,8 +82,18 @@ func main() {
 /help - Показывает список доступных команд и их описание.
 /start - Отправляет приветственное сообщение, описывающее цель бота.
 /clear - Очищает историю разговоров для текущего чата.
-/history - Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании.`
+/history - Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании.
+/translate <text> - Переводит <text> на любом языке на английский язык`
 				bot.Answer(chatID, update.Message.MessageID, helpText)
+
+			case "translate":
+				if len(update.Message.CommandArguments()) == 0 {
+					bot.Answer(chatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
+				} else {
+					prompt := update.Message.CommandArguments()
+					go translateText(bot, chatID, update.Message.MessageID, gptClient, prompt) // Launch a goroutine for translation
+				}
+
 			default:
 				if command == "reload" && fromID == config.AdminId {
 					config, err = readConfig("bot.conf")
@@ -132,6 +142,28 @@ func formatHistory(history []gpt.Message) []string {
 	}
 
 	return messages
+}
+
+func translateText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gpt.GPTClient, prompt string) {
+	translationPrompt := fmt.Sprintf("Translate the following text to English: \"%s\". You should answer only with translated text without explanations and quotation marks	", prompt)
+
+	responsePayload, err := gptClient.CallGPT35([]gpt.Message{
+		{Role: "system", Content: "You are a helpful assistant that translates."},
+		{Role: "user", Content: translationPrompt},
+	})
+
+	if err != nil {
+		log.Printf("Error: %v", err)
+		return
+	}
+
+	response := "I'm sorry, there was a problem translating your text. You can try again."
+	if len(responsePayload.Choices) > 0 {
+		response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
+	}
+
+	log.Printf("[%s] %s", "ChatGPT", response)
+	bot.Answer(chatID, messageID, response)
 }
 
 func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config) {
