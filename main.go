@@ -95,13 +95,71 @@ func main() {
 				}
 
 			default:
-				if command == "reload" && fromID == config.AdminId {
-					config, err = readConfig("bot.conf")
-					if err != nil {
-						log.Fatalf("Error reading bot.conf: %v", err)
-					}
+				if fromID == config.AdminId {
+					switch command {
+					case "reload":
+						config, err = readConfig("bot.conf")
+						if err != nil {
+							log.Fatalf("Error reading bot.conf: %v", err)
+						}
 
-					bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
+						bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
+
+					case "adduser":
+						if len(update.Message.CommandArguments()) == 0 {
+							bot.Answer(chatID, update.Message.MessageID, "Please provide a user id to add")
+						} else {
+							userId, err := strconv.Atoi(update.Message.CommandArguments())
+							if err != nil {
+								bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
+								break
+							}
+
+							for _, auth := range config.AuthorizedUsers {
+								if auth == userId {
+									bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User already added: %d", userId))
+									break
+								}
+							}
+
+							config.AuthorizedUsers = append(config.AuthorizedUsers, userId)
+							err = updateConfig("bot.conf", config)
+							if err != nil {
+								log.Fatalf("Error updating bot.conf: %v", err)
+							}
+
+							bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User successfully added: %d", userId))
+						}
+
+					case "removeuser":
+						if len(update.Message.CommandArguments()) == 0 {
+							bot.Answer(chatID, update.Message.MessageID, "Please provide a user id to remove")
+						} else {
+							userId, err := strconv.Atoi(update.Message.CommandArguments())
+							if err != nil {
+								bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
+								break
+							}
+
+							newList := make([]int, 0)
+							for _, auth := range config.AuthorizedUsers {
+								if auth == userId {
+									bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
+									break
+								} else {
+									newList = append(newList, auth)
+								}
+							}
+
+							config.AuthorizedUsers = newList
+							err = updateConfig("bot.conf", config)
+							if err != nil {
+								log.Fatalf("Error updating bot.conf: %v", err)
+							}
+
+							bot.Answer(chatID, update.Message.MessageID, "Command successfully ended")
+						}
+					}
 				} else {
 					bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
 				}
@@ -308,4 +366,50 @@ func readConfig(filename string) (*Config, error) {
 		IgnoreReportIds: ignoreReportIds,
 		AuthorizedUsers: authorizedUserIDs,
 	}, scanner.Err()
+}
+
+func updateConfig(filename string, config *Config) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var lines []string
+	authorizedUsersLine := fmt.Sprintf("authorized_users = %s", strings.Join(strings.Split(strings.Trim(strings.Trim(fmt.Sprint(config.AuthorizedUsers), "[]"), " "), " "), ","))
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(strings.TrimSpace(line), "authorized_users") {
+			lines = append(lines, authorizedUsersLine)
+		} else {
+			lines = append(lines, line)
+		}
+	}
+
+	if scanner.Err() != nil {
+		return scanner.Err()
+	}
+
+	outputFile, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer outputFile.Close()
+
+	writer := bufio.NewWriter(outputFile)
+	for _, line := range lines {
+		_, err := writer.WriteString(line + "\n")
+		if err != nil {
+			return err
+		}
+	}
+
+	err = writer.Flush()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
