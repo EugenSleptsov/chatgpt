@@ -4,3 +4,4 @@ timeout_value=10
 max_messages=10
 admin_id=
 ignore_report_ids=
+authorized_users=

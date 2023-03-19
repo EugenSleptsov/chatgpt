@@ -20,11 +20,12 @@ type Config struct {
 	MaxMessages     int
 	AdminId         int
 	IgnoreReportIds []int
+	AuthorizedUsers []int
 }
 
 func (c *Config) String() string {
-	return fmt.Sprintf("Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n}",
-		c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds)
+	return fmt.Sprintf("Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUsers: %v,\n}",
+		c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUsers)
 }
 
 func main() {
@@ -49,6 +50,18 @@ func main() {
 
 		chatID := update.Message.Chat.ID
 		fromID := update.Message.From.ID
+
+		if !isUserAuthorized(fromID, config.AuthorizedUsers) {
+			bot.Answer(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+			log.Printf("Unauthorized access attempt by user %d: %s %s (%s)", fromID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
+
+			// Notify the admin
+			if config.AdminId > 0 {
+				adminMessage := fmt.Sprintf("Unauthorized access attempt by user %d: %s %s (%s)", fromID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
+				bot.Admin(adminMessage, config.AdminId)
+			}
+			continue
+		}
 
 		// Check for commands
 		if update.Message.IsCommand() {
@@ -179,6 +192,21 @@ func isIDInList(id int, idList []int) bool {
 	return false
 }
 
+func isUserAuthorized(userID int, authorizedUsers []int) bool {
+	// If no authorized users are provided, make the bot public
+	if len(authorizedUsers) == 0 {
+		return true
+	}
+
+	// Check if the user is in the list of authorized users
+	for _, authorizedUser := range authorizedUsers {
+		if userID == authorizedUser {
+			return true
+		}
+	}
+	return false
+}
+
 func readConfig(filename string) (*Config, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -225,6 +253,15 @@ func readConfig(filename string) (*Config, error) {
 		}
 	}
 
+	authorizedUsers := strings.Split(config["authorized_users"], ",")
+	var authorizedUserIDs []int
+	for _, idStr := range authorizedUsers {
+		id, err := strconv.Atoi(strings.TrimSpace(idStr))
+		if err == nil {
+			authorizedUserIDs = append(authorizedUserIDs, id)
+		}
+	}
+
 	return &Config{
 		TelegramToken:   config["telegram_token"],
 		GPTToken:        config["gpt_token"],
@@ -232,5 +269,6 @@ func readConfig(filename string) (*Config, error) {
 		MaxMessages:     maxMessages,
 		AdminId:         adminID,
 		IgnoreReportIds: ignoreReportIds,
+		AuthorizedUsers: authorizedUserIDs,
 	}, scanner.Err()
 }
