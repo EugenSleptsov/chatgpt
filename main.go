@@ -22,6 +22,11 @@ type Config struct {
 	IgnoreReportIds []int
 }
 
+func (c *Config) String() string {
+	return fmt.Sprintf("Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n}",
+		c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds)
+}
+
 func main() {
 	config, err := readConfig("bot.conf")
 	if err != nil {
@@ -43,6 +48,7 @@ func main() {
 		}
 
 		chatID := update.Message.Chat.ID
+		fromID := update.Message.From.ID
 
 		// Check for commands
 		if update.Message.IsCommand() {
@@ -65,6 +71,17 @@ func main() {
 /clear - Очищает историю разговоров для текущего чата.
 /history - Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании.`
 				bot.Answer(chatID, update.Message.MessageID, helpText)
+			default:
+				if command == "reload" && fromID == config.AdminId {
+					config, err = readConfig("bot.conf")
+					if err != nil {
+						log.Fatalf("Error reading bot.conf: %v", err)
+					}
+
+					bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
+				} else {
+					bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
+				}
 			}
 
 			continue
