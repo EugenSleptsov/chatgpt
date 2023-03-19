@@ -45,6 +45,7 @@ The bot should now be running, and you can interact with it on Telegram. Send th
 * /clear - Clears the chat history for the current chat
 * /history - Shows the current chat history in a formatted output
 * /reload (admin only) - Reloads config in case if you have changed parameters (for example, added new authorized users)
+* /translate <text> - Translates <text> from any language to English
 
 
 ## Contributing
