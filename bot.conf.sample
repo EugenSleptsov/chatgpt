@@ -7,3 +7,4 @@ ignore_report_ids=
 authorized_users=
 
 #example commentary
+#you can always leave authorized_users empty to make bot public
