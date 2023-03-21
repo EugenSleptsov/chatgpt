@@ -237,7 +237,8 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	// Maintain conversation history
 	chatHistory[chatID] = append(chatHistory[chatID], gpt.Message{Role: "user", Content: update.Message.Text})
 	if len(chatHistory[chatID]) > config.MaxMessages {
-		chatHistory[chatID] = chatHistory[chatID][1:]
+		excessMessages := len(chatHistory[chatID]) - config.MaxMessages
+		chatHistory[chatID] = chatHistory[chatID][excessMessages:]
 	}
 
 	responsePayload, err := gptClient.CallGPT35(chatHistory[chatID])
