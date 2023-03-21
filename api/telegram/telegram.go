@@ -6,7 +6,8 @@ import (
 )
 
 type Bot struct {
-	api *tgbotapi.BotAPI
+	api      *tgbotapi.BotAPI
+	Username string
 }
 
 type UpdatesChannel <-chan Update
@@ -19,11 +20,11 @@ func NewBot(token string) (*Bot, error) {
 	}
 
 	bot := &Bot{
-		api: api,
+		api:      api,
+		Username: api.Self.UserName,
 	}
 
 	log.Printf("Authorized on account %s", bot.api.Self.UserName)
-
 	return bot, nil
 }
 
