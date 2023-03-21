@@ -14,18 +14,18 @@ import (
 var chatHistory = make(map[int64][]gpt.Message)
 
 type Config struct {
-	TelegramToken   string
-	GPTToken        string
-	TimeoutValue    int
-	MaxMessages     int
-	AdminId         int
-	IgnoreReportIds []int
-	AuthorizedUsers []int
+	TelegramToken     string
+	GPTToken          string
+	TimeoutValue      int
+	MaxMessages       int
+	AdminId           int
+	IgnoreReportIds   []int
+	AuthorizedUserIds []int
 }
 
 func (c *Config) String() string {
-	return fmt.Sprintf("Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUsers: %v,\n}",
-		c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUsers)
+	return fmt.Sprintf("Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUserIds: %v,\n}",
+		c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUserIds)
 }
 
 func main() {
@@ -44,130 +44,6 @@ func main() {
 	}
 
 	for update := range bot.GetUpdateChannel(config.TimeoutValue) {
-		if update.Message == nil {
-			continue
-		}
-
-		chatID := update.Message.Chat.ID
-		fromID := update.Message.From.ID
-
-		if !isUserAuthorized(fromID, config.AuthorizedUsers) {
-			bot.Answer(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
-			log.Printf("Unauthorized access attempt by user %d: %s %s (%s)", fromID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
-
-			// Notify the admin
-			if config.AdminId > 0 {
-				adminMessage := fmt.Sprintf("Unauthorized access attempt by user %d: %s %s (%s)", fromID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
-				bot.Admin(adminMessage, config.AdminId)
-			}
-			continue
-		}
-
-		// Check for commands
-		if update.Message.IsCommand() {
-			command := update.Message.Command()
-			switch command {
-			case "start":
-				bot.Answer(chatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help")
-			case "clear":
-				chatHistory[chatID] = nil
-				bot.Answer(chatID, update.Message.MessageID, "История разговоров была очищена.")
-			case "history":
-				historyMessages := formatHistory(chatHistory[chatID])
-				for _, message := range historyMessages {
-					bot.Answer(chatID, update.Message.MessageID, message)
-				}
-			case "help":
-				helpText := `Список доступных команд и их описание:
-/help - Показывает список доступных команд и их описание.
-/start - Отправляет приветственное сообщение, описывающее цель бота.
-/clear - Очищает историю разговоров для текущего чата.
-/history - Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании.
-/translate <text> - Переводит <text> на любом языке на английский язык`
-				bot.Answer(chatID, update.Message.MessageID, helpText)
-
-			case "translate":
-				if len(update.Message.CommandArguments()) == 0 {
-					bot.Answer(chatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
-				} else {
-					prompt := update.Message.CommandArguments()
-					go translateText(bot, chatID, update.Message.MessageID, gptClient, prompt) // Launch a goroutine for translation
-				}
-
-			default:
-				if fromID == config.AdminId {
-					switch command {
-					case "reload":
-						config, err = readConfig("bot.conf")
-						if err != nil {
-							log.Fatalf("Error reading bot.conf: %v", err)
-						}
-
-						bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
-
-					case "adduser":
-						if len(update.Message.CommandArguments()) == 0 {
-							bot.Answer(chatID, update.Message.MessageID, "Please provide a user id to add")
-						} else {
-							userId, err := strconv.Atoi(update.Message.CommandArguments())
-							if err != nil {
-								bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
-								break
-							}
-
-							for _, auth := range config.AuthorizedUsers {
-								if auth == userId {
-									bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User already added: %d", userId))
-									break
-								}
-							}
-
-							config.AuthorizedUsers = append(config.AuthorizedUsers, userId)
-							err = updateConfig("bot.conf", config)
-							if err != nil {
-								log.Fatalf("Error updating bot.conf: %v", err)
-							}
-
-							bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User successfully added: %d", userId))
-						}
-
-					case "removeuser":
-						if len(update.Message.CommandArguments()) == 0 {
-							bot.Answer(chatID, update.Message.MessageID, "Please provide a user id to remove")
-						} else {
-							userId, err := strconv.Atoi(update.Message.CommandArguments())
-							if err != nil {
-								bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
-								break
-							}
-
-							newList := make([]int, 0)
-							for _, auth := range config.AuthorizedUsers {
-								if auth == userId {
-									bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
-									break
-								} else {
-									newList = append(newList, auth)
-								}
-							}
-
-							config.AuthorizedUsers = newList
-							err = updateConfig("bot.conf", config)
-							if err != nil {
-								log.Fatalf("Error updating bot.conf: %v", err)
-							}
-
-							bot.Answer(chatID, update.Message.MessageID, "Command successfully ended")
-						}
-					}
-				} else {
-					bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
-				}
-			}
-
-			continue
-		}
-
 		go processUpdate(bot, update, gptClient, config) // Launch a goroutine for each update
 	}
 }
@@ -231,6 +107,123 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 
 	chatID := update.Message.Chat.ID
 	fromID := update.Message.From.ID
+
+	if !isUserAuthorized(fromID, config.AuthorizedUserIds) {
+		bot.Answer(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+		log.Printf("Unauthorized access attempt by user %d: %s %s (%s)", fromID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
+
+		// Notify the admin
+		if config.AdminId > 0 {
+			adminMessage := fmt.Sprintf("Unauthorized access attempt by user %d: %s %s (%s)", fromID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
+			bot.Admin(adminMessage, config.AdminId)
+		}
+		return
+	}
+
+	// Check for commands
+	if update.Message.IsCommand() {
+		command := update.Message.Command()
+		switch command {
+		case "start":
+			bot.Answer(chatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help")
+		case "clear":
+			chatHistory[chatID] = nil
+			bot.Answer(chatID, update.Message.MessageID, "История разговоров была очищена.")
+		case "history":
+			historyMessages := formatHistory(chatHistory[chatID])
+			for _, message := range historyMessages {
+				bot.Answer(chatID, update.Message.MessageID, message)
+			}
+		case "help":
+			helpText := `Список доступных команд и их описание:
+/help - Показывает список доступных команд и их описание.
+/start - Отправляет приветственное сообщение, описывающее цель бота.
+/clear - Очищает историю разговоров для текущего чата.
+/history - Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании.
+/translate <text> - Переводит <text> на любом языке на английский язык`
+			bot.Answer(chatID, update.Message.MessageID, helpText)
+
+		case "translate":
+			if len(update.Message.CommandArguments()) == 0 {
+				bot.Answer(chatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
+			} else {
+				prompt := update.Message.CommandArguments()
+				go translateText(bot, chatID, update.Message.MessageID, gptClient, prompt) // Launch a goroutine for translation
+			}
+
+		default:
+			if fromID == config.AdminId {
+				switch command {
+				case "reload":
+					config, err := readConfig("bot.conf")
+					if err != nil {
+						log.Fatalf("Error reading bot.conf: %v", err)
+					}
+
+					bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
+
+				case "adduser":
+					if len(update.Message.CommandArguments()) == 0 {
+						bot.Answer(chatID, update.Message.MessageID, "Please provide a user id to add")
+					} else {
+						userId, err := strconv.Atoi(update.Message.CommandArguments())
+						if err != nil {
+							bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
+							break
+						}
+
+						for _, auth := range config.AuthorizedUserIds {
+							if auth == userId {
+								bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User already added: %d", userId))
+								break
+							}
+						}
+
+						config.AuthorizedUserIds = append(config.AuthorizedUserIds, userId)
+						err = updateConfig("bot.conf", config)
+						if err != nil {
+							log.Fatalf("Error updating bot.conf: %v", err)
+						}
+
+						bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User successfully added: %d", userId))
+					}
+
+				case "removeuser":
+					if len(update.Message.CommandArguments()) == 0 {
+						bot.Answer(chatID, update.Message.MessageID, "Please provide a user id to remove")
+					} else {
+						userId, err := strconv.Atoi(update.Message.CommandArguments())
+						if err != nil {
+							bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
+							break
+						}
+
+						newList := make([]int, 0)
+						for _, auth := range config.AuthorizedUserIds {
+							if auth == userId {
+								bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
+								break
+							} else {
+								newList = append(newList, auth)
+							}
+						}
+
+						config.AuthorizedUserIds = newList
+						err = updateConfig("bot.conf", config)
+						if err != nil {
+							log.Fatalf("Error updating bot.conf: %v", err)
+						}
+
+						bot.Answer(chatID, update.Message.MessageID, "Command successfully ended")
+					}
+				}
+			} else {
+				bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
+			}
+		}
+
+		return
+	}
 
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
@@ -349,9 +342,9 @@ func readConfig(filename string) (*Config, error) {
 		}
 	}
 
-	authorizedUsers := strings.Split(config["authorized_users"], ",")
+	authorizedUsersRaw := strings.Split(config["authorized_user_ids"], ",")
 	var authorizedUserIDs []int
-	for _, idStr := range authorizedUsers {
+	for _, idStr := range authorizedUsersRaw {
 		id, err := strconv.Atoi(strings.TrimSpace(idStr))
 		if err == nil {
 			authorizedUserIDs = append(authorizedUserIDs, id)
@@ -359,13 +352,13 @@ func readConfig(filename string) (*Config, error) {
 	}
 
 	return &Config{
-		TelegramToken:   config["telegram_token"],
-		GPTToken:        config["gpt_token"],
-		TimeoutValue:    timeoutValue,
-		MaxMessages:     maxMessages,
-		AdminId:         adminID,
-		IgnoreReportIds: ignoreReportIds,
-		AuthorizedUsers: authorizedUserIDs,
+		TelegramToken:     config["telegram_token"],
+		GPTToken:          config["gpt_token"],
+		TimeoutValue:      timeoutValue,
+		MaxMessages:       maxMessages,
+		AdminId:           adminID,
+		IgnoreReportIds:   ignoreReportIds,
+		AuthorizedUserIds: authorizedUserIDs,
 	}, scanner.Err()
 }
 
@@ -378,11 +371,11 @@ func updateConfig(filename string, config *Config) error {
 
 	scanner := bufio.NewScanner(file)
 	var lines []string
-	authorizedUsersLine := fmt.Sprintf("authorized_users = %s", strings.Join(strings.Split(strings.Trim(strings.Trim(fmt.Sprint(config.AuthorizedUsers), "[]"), " "), " "), ","))
+	authorizedUsersLine := fmt.Sprintf("authorized_user_ids=%s", strings.Join(strings.Split(strings.Trim(strings.Trim(fmt.Sprint(config.AuthorizedUserIds), "[]"), " "), " "), ","))
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(strings.TrimSpace(line), "authorized_users") {
+		if strings.HasPrefix(strings.TrimSpace(line), "authorized_user_ids") {
 			lines = append(lines, authorizedUsersLine)
 		} else {
 			lines = append(lines, line)
