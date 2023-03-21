@@ -147,8 +147,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 			if len(update.Message.CommandArguments()) == 0 {
 				bot.Answer(chatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
 			} else {
-				prompt := update.Message.CommandArguments()
-				go translateText(bot, chatID, update.Message.MessageID, gptClient, prompt) // Launch a goroutine for translation
+				translateText(bot, chatID, update.Message.MessageID, gptClient, update.Message.CommandArguments())
 			}
 
 		default:
