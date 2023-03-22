@@ -53,29 +53,42 @@ func formatHistory(history []gpt.Message) []string {
 		return []string{"История разговоров пуста."}
 	}
 
-	var formattedHistory strings.Builder
-	var messages []string
+	var historyMessage string
+	var historyMessages []string
 	characterCount := 0
 
 	for i, message := range history {
-		formattedLine := fmt.Sprintf("%d. %s: %s\n", i+1, strings.Title(message.Role), message.Content)
+		formattedLine := fmt.Sprintf("%d. %s: %s\n", i+1, Title(message.Role), message.Content)
 		lineLength := len(formattedLine)
 
 		if characterCount+lineLength > 4096 {
-			messages = append(messages, formattedHistory.String())
-			formattedHistory.Reset()
+			historyMessages = append(historyMessages, historyMessage)
+			historyMessage = ""
 			characterCount = 0
 		}
 
-		formattedHistory.WriteString(formattedLine)
+		historyMessage += formattedLine
 		characterCount += lineLength
 	}
 
-	if formattedHistory.Len() > 0 {
-		messages = append(messages, formattedHistory.String())
+	if len(historyMessage) > 0 {
+		historyMessages = append(historyMessages, historyMessage)
 	}
 
-	return messages
+	return historyMessages
+}
+
+func Title(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+
+	r := []rune(s)
+	if r[0] >= 'a' && r[0] <= 'z' {
+		r[0] = r[0] - 'a' + 'A'
+	}
+
+	return string(r)
 }
 
 func translateText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gpt.GPTClient, prompt string) {
