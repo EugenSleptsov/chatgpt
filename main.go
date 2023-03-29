@@ -97,7 +97,7 @@ func translateText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gp
 	responsePayload, err := gptClient.CallGPT35([]gpt.Message{
 		{Role: "system", Content: "You are a helpful assistant that translates."},
 		{Role: "user", Content: translationPrompt},
-	})
+	}, "gpt-3.5-turbo", 0.6)
 
 	if err != nil {
 		log.Printf("Error: %v", err)
@@ -246,7 +246,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		chatHistory[chatID] = chatHistory[chatID][excessMessages:]
 	}
 
-	responsePayload, err := gptClient.CallGPT35(chatHistory[chatID])
+	responsePayload, err := gptClient.CallGPT35(chatHistory[chatID], "gpt-3.5-turbo", 0.8)
 	if err != nil {
 		log.Printf("Error: %v", err)
 		return
@@ -295,12 +295,7 @@ func isUserAuthorized(userID int, authorizedUsers []int) bool {
 	}
 
 	// Check if the user is in the list of authorized users
-	for _, authorizedUser := range authorizedUsers {
-		if userID == authorizedUser {
-			return true
-		}
-	}
-	return false
+	return isIDInList(userID, authorizedUsers)
 }
 
 func readConfig(filename string) (*Config, error) {

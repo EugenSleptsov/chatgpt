@@ -40,14 +40,14 @@ type GPTClient struct {
 	ApiKey string
 }
 
-func (gptClient *GPTClient) CallGPT35(chatConversation []Message) (*ResponsePayload, error) {
+func (gptClient *GPTClient) CallGPT35(chatConversation []Message, aimodel string, temperature float32) (*ResponsePayload, error) {
 	url := "https://api.openai.com/v1/chat/completions"
 	apiKey := gptClient.ApiKey
 
 	payload := RequestPayload{
-		Model:       "gpt-3.5-turbo",
+		Model:       aimodel,
 		Messages:    chatConversation,
-		Temperature: 0.9,
+		Temperature: temperature,
 	}
 
 	jsonPayload, err := json.Marshal(payload)
