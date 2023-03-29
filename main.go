@@ -157,6 +157,10 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		return
 	}
 
+	handleMessage(bot, update, gptClient, config, chatID, fromID)
+}
+
+func handleMessage(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chatID int64, fromID int) {
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
 	// Maintain conversation history
