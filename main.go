@@ -269,16 +269,6 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	}
 }
 
-func isUserAuthorized(userID int, authorizedUsers []int) bool {
-	// If no authorized users are provided, make the bot public
-	if len(authorizedUsers) == 0 {
-		return true
-	}
-
-	// Check if the user is in the list of authorized users
-	return utils.IsIdInList(userID, authorizedUsers)
-}
-
 func readConfig(filename string) (*Config, error) {
 	file, err := os.Open(filename)
 	if err != nil {
