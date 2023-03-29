@@ -1,10 +1,11 @@
-package utils
+package util
 
 import (
 	"bufio"
 	"os"
 )
 
+// ReadLines Read file to get lines from it
 func ReadLines(filename string) (lines []string, err error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -24,6 +25,7 @@ func ReadLines(filename string) (lines []string, err error) {
 	return
 }
 
+// WriteLines Write line list to file
 func WriteLines(filename string, lines []string) error {
 	file, err := os.Create(filename)
 	if err != nil {

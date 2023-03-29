@@ -1,6 +1,6 @@
-package utils
+package util
 
-// Make first letter capital
+// Title Make first letter capital
 func Title(s string) string {
 	if len(s) == 0 {
 		return s
