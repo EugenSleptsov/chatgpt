@@ -3,6 +3,7 @@ package main
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/utils"
 	"bufio"
 	"fmt"
 	"log"
@@ -58,7 +59,7 @@ func formatHistory(history []gpt.Message) []string {
 	characterCount := 0
 
 	for i, message := range history {
-		formattedLine := fmt.Sprintf("%d. %s: %s\n", i+1, Title(message.Role), message.Content)
+		formattedLine := fmt.Sprintf("%d. %s: %s\n", i+1, utils.Title(message.Role), message.Content)
 		lineLength := len(formattedLine)
 
 		if characterCount+lineLength > 4096 {
@@ -76,19 +77,6 @@ func formatHistory(history []gpt.Message) []string {
 	}
 
 	return historyMessages
-}
-
-func Title(s string) string {
-	if len(s) == 0 {
-		return s
-	}
-
-	r := []rune(s)
-	if r[0] >= 'a' && r[0] <= 'z' {
-		r[0] = r[0] - 'a' + 'A'
-	}
-
-	return string(r)
 }
 
 func translateText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gpt.GPTClient, prompt string) {
@@ -121,16 +109,19 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	chatID := update.Message.Chat.ID
 	fromID := update.Message.From.ID
 
-	if !isUserAuthorized(fromID, config.AuthorizedUserIds) {
-		bot.Answer(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
-		log.Printf("Unauthorized access attempt by user %d: %s %s (%s)", fromID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
+	// If no authorized users are provided, make the bot public
+	if len(config.AuthorizedUserIds) > 0 {
+		if !utils.IsIdInList(fromID, config.AuthorizedUserIds) {
+			bot.Answer(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+			log.Printf("Unauthorized access attempt by user %d: %s %s (%s)", fromID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
 
-		// Notify the admin
-		if config.AdminId > 0 {
-			adminMessage := fmt.Sprintf("Unauthorized access attempt by user %d: %s %s (%s)", fromID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
-			bot.Admin(adminMessage, config.AdminId)
+			// Notify the admin
+			if config.AdminId > 0 {
+				adminMessage := fmt.Sprintf("Unauthorized access attempt by user %d: %s %s (%s)", fromID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
+				bot.Admin(adminMessage, config.AdminId)
+			}
+			return
 		}
-		return
 	}
 
 	// Check for commands
@@ -265,7 +256,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	if config.AdminId > 0 {
 		if fromID != config.AdminId {
 			var adminMessage string
-			if !isIDInList(fromID, config.IgnoreReportIds) {
+			if !utils.IsIdInList(fromID, config.IgnoreReportIds) {
 				adminMessage = fmt.Sprintf("[User: %s %s (%s, ID: %d)] %s\n[ChatGPT] %s\n",
 					update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID, update.Message.Text,
 					response)
@@ -278,16 +269,6 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	}
 }
 
-// Helper function to check if an ID is in a list of IDs
-func isIDInList(id int, idList []int) bool {
-	for _, listID := range idList {
-		if id == listID {
-			return true
-		}
-	}
-	return false
-}
-
 func isUserAuthorized(userID int, authorizedUsers []int) bool {
 	// If no authorized users are provided, make the bot public
 	if len(authorizedUsers) == 0 {
@@ -295,7 +276,7 @@ func isUserAuthorized(userID int, authorizedUsers []int) bool {
 	}
 
 	// Check if the user is in the list of authorized users
-	return isIDInList(userID, authorizedUsers)
+	return utils.IsIdInList(userID, authorizedUsers)
 }
 
 func readConfig(filename string) (*Config, error) {
