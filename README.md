@@ -48,9 +48,8 @@ The bot should now be running, and you can interact with it on Telegram. Send th
 
 ## Admin Bot Commands
 * /reload - Reloads config in case if you have changed parameters (for example, added new authorized users)
-* /adduser userId - Adds user to authorized user list "authorized_user_ids"
-* /removeuser userId - Removes user from authorized user list "authorized_user_ids"
-
+* /adduser userId - Adds a user to the authorized users list
+* /removeuser userId - Removes a user from the authorized users list
 
 ## Contributing
 Contributions are welcome! Please feel free to submit issues or pull requests for enhancements or bug fixes.
