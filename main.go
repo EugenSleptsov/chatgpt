@@ -4,7 +4,6 @@ import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/utils"
-	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -277,9 +276,12 @@ func readConfig(filename string) (*Config, error) {
 	defer file.Close()
 
 	config := make(map[string]string)
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
+	lines, err := utils.ReadLines(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "#") {
 			continue // Ignore comment lines
@@ -337,22 +339,19 @@ func readConfig(filename string) (*Config, error) {
 		AdminId:           adminID,
 		IgnoreReportIds:   ignoreReportIds,
 		AuthorizedUserIds: authorizedUserIDs,
-	}, scanner.Err()
+	}, nil
 }
 
 func updateConfig(filename string, config *Config) error {
-	file, err := os.Open(filename)
+	oldLines, err := utils.ReadLines(filename)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
 	var lines []string
 	authorizedUsersLine := fmt.Sprintf("authorized_user_ids=%s", strings.Join(strings.Split(strings.Trim(strings.Trim(fmt.Sprint(config.AuthorizedUserIds), "[]"), " "), " "), ","))
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	for _, line := range oldLines {
 		if strings.HasPrefix(strings.TrimSpace(line), "authorized_user_ids") {
 			lines = append(lines, authorizedUsersLine)
 		} else {
@@ -360,28 +359,5 @@ func updateConfig(filename string, config *Config) error {
 		}
 	}
 
-	if scanner.Err() != nil {
-		return scanner.Err()
-	}
-
-	outputFile, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer outputFile.Close()
-
-	writer := bufio.NewWriter(outputFile)
-	for _, line := range lines {
-		_, err := writer.WriteString(line + "\n")
-		if err != nil {
-			return err
-		}
-	}
-
-	err = writer.Flush()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return utils.WriteLines(filename, lines)
 }
