@@ -42,7 +42,8 @@ func main() {
 		ApiKey: config.GPTToken,
 	}
 
-	updateChan := make(chan telegram.Update)
+	// buffer up to 100 update messages
+	updateChan := make(chan telegram.Update, 100)
 
 	// create a pool of worker goroutines
 	numWorkers := 10
