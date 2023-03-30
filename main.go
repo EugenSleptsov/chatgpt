@@ -224,7 +224,7 @@ func handleMessage(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		return
 	}
 
-	if !util.IsIdInList(fromID, config.IgnoreReportIds) {
+	if util.IsIdInList(fromID, config.IgnoreReportIds) {
 		return
 	}
 
