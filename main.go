@@ -168,6 +168,10 @@ func handleMessage(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		if !strings.Contains(update.Message.Text, "@"+bot.Username) && !isReplyToBot {
 			return
 		}
+
+		if strings.Contains(update.Message.Text, "@"+bot.Username) {
+			update.Message.Text = strings.Replace(update.Message.Text, "@"+bot.Username, "", -1)
+		}
 	}
 
 	// Maintain conversation history
