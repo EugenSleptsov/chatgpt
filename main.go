@@ -42,6 +42,14 @@ func main() {
 		ApiKey: config.GPTToken,
 	}
 
+	updateChan := make(chan telegram.Update)
+
+	// create a pool of worker goroutines
+	numWorkers := 10
+	for i := 0; i < numWorkers; i++ {
+		go worker(updateChan, bot, gptClient, config)
+	}
+
 	for update := range bot.GetUpdateChannel(config.TimeoutValue) {
 		// Ignore any non-Message Updates
 		if update.Message == nil {
@@ -63,8 +71,15 @@ func main() {
 			}
 		}
 
-		// Launch a goroutine for each update
-		go processUpdate(bot, update, gptClient, config)
+		// Send the Update to the worker goroutines via the channel
+		updateChan <- update
+	}
+}
+
+// worker function that processes updates
+func worker(updateChan <-chan telegram.Update, bot *telegram.Bot, gptClient *gpt.GPTClient, config *Config) {
+	for update := range updateChan {
+		processUpdate(bot, update, gptClient, config)
 	}
 }
 
