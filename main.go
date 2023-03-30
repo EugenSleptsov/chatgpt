@@ -202,6 +202,10 @@ func handleMessage(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		return
 	}
 
+	if update.Message.Chat.IsGroup() {
+		return
+	}
+
 	var adminMessage string
 	if !util.IsIdInList(fromID, config.IgnoreReportIds) {
 		adminMessage = fmt.Sprintf("[User: %s %s (%s, ID: %d)] %s\n[ChatGPT] %s\n",
