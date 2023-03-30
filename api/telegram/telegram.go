@@ -1,7 +1,7 @@
 package telegram
 
 import (
-	"github.com/go-telegram-bot-api/telegram-bot-api"
+	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 )
 
@@ -34,7 +34,7 @@ func (botInstance *Bot) GetUpdateChannel(timeout int) UpdatesChannel {
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = timeout
 
-	updates, _ := botInstance.api.GetUpdatesChan(updateConfig)
+	updates := botInstance.api.GetUpdatesChan(updateConfig)
 
 	ourChannel := make(chan Update)
 	go func(channel tgbotapi.UpdatesChannel) {
@@ -56,8 +56,8 @@ func (botInstance *Bot) Answer(chatID int64, replyTo int, text string) {
 	}
 }
 
-func (botInstance *Bot) Admin(message string, adminId int) {
-	msg := tgbotapi.NewMessage(int64(adminId), message)
+func (botInstance *Bot) Admin(message string, adminId int64) {
+	msg := tgbotapi.NewMessage(adminId, message)
 	_, err := botInstance.api.Send(msg)
 	if err != nil {
 		log.Printf("Error sending message: %v", err)

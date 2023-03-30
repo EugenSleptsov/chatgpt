@@ -17,9 +17,9 @@ type Config struct {
 	GPTToken          string
 	TimeoutValue      int
 	MaxMessages       int
-	AdminId           int
-	IgnoreReportIds   []int
-	AuthorizedUserIds []int
+	AdminId           int64
+	IgnoreReportIds   []int64
+	AuthorizedUserIds []int64
 }
 
 func (c *Config) String() string {
@@ -160,7 +160,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	handleMessage(bot, update, gptClient, config, chatID, fromID)
 }
 
-func handleMessage(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chatID int64, fromID int) {
+func handleMessage(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chatID int64, fromID int64) {
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
 	// Maintain conversation history
@@ -211,13 +211,13 @@ func commandRemoveUser(bot *telegram.Bot, update telegram.Update, chatID int64, 
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Answer(chatID, update.Message.MessageID, "Please provide a user id to remove")
 	} else {
-		userId, err := strconv.Atoi(update.Message.CommandArguments())
+		userId, err := strconv.ParseInt(update.Message.CommandArguments(), 10, 64)
 		if err != nil {
 			bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
 			return
 		}
 
-		newList := make([]int, 0)
+		newList := make([]int64, 0)
 		for _, auth := range config.AuthorizedUserIds {
 			if auth == userId {
 				bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
@@ -240,7 +240,7 @@ func commandAddUser(bot *telegram.Bot, update telegram.Update, chatID int64, con
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Answer(chatID, update.Message.MessageID, "Please provide a user id to add")
 	} else {
-		userId, err := strconv.Atoi(update.Message.CommandArguments())
+		userId, err := strconv.ParseInt(update.Message.CommandArguments(), 10, 64)
 		if err != nil {
 			bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
 			return
@@ -334,19 +334,19 @@ func readConfig(filename string) (*Config, error) {
 		log.Fatalf("Error converting max_messages to integer: %v", err)
 	}
 
-	var adminID int
+	var adminID int64
 	if config["admin_id"] != "" {
-		adminID, err = strconv.Atoi(config["admin_id"])
+		adminID, err = strconv.ParseInt(config["admin_id"], 10, 64)
 		if err != nil {
 			log.Fatalf("Error converting admin_id to integer: %v", err)
 		}
 	}
 
-	ignoreReportIds := make([]int, 0)
+	var ignoreReportIds []int64
 	if config["ignore_report_ids"] != "" {
 		ids := strings.Split(config["ignore_report_ids"], ",")
 		for _, id := range ids {
-			parsedID, err := strconv.Atoi(strings.TrimSpace(id))
+			parsedID, err := strconv.ParseInt(strings.TrimSpace(id), 10, 64)
 			if err != nil {
 				log.Fatalf("Error converting ignore_report_ids to integer: %v", err)
 			}
@@ -355,9 +355,9 @@ func readConfig(filename string) (*Config, error) {
 	}
 
 	authorizedUsersRaw := strings.Split(config["authorized_user_ids"], ",")
-	var authorizedUserIDs []int
+	var authorizedUserIDs []int64
 	for _, idStr := range authorizedUsersRaw {
-		id, err := strconv.Atoi(strings.TrimSpace(idStr))
+		id, err := strconv.ParseInt(strings.TrimSpace(idStr), 10, 64)
 		if err == nil {
 			authorizedUserIDs = append(authorizedUserIDs, id)
 		}
