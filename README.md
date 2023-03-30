@@ -37,7 +37,7 @@ After building the project and creating the bot.conf file, run the bot:
 ./gptbot
 ```
 
-The bot should now be running, and you can interact with it on Telegram. Send the `/start` command to begin using the bot.
+The bot should now be running, and you can interact with it on Telegram. Send the `/start` command to begin using the bot. You can also add the bot to a group chat and use it there, but in such case you'll need to mention his name via @BotName or reply to any of his messages.
 
 ## Bot Commands
 * /start - Sends a welcome message and describes the bot's purpose
