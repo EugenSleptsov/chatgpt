@@ -47,7 +47,7 @@ func (botInstance *Bot) GetUpdateChannel(timeout int) UpdatesChannel {
 	return ourChannel
 }
 
-func (botInstance *Bot) Answer(chatID int64, replyTo int, text string) {
+func (botInstance *Bot) Reply(chatID int64, replyTo int, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ReplyToMessageID = replyTo
 	_, err := botInstance.api.Send(msg)
@@ -56,7 +56,7 @@ func (botInstance *Bot) Answer(chatID int64, replyTo int, text string) {
 	}
 }
 
-func (botInstance *Bot) Admin(message string, adminId int64) {
+func (botInstance *Bot) Message(message string, adminId int64) {
 	msg := tgbotapi.NewMessage(adminId, message)
 	_, err := botInstance.api.Send(msg)
 	if err != nil {

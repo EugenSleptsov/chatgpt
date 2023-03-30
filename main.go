@@ -51,13 +51,13 @@ func main() {
 		// If no authorized users are provided, make the bot public
 		if len(config.AuthorizedUserIds) > 0 {
 			if !util.IsIdInList(update.Message.From.ID, config.AuthorizedUserIds) {
-				bot.Answer(update.Message.Chat.ID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+				bot.Reply(update.Message.Chat.ID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
 				log.Printf("Unauthorized access attempt by user %d: %s %s (%s)", update.Message.From.ID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
 
 				// Notify the admin
 				if config.AdminId > 0 {
 					adminMessage := fmt.Sprintf("Unauthorized access attempt by user %d: %s %s (%s)", update.Message.From.ID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
-					bot.Admin(adminMessage, config.AdminId)
+					bot.Message(adminMessage, config.AdminId)
 				}
 				continue
 			}
@@ -117,7 +117,7 @@ func translateText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gp
 	}
 
 	log.Printf("[%s] %s", "ChatGPT", response)
-	bot.Answer(chatID, messageID, response)
+	bot.Reply(chatID, messageID, response)
 }
 
 func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config) {
@@ -140,7 +140,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 			commandTranslate(bot, update, gptClient, chatID)
 		default:
 			if fromID != config.AdminId {
-				bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
+				bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
 				break
 			}
 
@@ -162,6 +162,13 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 
 func handleMessage(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chatID int64, fromID int64) {
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
+
+	if update.Message.Chat.IsGroup() {
+		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == bot.Username
+		if !strings.Contains(update.Message.Text, "@"+bot.Username) && !isReplyToBot {
+			return
+		}
+	}
 
 	// Maintain conversation history
 	chatHistory[chatID] = append(chatHistory[chatID], gpt.Message{Role: "user", Content: update.Message.Text})
@@ -185,7 +192,7 @@ func handleMessage(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	chatHistory[chatID] = append(chatHistory[chatID], gpt.Message{Role: "assistant", Content: response})
 
 	log.Printf("[%s] %s", "ChatGPT", response)
-	bot.Answer(chatID, update.Message.MessageID, response)
+	bot.Reply(chatID, update.Message.MessageID, response)
 
 	if config.AdminId == 0 {
 		return
@@ -204,23 +211,23 @@ func handleMessage(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		adminMessage = fmt.Sprintf("[User: %s %s (%s, ID: %d)] asked ChatGPT",
 			update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID)
 	}
-	bot.Admin(adminMessage, config.AdminId)
+	bot.Message(adminMessage, config.AdminId)
 }
 
 func commandRemoveUser(bot *telegram.Bot, update telegram.Update, chatID int64, config *Config) {
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Answer(chatID, update.Message.MessageID, "Please provide a user id to remove")
+		bot.Reply(chatID, update.Message.MessageID, "Please provide a user id to remove")
 	} else {
 		userId, err := strconv.ParseInt(update.Message.CommandArguments(), 10, 64)
 		if err != nil {
-			bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
+			bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
 			return
 		}
 
 		newList := make([]int64, 0)
 		for _, auth := range config.AuthorizedUserIds {
 			if auth == userId {
-				bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
+				bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
 			} else {
 				newList = append(newList, auth)
 			}
@@ -232,23 +239,23 @@ func commandRemoveUser(bot *telegram.Bot, update telegram.Update, chatID int64, 
 			log.Fatalf("Error updating bot.conf: %v", err)
 		}
 
-		bot.Answer(chatID, update.Message.MessageID, "Command successfully ended")
+		bot.Reply(chatID, update.Message.MessageID, "Command successfully ended")
 	}
 }
 
 func commandAddUser(bot *telegram.Bot, update telegram.Update, chatID int64, config *Config) {
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Answer(chatID, update.Message.MessageID, "Please provide a user id to add")
+		bot.Reply(chatID, update.Message.MessageID, "Please provide a user id to add")
 	} else {
 		userId, err := strconv.ParseInt(update.Message.CommandArguments(), 10, 64)
 		if err != nil {
-			bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
+			bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
 			return
 		}
 
 		for _, auth := range config.AuthorizedUserIds {
 			if auth == userId {
-				bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User already added: %d", userId))
+				bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User already added: %d", userId))
 				return
 			}
 		}
@@ -259,7 +266,7 @@ func commandAddUser(bot *telegram.Bot, update telegram.Update, chatID int64, con
 			log.Fatalf("Error updating bot.conf: %v", err)
 		}
 
-		bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("User successfully added: %d", userId))
+		bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User successfully added: %d", userId))
 	}
 }
 
@@ -269,12 +276,12 @@ func commandReload(bot *telegram.Bot, update telegram.Update, chatID int64) {
 		log.Fatalf("Error reading bot.conf: %v", err)
 	}
 
-	bot.Answer(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
+	bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
 }
 
 func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64) {
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Answer(chatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
+		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
 	} else {
 		translateText(bot, chatID, update.Message.MessageID, gptClient, update.Message.CommandArguments())
 	}
@@ -287,23 +294,23 @@ func commandHelp(bot *telegram.Bot, update telegram.Update, chatID int64) {
 /clear - Очищает историю разговоров для текущего чата.
 /history - Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании.
 /translate <text> - Переводит <text> на любом языке на английский язык`
-	bot.Answer(chatID, update.Message.MessageID, helpText)
+	bot.Reply(chatID, update.Message.MessageID, helpText)
 }
 
 func commandHistory(bot *telegram.Bot, update telegram.Update, chatID int64) {
 	historyMessages := formatHistory(chatHistory[chatID])
 	for _, message := range historyMessages {
-		bot.Answer(chatID, update.Message.MessageID, message)
+		bot.Reply(chatID, update.Message.MessageID, message)
 	}
 }
 
 func commandStart(bot *telegram.Bot, update telegram.Update, chatID int64) {
-	bot.Answer(chatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help")
+	bot.Reply(chatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help")
 }
 
 func commandClear(bot *telegram.Bot, update telegram.Update, chatID int64) {
 	chatHistory[chatID] = nil
-	bot.Answer(chatID, update.Message.MessageID, "История разговоров была очищена.")
+	bot.Reply(chatID, update.Message.MessageID, "История разговоров была очищена.")
 }
 
 func readConfig(filename string) (*Config, error) {
@@ -335,21 +342,17 @@ func readConfig(filename string) (*Config, error) {
 	}
 
 	var adminID int64
-	if config["admin_id"] != "" {
-		adminID, err = strconv.ParseInt(config["admin_id"], 10, 64)
-		if err != nil {
-			log.Fatalf("Error converting admin_id to integer: %v", err)
-		}
+	adminID, err = strconv.ParseInt(config["admin_id"], 10, 64)
+	if err != nil {
+		adminID = 0
+		log.Printf("Error converting admin_id to integer: %v", err)
 	}
 
+	ids := strings.Split(config["ignore_report_ids"], ",")
 	var ignoreReportIds []int64
-	if config["ignore_report_ids"] != "" {
-		ids := strings.Split(config["ignore_report_ids"], ",")
-		for _, id := range ids {
-			parsedID, err := strconv.ParseInt(strings.TrimSpace(id), 10, 64)
-			if err != nil {
-				log.Fatalf("Error converting ignore_report_ids to integer: %v", err)
-			}
+	for _, id := range ids {
+		parsedID, err := strconv.ParseInt(strings.TrimSpace(id), 10, 64)
+		if err == nil {
 			ignoreReportIds = append(ignoreReportIds, parsedID)
 		}
 	}
