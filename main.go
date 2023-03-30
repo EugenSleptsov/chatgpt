@@ -206,20 +206,11 @@ func handleMessage(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		return
 	}
 
-	if update.Message.Chat.IsGroup() {
+	if !util.IsIdInList(fromID, config.IgnoreReportIds) {
 		return
 	}
 
-	var adminMessage string
-	if !util.IsIdInList(fromID, config.IgnoreReportIds) {
-		adminMessage = fmt.Sprintf("[User: %s %s (%s, ID: %d)] %s\n[ChatGPT] %s\n",
-			update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID, update.Message.Text,
-			response)
-	} else {
-		adminMessage = fmt.Sprintf("[User: %s %s (%s, ID: %d)] asked ChatGPT",
-			update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID)
-	}
-	bot.Message(adminMessage, config.AdminId)
+	bot.Message(fmt.Sprintf("[User: %s %s (%s, ID: %d)] %s\n[ChatGPT] %s\n", update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID, update.Message.Text, response), config.AdminId)
 }
 
 func commandRemoveUser(bot *telegram.Bot, update telegram.Update, chatID int64, config *Config) {
