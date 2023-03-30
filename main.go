@@ -114,12 +114,10 @@ func formatHistory(history []gpt.Message) []string {
 	return historyMessages
 }
 
-func translateText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gpt.GPTClient, prompt string) {
-	translationPrompt := fmt.Sprintf("Translate the following text to English: \"%s\". You should answer only with translated text without explanations and quotation marks	", prompt)
-
+func processText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
 	responsePayload, err := gptClient.CallGPT35([]gpt.Message{
-		{Role: "system", Content: "You are a helpful assistant that translates."},
-		{Role: "user", Content: translationPrompt},
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
 	}, "gpt-3.5-turbo", 0.6)
 
 	if err != nil {
@@ -127,7 +125,7 @@ func translateText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gp
 		return
 	}
 
-	response := "I'm sorry, there was a problem translating your text. You can try again."
+	response := "I'm sorry, there was a problem. You can try again."
 	if len(responsePayload.Choices) > 0 {
 		response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
 	}
@@ -154,6 +152,10 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 			commandHelp(bot, update, chatID)
 		case "translate":
 			commandTranslate(bot, update, gptClient, chatID)
+		case "grammar":
+			commandGrammar(bot, update, gptClient, chatID)
+		case "enhance":
+			commandEnhance(bot, update, gptClient, chatID)
 		default:
 			if fromID != config.AdminId {
 				bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
@@ -298,7 +300,32 @@ func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
 	} else {
-		translateText(bot, chatID, update.Message.MessageID, gptClient, update.Message.CommandArguments())
+		prompt := update.Message.CommandArguments()
+		translationPrompt := fmt.Sprintf("Translate the following text to English: \"%s\". You should answer only with translated text without explanations and quotation marks", prompt)
+		systemPrompt := "You are a helpful assistant that translates."
+		processText(bot, chatID, update.Message.MessageID, gptClient, systemPrompt, translationPrompt)
+	}
+}
+
+func commandGrammar(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64) {
+	if len(update.Message.CommandArguments()) == 0 {
+		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to correct. Usage: /grammar <text>")
+	} else {
+		prompt := update.Message.CommandArguments()
+		grammarPrompt := fmt.Sprintf("Correct the following text: \"%s\". Answer with corrected text only.", prompt)
+		systemPrompt := "You are a helpful assistant that corrects grammar."
+		processText(bot, chatID, update.Message.MessageID, gptClient, systemPrompt, grammarPrompt)
+	}
+}
+
+func commandEnhance(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64) {
+	if len(update.Message.CommandArguments()) == 0 {
+		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to enhance. Usage: /enhance <text>")
+	} else {
+		prompt := update.Message.CommandArguments()
+		enhancePrompt := fmt.Sprintf("Review and improve the following text: \"%s\". Answer with improved text only.", prompt)
+		systemPrompt := "You are a helpful assistant that reviews text for grammar, style and things like that."
+		processText(bot, chatID, update.Message.MessageID, gptClient, systemPrompt, enhancePrompt)
 	}
 }
 
@@ -308,7 +335,9 @@ func commandHelp(bot *telegram.Bot, update telegram.Update, chatID int64) {
 /start - Отправляет приветственное сообщение, описывающее цель бота.
 /clear - Очищает историю разговоров для текущего чата.
 /history - Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании.
-/translate <text> - Переводит <text> на любом языке на английский язык`
+/translate <text> - Переводит <text> на любом языке на английский язык
+/grammar <text> - Исправляет грамматические ошибки в <text>
+/enhance <text> - Улучшает <text> с помощью GPT`
 	bot.Reply(chatID, update.Message.MessageID, helpText)
 }
 
