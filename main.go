@@ -8,9 +8,11 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var chatHistory = make(map[int64][]gpt.Message)
+var imageGenNextTime = make(map[int64]time.Time)
 
 type Config struct {
 	TelegramToken     string
@@ -134,7 +136,7 @@ func processText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gpt.
 	bot.Reply(chatID, messageID, response)
 }
 
-func processImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string) {
+func processImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string, config *Config) {
 	imageUrl, err := gptClient.GenerateImage(prompt, gpt.ImageSize512)
 	if err != nil {
 		log.Printf("Error generating image: %v", err)
@@ -154,6 +156,13 @@ func processImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, pro
 	if err != nil {
 		log.Printf("Error sending image: %v", err)
 		return
+	}
+
+	log.Printf("[ChatGPT] sent image %s", imageUrl)
+	if config.AdminId > 0 {
+		if chatID != config.AdminId {
+			bot.Message(fmt.Sprintf("Image with prompt \"%s\" sent to chat %d", prompt, chatID), config.AdminId)
+		}
 	}
 }
 
@@ -182,7 +191,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		case "enhance":
 			commandEnhance(bot, update, gptClient, chatID)
 		case "imagine":
-			commandImagine(bot, update, gptClient, chatID)
+			commandImagine(bot, update, gptClient, chatID, config)
 		default:
 			if fromID != config.AdminId {
 				bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
@@ -408,11 +417,19 @@ func commandRollback(bot *telegram.Bot, update telegram.Update, chatID int64) {
 	}
 }
 
-func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64) {
+func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64, config *Config) {
+	now := time.Now()
+	nextTime, exists := imageGenNextTime[chatID]
+	if exists && nextTime.After(now) && chatID != config.AdminId {
+		nextTimeStr := nextTime.Format("15:04:05")
+		bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Your next image generation will be available at %s.", nextTimeStr))
+	}
+
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to generate an image. Usage: /image <text>")
 	} else {
-		processImage(bot, chatID, gptClient, update.Message.CommandArguments())
+		imageGenNextTime[chatID] = now.Add(time.Second * 900)
+		processImage(bot, chatID, gptClient, update.Message.CommandArguments(), config)
 	}
 }
 
