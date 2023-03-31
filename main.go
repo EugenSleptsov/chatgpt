@@ -134,6 +134,29 @@ func processText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gpt.
 	bot.Reply(chatID, messageID, response)
 }
 
+func processImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string) {
+	imageUrl, err := gptClient.GenerateImage(prompt, gpt.ImageSize512)
+	if err != nil {
+		log.Printf("Error generating image: %v", err)
+		return
+	}
+
+	enhancedCaption := prompt
+	responsePayload, err := gptClient.CallGPT35([]gpt.Message{
+		{Role: "system", Content: "You are an assistant that generates natural language description (prompt) for an artificial intelligence (AI) that generates images"},
+		{Role: "user", Content: fmt.Sprintf("Please improve this prompt: \"%s\". Answer with improved prompt only. Keep prompt at most 200 characters long. Your prompt must be in one sentence.", prompt)},
+	}, "gpt-3.5-turbo", 0.7)
+	if err == nil {
+		enhancedCaption = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
+	}
+
+	err = bot.SendImage(chatID, imageUrl, enhancedCaption)
+	if err != nil {
+		log.Printf("Error sending image: %v", err)
+		return
+	}
+}
+
 func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config) {
 	chatID := update.Message.Chat.ID
 	fromID := update.Message.From.ID
@@ -158,6 +181,8 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 			commandGrammar(bot, update, gptClient, chatID)
 		case "enhance":
 			commandEnhance(bot, update, gptClient, chatID)
+		case "imagine":
+			commandImagine(bot, update, gptClient, chatID)
 		default:
 			if fromID != config.AdminId {
 				bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
@@ -340,7 +365,8 @@ func commandHelp(bot *telegram.Bot, update telegram.Update, chatID int64) {
 /rollback <n> - Удаляет последние <n> сообщений из истории разговоров для текущего чата.
 /translate <text> - Переводит <text> на любом языке на английский язык
 /grammar <text> - Исправляет грамматические ошибки в <text>
-/enhance <text> - Улучшает <text> с помощью GPT`
+/enhance <text> - Улучшает <text> с помощью GPT
+/imagine <text> - Генерирует изображение по описанию <text> размера 512x512`
 	bot.Reply(chatID, update.Message.MessageID, helpText)
 }
 
@@ -379,6 +405,14 @@ func commandRollback(bot *telegram.Bot, update telegram.Update, chatID int64) {
 		bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
 	} else {
 		bot.Reply(chatID, update.Message.MessageID, "История разговоров пуста.")
+	}
+}
+
+func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64) {
+	if len(update.Message.CommandArguments()) == 0 {
+		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to generate an image. Usage: /image <text>")
+	} else {
+		processImage(bot, chatID, gptClient, update.Message.CommandArguments())
 	}
 }
 

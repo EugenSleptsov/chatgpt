@@ -36,6 +36,12 @@ type ResponsePayload struct {
 	} `json:"usage"`
 }
 
+const (
+	ImageSize256  = "256x256"
+	ImageSize512  = "512x512"
+	ImageSize1024 = "1024x1024"
+)
+
 type GPTClient struct {
 	ApiKey string
 }
@@ -95,4 +101,53 @@ func (gptClient *GPTClient) CallGPT35(chatConversation []Message, aimodel string
 	}
 
 	return &responsePayload, nil
+}
+
+func (gptClient *GPTClient) GenerateImage(prompt string, size string) (string, error) {
+	url := "https://api.openai.com/v1/images/generations"
+	apiKey := gptClient.ApiKey
+
+	var imageSize string
+	switch size {
+	case ImageSize256, ImageSize512, ImageSize1024:
+		imageSize = size
+	default:
+		imageSize = ImageSize512 // Default to 512x512 if size is invalid
+	}
+
+	requestData := map[string]interface{}{
+		"prompt": prompt,
+		"size":   imageSize,
+	}
+	requestDataBytes, err := json.Marshal(requestData)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestDataBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var responseData map[string]interface{}
+	err = json.Unmarshal(body, &responseData)
+	if err != nil {
+		return "", err
+	}
+
+	return responseData["data"].([]interface{})[0].(map[string]interface{})["url"].(string), nil
 }

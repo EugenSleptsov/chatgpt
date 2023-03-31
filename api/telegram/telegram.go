@@ -2,7 +2,9 @@ package telegram
 
 import (
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"io/ioutil"
 	"log"
+	"net/http"
 )
 
 type Bot struct {
@@ -62,4 +64,26 @@ func (botInstance *Bot) Message(message string, adminId int64) {
 	if err != nil {
 		log.Printf("Error sending message: %v", err)
 	}
+}
+
+func (botInstance *Bot) SendImage(chatID int64, imageUrl string, caption string) error {
+	response, err := http.Get(imageUrl)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	imageData, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
+	photoMsg := tgbotapi.NewPhoto(chatID, tgbotapi.FileBytes{Name: "image.png", Bytes: imageData})
+	photoMsg.Caption = caption
+	_, err = botInstance.api.Send(photoMsg)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
