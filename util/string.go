@@ -13,3 +13,16 @@ func Title(s string) string {
 
 	return string(r)
 }
+
+// Pluralize Pluralize word
+func Pluralize(number int, variations [3]string) string {
+	cases := []int{2, 0, 1, 1, 1, 2}
+	var index int
+	if number%100 > 4 && number%100 < 20 || number%10 >= 5 {
+		index = 2
+	} else {
+		index = cases[number%10]
+	}
+
+	return variations[index]
+}

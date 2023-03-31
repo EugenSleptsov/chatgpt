@@ -148,6 +148,8 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 			commandClear(bot, update, chatID)
 		case "history":
 			commandHistory(bot, update, chatID)
+		case "rollback":
+			commandRollback(bot, update, chatID)
 		case "help":
 			commandHelp(bot, update, chatID)
 		case "translate":
@@ -333,8 +335,9 @@ func commandHelp(bot *telegram.Bot, update telegram.Update, chatID int64) {
 	helpText := `Список доступных команд и их описание:
 /help - Показывает список доступных команд и их описание.
 /start - Отправляет приветственное сообщение, описывающее цель бота.
-/clear - Очищает историю разговоров для текущего чата.
 /history - Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании.
+/clear - Очищает историю разговоров для текущего чата.
+/rollback <n> - Удаляет последние <n> сообщений из истории разговоров для текущего чата.
 /translate <text> - Переводит <text> на любом языке на английский язык
 /grammar <text> - Исправляет грамматические ошибки в <text>
 /enhance <text> - Улучшает <text> с помощью GPT`
@@ -355,6 +358,28 @@ func commandStart(bot *telegram.Bot, update telegram.Update, chatID int64) {
 func commandClear(bot *telegram.Bot, update telegram.Update, chatID int64) {
 	chatHistory[chatID] = nil
 	bot.Reply(chatID, update.Message.MessageID, "История разговоров была очищена.")
+}
+
+func commandRollback(bot *telegram.Bot, update telegram.Update, chatID int64) {
+	number := 1
+	if len(update.Message.CommandArguments()) > 0 {
+		var err error
+		number, err = strconv.Atoi(update.Message.CommandArguments())
+		if err != nil || number < 1 {
+			number = 1
+		}
+	}
+
+	if number > len(chatHistory[chatID]) {
+		number = len(chatHistory[chatID])
+	}
+
+	if len(chatHistory[chatID]) > 0 {
+		chatHistory[chatID] = chatHistory[chatID][:len(chatHistory[chatID])-number]
+		bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
+	} else {
+		bot.Reply(chatID, update.Message.MessageID, "История разговоров пуста.")
+	}
 }
 
 func readConfig(filename string) (*Config, error) {

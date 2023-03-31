@@ -42,8 +42,9 @@ The bot should now be running, and you can interact with it on Telegram. Send th
 ## Bot Commands
 * /start - Sends a welcome message and describes the bot's purpose
 * /help - Shows a list of available commands and their descriptions
-* /clear - Clears the chat history for the current chat
 * /history - Shows the current chat history in a formatted output
+* /clear - Clears the chat history for the current chat
+* /rollback <num> - Rolls back the chat history by <num> messages
 * /translate <text> - Translates <text> from any language to English
 * /grammar <text> - Checks the grammar of <text> and returns corrected text
 * /enhance <text> - Enhances <text> by adding more details
