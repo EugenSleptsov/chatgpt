@@ -420,9 +420,10 @@ func commandRollback(bot *telegram.Bot, update telegram.Update, chatID int64) {
 func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64, config *Config) {
 	now := time.Now()
 	nextTime, exists := imageGenNextTime[chatID]
-	if exists && nextTime.After(now) && chatID != config.AdminId {
+	if exists && nextTime.After(now) && chatID != config.AdminId && update.Message.From.ID != config.AdminId {
 		nextTimeStr := nextTime.Format("15:04:05")
 		bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Your next image generation will be available at %s.", nextTimeStr))
+		return
 	}
 
 	if len(update.Message.CommandArguments()) == 0 {
