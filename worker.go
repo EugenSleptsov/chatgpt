@@ -20,48 +20,50 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	chatID := update.Message.Chat.ID
 	fromID := update.Message.From.ID
 
+	chat, _ := chats[chatID]
+
 	// Check for command
 	if update.Message.IsCommand() {
 		command := update.Message.Command()
 		switch command {
 		case "start":
-			commandStart(bot, update, chatID)
+			commandStart(bot, update, chat)
 		case "clear":
-			commandClear(bot, update, chatID)
+			commandClear(bot, update, chat)
 		case "history":
-			commandHistory(bot, update, chatID)
+			commandHistory(bot, update, chat)
 		case "rollback":
-			commandRollback(bot, update, chatID)
+			commandRollback(bot, update, chat)
 		case "help":
-			commandHelp(bot, update, chatID)
+			commandHelp(bot, update, chat)
 		case "translate":
-			commandTranslate(bot, update, gptClient, chatID)
+			commandTranslate(bot, update, gptClient, chat)
 		case "grammar":
-			commandGrammar(bot, update, gptClient, chatID)
+			commandGrammar(bot, update, gptClient, chat)
 		case "enhance":
-			commandEnhance(bot, update, gptClient, chatID)
+			commandEnhance(bot, update, gptClient, chat)
 		case "imagine":
-			commandImagine(bot, update, gptClient, chatID, config)
+			commandImagine(bot, update, gptClient, chat, config)
 		default:
 			if fromID != config.AdminId {
-				bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
+				bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
 				break
 			}
 
 			switch command {
 			case "reload":
-				commandReload(bot, update, chatID)
+				commandReload(bot, update, chat)
 			case "adduser":
-				commandAddUser(bot, update, chatID, config)
+				commandAddUser(bot, update, chat, config)
 			case "removeuser":
-				commandRemoveUser(bot, update, chatID, config)
+				commandRemoveUser(bot, update, chat, config)
 			}
 		}
 
 		return
 	}
 
-	gptChat(bot, update, gptClient, config, chatID, fromID)
+	gptChat(bot, update, gptClient, config, chat, fromID)
 }
 
 func gptText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
@@ -114,7 +116,7 @@ func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt 
 	}
 }
 
-func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chatID int64, fromID int64) {
+func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chat *Chat, fromID int64) {
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
 	if update.Message.Chat.IsGroup() {
@@ -131,13 +133,14 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 	// Maintain conversation history
 	userMessage := gpt.Message{Role: "user", Content: update.Message.Text}
 	historyEntry := &ConversationEntry{Prompt: userMessage, Response: gpt.Message{}}
-	chatHistory[chatID] = append(chatHistory[chatID], historyEntry)
-	if len(chatHistory[chatID]) > config.MaxMessages {
-		excessMessages := len(chatHistory[chatID]) - config.MaxMessages
-		chatHistory[chatID] = chatHistory[chatID][excessMessages:]
+
+	chat.History = append(chat.History, historyEntry)
+	if len(chat.History) > config.MaxMessages {
+		excessMessages := len(chat.History) - chat.Settings.MaxMessages
+		chat.History = chat.History[excessMessages:]
 	}
 
-	responsePayload, err := gptClient.CallGPT35(messagesFromHistory(chatHistory[chatID]), "gpt-3.5-turbo", 0.8)
+	responsePayload, err := gptClient.CallGPT35(messagesFromHistory(chat.History), "gpt-3.5-turbo", 0.8)
 	if err != nil {
 		log.Printf("Error: %v", err)
 		return
@@ -152,7 +155,7 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 	historyEntry.Response = gpt.Message{Role: "assistant", Content: response}
 
 	log.Printf("[%s] %s", "ChatGPT", response)
-	bot.Reply(chatID, update.Message.MessageID, response)
+	bot.Reply(chat.ChatID, update.Message.MessageID, response)
 
 	if config.AdminId == 0 {
 		return

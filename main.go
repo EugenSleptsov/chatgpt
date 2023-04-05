@@ -9,8 +9,20 @@ import (
 	"time"
 )
 
-var chatHistory = make(map[int64][]*ConversationEntry)
-var imageGenNextTime = make(map[int64]time.Time)
+var chats = make(map[int64]*Chat)
+
+type Chat struct {
+	ChatID           int64
+	Settings         ChatSettings
+	History          []*ConversationEntry
+	ImageGenNextTime time.Time
+}
+
+type ChatSettings struct {
+	Temperature float32
+	Model       string
+	MaxMessages int
+}
 
 type ConversationEntry struct {
 	Prompt   gpt.Message
@@ -62,10 +74,25 @@ func main() {
 			continue
 		}
 
+		chat, ok := chats[update.Message.Chat.ID]
+		if !ok {
+			chat = &Chat{
+				ChatID: update.Message.Chat.ID,
+				Settings: ChatSettings{
+					Temperature: 0.6,
+					Model:       "gpt-3.5-turbo",
+					MaxMessages: config.MaxMessages,
+				},
+				History:          make([]*ConversationEntry, 0),
+				ImageGenNextTime: time.Now(),
+			}
+			chats[chat.ChatID] = chat
+		}
+
 		// If no authorized users are provided, make the bot public
 		if len(config.AuthorizedUserIds) > 0 {
 			if !util.IsIdInList(update.Message.From.ID, config.AuthorizedUserIds) {
-				bot.Reply(update.Message.Chat.ID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+				bot.Reply(chat.ChatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
 				log.Printf("Unauthorized access attempt by user %d: %s %s (%s)", update.Message.From.ID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
 
 				// Notify the admin

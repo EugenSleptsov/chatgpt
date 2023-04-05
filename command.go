@@ -10,7 +10,8 @@ import (
 	"time"
 )
 
-func commandRemoveUser(bot *telegram.Bot, update telegram.Update, chatID int64, config *Config) {
+func commandRemoveUser(bot *telegram.Bot, update telegram.Update, chat *Chat, config *Config) {
+	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chatID, update.Message.MessageID, "Please provide a user id to remove")
 	} else {
@@ -39,7 +40,8 @@ func commandRemoveUser(bot *telegram.Bot, update telegram.Update, chatID int64, 
 	}
 }
 
-func commandAddUser(bot *telegram.Bot, update telegram.Update, chatID int64, config *Config) {
+func commandAddUser(bot *telegram.Bot, update telegram.Update, chat *Chat, config *Config) {
+	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chatID, update.Message.MessageID, "Please provide a user id to add")
 	} else {
@@ -66,7 +68,8 @@ func commandAddUser(bot *telegram.Bot, update telegram.Update, chatID int64, con
 	}
 }
 
-func commandReload(bot *telegram.Bot, update telegram.Update, chatID int64) {
+func commandReload(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+	chatID := chat.ChatID
 	config, err := readConfig("bot.conf")
 	if err != nil {
 		log.Fatalf("Error reading bot.conf: %v", err)
@@ -75,7 +78,8 @@ func commandReload(bot *telegram.Bot, update telegram.Update, chatID int64) {
 	bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
 }
 
-func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64) {
+func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat) {
+	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
 	} else {
@@ -86,7 +90,8 @@ func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.
 	}
 }
 
-func commandGrammar(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64) {
+func commandGrammar(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat) {
+	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to correct. Usage: /grammar <text>")
 	} else {
@@ -97,7 +102,8 @@ func commandGrammar(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 	}
 }
 
-func commandEnhance(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64) {
+func commandEnhance(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat) {
+	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to enhance. Usage: /enhance <text>")
 	} else {
@@ -108,7 +114,7 @@ func commandEnhance(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 	}
 }
 
-func commandHelp(bot *telegram.Bot, update telegram.Update, chatID int64) {
+func commandHelp(bot *telegram.Bot, update telegram.Update, chat *Chat) {
 	helpText := `Список доступных команд и их описание:
 /help - Показывает список доступных команд и их описание.
 /start - Отправляет приветственное сообщение, описывающее цель бота.
@@ -119,26 +125,26 @@ func commandHelp(bot *telegram.Bot, update telegram.Update, chatID int64) {
 /grammar <text> - Исправляет грамматические ошибки в <text>
 /enhance <text> - Улучшает <text> с помощью GPT
 /imagine <text> - Генерирует изображение по описанию <text> размера 512x512`
-	bot.Reply(chatID, update.Message.MessageID, helpText)
+	bot.Reply(chat.ChatID, update.Message.MessageID, helpText)
 }
 
-func commandHistory(bot *telegram.Bot, update telegram.Update, chatID int64) {
-	historyMessages := formatHistory(messagesFromHistory(chatHistory[chatID]))
+func commandHistory(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+	historyMessages := formatHistory(messagesFromHistory(chat.History))
 	for _, message := range historyMessages {
-		bot.Reply(chatID, update.Message.MessageID, message)
+		bot.Reply(chat.ChatID, update.Message.MessageID, message)
 	}
 }
 
-func commandStart(bot *telegram.Bot, update telegram.Update, chatID int64) {
-	bot.Reply(chatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help")
+func commandStart(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+	bot.Reply(chat.ChatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help")
 }
 
-func commandClear(bot *telegram.Bot, update telegram.Update, chatID int64) {
-	chatHistory[chatID] = nil
-	bot.Reply(chatID, update.Message.MessageID, "История разговоров была очищена.")
+func commandClear(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+	chat.History = nil
+	bot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров была очищена.")
 }
 
-func commandRollback(bot *telegram.Bot, update telegram.Update, chatID int64) {
+func commandRollback(bot *telegram.Bot, update telegram.Update, chat *Chat) {
 	number := 1
 	if len(update.Message.CommandArguments()) > 0 {
 		var err error
@@ -148,31 +154,31 @@ func commandRollback(bot *telegram.Bot, update telegram.Update, chatID int64) {
 		}
 	}
 
-	if number > len(chatHistory[chatID]) {
-		number = len(chatHistory[chatID])
+	if number > len(chat.History) {
+		number = len(chat.History)
 	}
 
-	if len(chatHistory[chatID]) > 0 {
-		chatHistory[chatID] = chatHistory[chatID][:len(chatHistory[chatID])-number]
-		bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
+	if len(chat.History) > 0 {
+		chat.History = chat.History[:len(chat.History)-number]
+		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
 	} else {
-		bot.Reply(chatID, update.Message.MessageID, "История разговоров пуста.")
+		bot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров пуста.")
 	}
 }
 
-func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chatID int64, config *Config) {
+func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat, config *Config) {
 	now := time.Now()
-	nextTime, exists := imageGenNextTime[chatID]
-	if exists && nextTime.After(now) && chatID != config.AdminId && update.Message.From.ID != config.AdminId {
+	nextTime := chat.ImageGenNextTime
+	if nextTime.After(now) && update.Message.From.ID != config.AdminId {
 		nextTimeStr := nextTime.Format("15:04:05")
-		bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Your next image generation will be available at %s.", nextTimeStr))
+		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Your next image generation will be available at %s.", nextTimeStr))
 		return
 	}
 
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to generate an image. Usage: /image <text>")
+		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to generate an image. Usage: /image <text>")
 	} else {
-		imageGenNextTime[chatID] = now.Add(time.Second * 900)
-		gptImage(bot, chatID, gptClient, update.Message.CommandArguments(), config)
+		chat.ImageGenNextTime = now.Add(time.Second * 900)
+		gptImage(bot, chat.ChatID, gptClient, update.Message.CommandArguments(), config)
 	}
 }
