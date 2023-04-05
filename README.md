@@ -49,6 +49,7 @@ The bot should now be running, and you can interact with it on Telegram. Send th
 * /grammar `text` - Checks the grammar of `text` and returns corrected text
 * /enhance `text` - Enhances `text` by adding more details
 * /imagine `text` - Generates an image based on `text`
+* /temperature `value` - Sets the temperature value for the GPT-3.5 Turbo API
 
 ## Admin Bot Commands
 * /reload - Reloads config in case if you have changed parameters (for example, added new authorized users)

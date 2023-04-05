@@ -44,6 +44,8 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 			commandEnhance(bot, update, gptClient, chat)
 		case "imagine":
 			commandImagine(bot, update, gptClient, chat, config)
+		case "temperature":
+			commandTemperature(bot, update, chat)
 		default:
 			if fromID != config.AdminId {
 				bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
@@ -66,11 +68,11 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	gptChat(bot, update, gptClient, config, chat, fromID)
 }
 
-func gptText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
+func gptText(bot *telegram.Bot, chat *Chat, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
 	responsePayload, err := gptClient.CallGPT35([]gpt.Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
-	}, "gpt-3.5-turbo", 0.6)
+	}, chat.Settings.Model, 0.6)
 
 	if err != nil {
 		log.Printf("Error: %v", err)
@@ -83,7 +85,7 @@ func gptText(bot *telegram.Bot, chatID int64, messageID int, gptClient *gpt.GPTC
 	}
 
 	log.Printf("[%s] %s", "ChatGPT", response)
-	bot.Reply(chatID, messageID, response)
+	bot.Reply(chat.ChatID, messageID, response)
 }
 
 func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string, config *Config) {
@@ -140,7 +142,7 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 		chat.History = chat.History[excessMessages:]
 	}
 
-	responsePayload, err := gptClient.CallGPT35(messagesFromHistory(chat.History), "gpt-3.5-turbo", 0.8)
+	responsePayload, err := gptClient.CallGPT35(messagesFromHistory(chat.History), chat.Settings.Model, chat.Settings.Temperature)
 	if err != nil {
 		log.Printf("Error: %v", err)
 		return

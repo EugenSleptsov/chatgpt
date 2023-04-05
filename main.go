@@ -79,7 +79,7 @@ func main() {
 			chat = &Chat{
 				ChatID: update.Message.Chat.ID,
 				Settings: ChatSettings{
-					Temperature: 0.6,
+					Temperature: 0.8,
 					Model:       "gpt-3.5-turbo",
 					MaxMessages: config.MaxMessages,
 				},

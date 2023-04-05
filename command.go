@@ -79,38 +79,35 @@ func commandReload(bot *telegram.Bot, update telegram.Update, chat *Chat) {
 }
 
 func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat) {
-	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
+		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
 	} else {
 		prompt := update.Message.CommandArguments()
 		translationPrompt := fmt.Sprintf("Translate the following text to English: \"%s\". You should answer only with translated text without explanations and quotation marks", prompt)
 		systemPrompt := "You are a helpful assistant that translates."
-		gptText(bot, chatID, update.Message.MessageID, gptClient, systemPrompt, translationPrompt)
+		gptText(bot, chat, update.Message.MessageID, gptClient, systemPrompt, translationPrompt)
 	}
 }
 
 func commandGrammar(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat) {
-	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to correct. Usage: /grammar <text>")
+		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to correct. Usage: /grammar <text>")
 	} else {
 		prompt := update.Message.CommandArguments()
 		grammarPrompt := fmt.Sprintf("Correct the following text: \"%s\". Answer with corrected text only.", prompt)
 		systemPrompt := "You are a helpful assistant that corrects grammar."
-		gptText(bot, chatID, update.Message.MessageID, gptClient, systemPrompt, grammarPrompt)
+		gptText(bot, chat, update.Message.MessageID, gptClient, systemPrompt, grammarPrompt)
 	}
 }
 
 func commandEnhance(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat) {
-	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chatID, update.Message.MessageID, "Please provide a text to enhance. Usage: /enhance <text>")
+		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to enhance. Usage: /enhance <text>")
 	} else {
 		prompt := update.Message.CommandArguments()
 		enhancePrompt := fmt.Sprintf("Review and improve the following text: \"%s\". Answer with improved text only.", prompt)
 		systemPrompt := "You are a helpful assistant that reviews text for grammar, style and things like that."
-		gptText(bot, chatID, update.Message.MessageID, gptClient, systemPrompt, enhancePrompt)
+		gptText(bot, chat, update.Message.MessageID, gptClient, systemPrompt, enhancePrompt)
 	}
 }
 
@@ -124,7 +121,8 @@ func commandHelp(bot *telegram.Bot, update telegram.Update, chat *Chat) {
 /translate <text> - Переводит <text> на любом языке на английский язык
 /grammar <text> - Исправляет грамматические ошибки в <text>
 /enhance <text> - Улучшает <text> с помощью GPT
-/imagine <text> - Генерирует изображение по описанию <text> размера 512x512`
+/imagine <text> - Генерирует изображение по описанию <text> размера 512x512
+/temperature <n> - Устанавливает температуру (креативность) для GPT. Допустимые значения: 0.0 - 1.2`
 	bot.Reply(chat.ChatID, update.Message.MessageID, helpText)
 }
 
@@ -180,5 +178,19 @@ func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 	} else {
 		chat.ImageGenNextTime = now.Add(time.Second * 900)
 		gptImage(bot, chat.ChatID, gptClient, update.Message.CommandArguments(), config)
+	}
+}
+
+func commandTemperature(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+	if len(update.Message.CommandArguments()) == 0 {
+		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Текущая температура %.1f.", chat.Settings.Temperature))
+	} else {
+		temperature, err := strconv.ParseFloat(update.Message.CommandArguments(), 64)
+		if err != nil || temperature < 0.0 || temperature > 1.2 {
+			bot.Reply(chat.ChatID, update.Message.MessageID, "Неверное значение температуры. Должно быть от 0.0 до 1.2.")
+		} else {
+			chat.Settings.Temperature = float32(temperature)
+			bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Температура установлена на %.1f.", temperature))
+		}
 	}
 }
