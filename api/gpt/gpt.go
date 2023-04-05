@@ -3,6 +3,7 @@ package gpt
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -14,13 +15,13 @@ type Message struct {
 	Content string `json:"content"`
 }
 
-type RequestPayload struct {
+type RequestCompletionsPayload struct {
 	Model       string    `json:"model"`
 	Messages    []Message `json:"messages"`
 	Temperature float32   `json:"temperature,omitempty"`
 }
 
-type ResponsePayload struct {
+type ResponseCompletionsPayload struct {
 	ID      string `json:"id"`
 	Object  string `json:"object"`
 	Created int    `json:"created"`
@@ -36,6 +37,17 @@ type ResponsePayload struct {
 	} `json:"usage"`
 }
 
+type RequestImagePayload struct {
+	Prompt string `json:"prompt"`
+	Size   string `json:"size"`
+}
+
+type ResponseImagePayload struct {
+	Data []struct {
+		URL string `json:"url"`
+	} `json:"data"`
+}
+
 const (
 	ImageSize256  = "256x256"
 	ImageSize512  = "512x512"
@@ -46,23 +58,77 @@ type GPTClient struct {
 	ApiKey string
 }
 
-func (gptClient *GPTClient) CallGPT35(chatConversation []Message, aimodel string, temperature float32) (*ResponsePayload, error) {
-	url := "https://api.openai.com/v1/chat/completions"
-	apiKey := gptClient.ApiKey
-
-	payload := RequestPayload{
+func (gptClient *GPTClient) CallGPT35(chatConversation []Message, aimodel string, temperature float32) (*ResponseCompletionsPayload, error) {
+	jsonPayload, err := json.Marshal(RequestCompletionsPayload{
 		Model:       aimodel,
 		Messages:    chatConversation,
 		Temperature: temperature,
-	}
-
-	jsonPayload, err := json.Marshal(payload)
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	retries := 3
+	resp, err := gptClient.httpRequest("https://api.openai.com/v1/chat/completions", jsonPayload, retries)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	log.Printf("Competions / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var responsePayload ResponseCompletionsPayload
+	err = json.Unmarshal(body, &responsePayload)
+	if err != nil {
+		return nil, err
+	}
+
+	return &responsePayload, nil
+}
+
+func (gptClient *GPTClient) GenerateImage(prompt string, size string) (string, error) {
+	jsonPayload, err := json.Marshal(RequestImagePayload{
+		Prompt: prompt,
+		Size:   getImageSize(size),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := gptClient.httpRequest("https://api.openai.com/v1/images/generations", jsonPayload, 1)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	log.Printf("Image / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var responseData ResponseImagePayload
+	err = json.Unmarshal(body, &responseData)
+	if err != nil {
+		return "", err
+	}
+
+	if len(responseData.Data) == 0 {
+		return "", fmt.Errorf("empty data array in response")
+	}
+
+	return responseData.Data[0].URL, nil
+}
+
+func (gptClient *GPTClient) httpRequest(url string, jsonPayload []byte, retries int) (*http.Response, error) {
+	apiKey := gptClient.ApiKey
+
 	var resp *http.Response
+	var err error
 
 	for i := 0; i < retries; i++ {
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
@@ -78,76 +144,17 @@ func (gptClient *GPTClient) CallGPT35(chatConversation []Message, aimodel string
 		if err == nil && resp.StatusCode == 200 {
 			break
 		}
-		time.Sleep(time.Duration(i+1) * time.Second) // Add a delay before retrying
+		time.Sleep(time.Duration(i+1) * time.Second)
 	}
 
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Log the HTTP status code and status text
-	log.Printf("HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var responsePayload ResponsePayload
-	err = json.Unmarshal(body, &responsePayload)
-	if err != nil {
-		return nil, err
-	}
-
-	return &responsePayload, nil
+	return resp, err
 }
 
-func (gptClient *GPTClient) GenerateImage(prompt string, size string) (string, error) {
-	url := "https://api.openai.com/v1/images/generations"
-	apiKey := gptClient.ApiKey
-
-	var imageSize string
+func getImageSize(size string) string {
 	switch size {
 	case ImageSize256, ImageSize512, ImageSize1024:
-		imageSize = size
+		return size
 	default:
-		imageSize = ImageSize512 // Default to 512x512 if size is invalid
+		return ImageSize512 // Default to 512x512 if size is invalid
 	}
-
-	requestData := map[string]interface{}{
-		"prompt": prompt,
-		"size":   imageSize,
-	}
-	requestDataBytes, err := json.Marshal(requestData)
-	if err != nil {
-		return "", err
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestDataBytes))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	var responseData map[string]interface{}
-	err = json.Unmarshal(body, &responseData)
-	if err != nil {
-		return "", err
-	}
-
-	return responseData["data"].([]interface{})[0].(map[string]interface{})["url"].(string), nil
 }
