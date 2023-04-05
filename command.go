@@ -3,6 +3,7 @@ package main
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
 	"log"
@@ -10,7 +11,7 @@ import (
 	"time"
 )
 
-func commandRemoveUser(bot *telegram.Bot, update telegram.Update, chat *Chat, config *Config) {
+func commandRemoveUser(bot *telegram.Bot, update telegram.Update, chat *storage.Chat, config *Config) {
 	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chatID, update.Message.MessageID, "Please provide a user id to remove")
@@ -40,7 +41,7 @@ func commandRemoveUser(bot *telegram.Bot, update telegram.Update, chat *Chat, co
 	}
 }
 
-func commandAddUser(bot *telegram.Bot, update telegram.Update, chat *Chat, config *Config) {
+func commandAddUser(bot *telegram.Bot, update telegram.Update, chat *storage.Chat, config *Config) {
 	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chatID, update.Message.MessageID, "Please provide a user id to add")
@@ -68,7 +69,7 @@ func commandAddUser(bot *telegram.Bot, update telegram.Update, chat *Chat, confi
 	}
 }
 
-func commandReload(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+func commandReload(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
 	chatID := chat.ChatID
 	config, err := readConfig("bot.conf")
 	if err != nil {
@@ -78,7 +79,7 @@ func commandReload(bot *telegram.Bot, update telegram.Update, chat *Chat) {
 	bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
 }
 
-func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat) {
+func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
 	} else {
@@ -89,7 +90,7 @@ func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.
 	}
 }
 
-func commandGrammar(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat) {
+func commandGrammar(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to correct. Usage: /grammar <text>")
 	} else {
@@ -100,7 +101,7 @@ func commandGrammar(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 	}
 }
 
-func commandEnhance(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat) {
+func commandEnhance(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to enhance. Usage: /enhance <text>")
 	} else {
@@ -111,7 +112,7 @@ func commandEnhance(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 	}
 }
 
-func commandHelp(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+func commandHelp(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
 	helpText := `Список доступных команд и их описание:
 /help - Показывает список доступных команд и их описание.
 /start - Отправляет приветственное сообщение, описывающее цель бота.
@@ -126,23 +127,23 @@ func commandHelp(bot *telegram.Bot, update telegram.Update, chat *Chat) {
 	bot.Reply(chat.ChatID, update.Message.MessageID, helpText)
 }
 
-func commandHistory(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+func commandHistory(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
 	historyMessages := formatHistory(messagesFromHistory(chat.History))
 	for _, message := range historyMessages {
 		bot.Reply(chat.ChatID, update.Message.MessageID, message)
 	}
 }
 
-func commandStart(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+func commandStart(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
 	bot.Reply(chat.ChatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help")
 }
 
-func commandClear(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+func commandClear(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
 	chat.History = nil
 	bot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров была очищена.")
 }
 
-func commandRollback(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+func commandRollback(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
 	number := 1
 	if len(update.Message.CommandArguments()) > 0 {
 		var err error
@@ -164,7 +165,7 @@ func commandRollback(bot *telegram.Bot, update telegram.Update, chat *Chat) {
 	}
 }
 
-func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *Chat, config *Config) {
+func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {
 	now := time.Now()
 	nextTime := chat.ImageGenNextTime
 	if nextTime.After(now) && update.Message.From.ID != config.AdminId {
@@ -181,7 +182,7 @@ func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 	}
 }
 
-func commandTemperature(bot *telegram.Bot, update telegram.Update, chat *Chat) {
+func commandTemperature(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Текущая температура %.1f.", chat.Settings.Temperature))
 	} else {

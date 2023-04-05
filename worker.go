@@ -3,6 +3,7 @@ package main
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
 	"log"
@@ -20,7 +21,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	chatID := update.Message.Chat.ID
 	fromID := update.Message.From.ID
 
-	chat, _ := chats[chatID]
+	chat, _ := botStorage.Get(chatID)
 
 	// Check for command
 	if update.Message.IsCommand() {
@@ -68,7 +69,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	gptChat(bot, update, gptClient, config, chat, fromID)
 }
 
-func gptText(bot *telegram.Bot, chat *Chat, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
+func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
 	responsePayload, err := gptClient.CallGPT35([]gpt.Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
@@ -118,7 +119,7 @@ func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt 
 	}
 }
 
-func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chat *Chat, fromID int64) {
+func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chat *storage.Chat, fromID int64) {
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
 	if update.Message.Chat.IsGroup() {
@@ -133,13 +134,17 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 	}
 
 	// Maintain conversation history
-	userMessage := gpt.Message{Role: "user", Content: update.Message.Text}
-	historyEntry := &ConversationEntry{Prompt: userMessage, Response: gpt.Message{}}
+	userMessage := storage.Message{Role: "user", Content: update.Message.Text}
+	historyEntry := &storage.ConversationEntry{Prompt: userMessage, Response: storage.Message{}}
 
 	chat.History = append(chat.History, historyEntry)
 	if len(chat.History) > config.MaxMessages {
 		excessMessages := len(chat.History) - chat.Settings.MaxMessages
 		chat.History = chat.History[excessMessages:]
+	}
+	err := botStorage.Set(chat.ChatID, chat)
+	if err != nil {
+		log.Printf("Error: %v", err)
 	}
 
 	responsePayload, err := gptClient.CallGPT35(messagesFromHistory(chat.History), chat.Settings.Model, chat.Settings.Temperature)
@@ -154,7 +159,11 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 	}
 
 	// Add the assistant's response to the conversation history
-	historyEntry.Response = gpt.Message{Role: "assistant", Content: response}
+	historyEntry.Response = storage.Message{Role: "assistant", Content: response}
+	err = botStorage.Set(chat.ChatID, chat)
+	if err != nil {
+		log.Printf("Error: %v", err)
+	}
 
 	log.Printf("[%s] %s", "ChatGPT", response)
 	bot.Reply(chat.ChatID, update.Message.MessageID, response)

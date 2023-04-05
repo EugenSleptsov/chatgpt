@@ -3,31 +3,14 @@ package main
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
 	"log"
 	"time"
 )
 
-var chats = make(map[int64]*Chat)
-
-type Chat struct {
-	ChatID           int64
-	Settings         ChatSettings
-	History          []*ConversationEntry
-	ImageGenNextTime time.Time
-}
-
-type ChatSettings struct {
-	Temperature float32
-	Model       string
-	MaxMessages int
-}
-
-type ConversationEntry struct {
-	Prompt   gpt.Message
-	Response gpt.Message
-}
+var botStorage storage.Storage
 
 type Config struct {
 	TelegramToken     string
@@ -37,6 +20,11 @@ type Config struct {
 	AdminId           int64
 	IgnoreReportIds   []int64
 	AuthorizedUserIds []int64
+}
+
+type ConversationEntry struct {
+	Prompt   gpt.Message
+	Response gpt.Message
 }
 
 func (c *Config) String() string {
@@ -68,25 +56,29 @@ func main() {
 		go worker(updateChan, bot, gptClient, config)
 	}
 
+	// Here we can choose any type of implemented storage
+	botStorage = storage.NewMemoryStorage()
+
 	for update := range bot.GetUpdateChannel(config.TimeoutValue) {
 		// Ignore any non-Message Updates
 		if update.Message == nil {
 			continue
 		}
 
-		chat, ok := chats[update.Message.Chat.ID]
+		chatID := update.Message.Chat.ID
+		chat, ok := botStorage.Get(chatID)
 		if !ok {
-			chat = &Chat{
+			chat = &storage.Chat{
 				ChatID: update.Message.Chat.ID,
-				Settings: ChatSettings{
+				Settings: storage.ChatSettings{
 					Temperature: 0.8,
 					Model:       "gpt-3.5-turbo",
 					MaxMessages: config.MaxMessages,
 				},
-				History:          make([]*ConversationEntry, 0),
+				History:          make([]*storage.ConversationEntry, 0),
 				ImageGenNextTime: time.Now(),
 			}
-			chats[chat.ChatID] = chat
+			_ = botStorage.Set(chatID, chat)
 		}
 
 		// If no authorized users are provided, make the bot public
@@ -139,7 +131,18 @@ func formatHistory(history []gpt.Message) []string {
 	return historyMessages
 }
 
-func messagesFromHistory(history []*ConversationEntry) []gpt.Message {
+func messagesFromHistory(storageHistory []*storage.ConversationEntry) []gpt.Message {
+	var history []*ConversationEntry
+	for _, entry := range storageHistory {
+		prompt := entry.Prompt
+		response := entry.Response
+
+		history = append(history, &ConversationEntry{
+			Prompt:   gpt.Message{Role: prompt.Role, Content: prompt.Content},
+			Response: gpt.Message{Role: response.Role, Content: response.Content},
+		})
+	}
+
 	var messages []gpt.Message
 	for _, entry := range history {
 		messages = append(messages, entry.Prompt)
