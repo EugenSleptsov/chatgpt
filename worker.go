@@ -14,6 +14,7 @@ import (
 func worker(updateChan <-chan telegram.Update, bot *telegram.Bot, gptClient *gpt.GPTClient, config *Config) {
 	for update := range updateChan {
 		processUpdate(bot, update, gptClient, config)
+		botStorage.Save()
 	}
 }
 
@@ -142,10 +143,6 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 		excessMessages := len(chat.History) - chat.Settings.MaxMessages
 		chat.History = chat.History[excessMessages:]
 	}
-	err := botStorage.Set(chat.ChatID, chat)
-	if err != nil {
-		log.Printf("Error: %v", err)
-	}
 
 	responsePayload, err := gptClient.CallGPT35(messagesFromHistory(chat.History), chat.Settings.Model, chat.Settings.Temperature)
 	if err != nil {
@@ -160,10 +157,6 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 
 	// Add the assistant's response to the conversation history
 	historyEntry.Response = storage.Message{Role: "assistant", Content: response}
-	err = botStorage.Set(chat.ChatID, chat)
-	if err != nil {
-		log.Printf("Error: %v", err)
-	}
 
 	log.Printf("[%s] %s", "ChatGPT", response)
 	bot.Reply(chat.ChatID, update.Message.MessageID, response)

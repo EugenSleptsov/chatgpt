@@ -19,3 +19,7 @@ func (m *MemoryStorage) Set(chatID int64, chat *Chat) error {
 	m.chats[chatID] = chat
 	return nil
 }
+
+func (m *MemoryStorage) Save() bool {
+	return true
+}

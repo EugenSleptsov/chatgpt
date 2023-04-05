@@ -57,7 +57,10 @@ func main() {
 	}
 
 	// Here we can choose any type of implemented storage
-	botStorage = storage.NewMemoryStorage()
+	botStorage, err = storage.NewFileStorage("data")
+	if err != nil {
+		log.Fatalf("Error creating storage: %v", err)
+	}
 
 	for update := range bot.GetUpdateChannel(config.TimeoutValue) {
 		// Ignore any non-Message Updates

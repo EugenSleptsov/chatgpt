@@ -7,6 +7,7 @@ import (
 type Storage interface {
 	Get(chatID int64) (*Chat, bool)
 	Set(chatID int64, chat *Chat) error
+	Save() bool
 }
 
 type Chat struct {
