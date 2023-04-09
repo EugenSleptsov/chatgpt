@@ -15,6 +15,29 @@ type Bot struct {
 type UpdatesChannel <-chan Update
 type Update tgbotapi.Update
 
+type Command string
+
+const (
+	CommandHelp     Command = "help"
+	CommandHistory  Command = "history"
+	CommandRollback Command = "rollback"
+	CommandClear    Command = "clear"
+)
+
+var CommandDescriptions = map[Command]string{
+	CommandHelp:     "Справка по командам",
+	CommandHistory:  "Показать историю переписки",
+	CommandRollback: "Отменить последнее сообщение",
+	CommandClear:    "Очистить историю переписки",
+}
+
+var DefaultCommandList = []Command{
+	CommandHelp,
+	CommandHistory,
+	CommandRollback,
+	CommandClear,
+}
+
 func NewBot(token string) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
@@ -26,15 +49,18 @@ func NewBot(token string) (*Bot, error) {
 		Username: api.Self.UserName,
 	}
 
-	_, _ = bot.api.Request(tgbotapi.NewSetMyCommands(
-		tgbotapi.BotCommand{Command: "help", Description: "Справка по командам"},
-		tgbotapi.BotCommand{Command: "history", Description: "Показать историю переписки"},
-		tgbotapi.BotCommand{Command: "rollback", Description: "Отменить последнее сообщение"},
-		tgbotapi.BotCommand{Command: "clear", Description: "Очистить историю переписки"},
-	))
-
 	log.Printf("Authorized on account %s", bot.api.Self.UserName)
 	return bot, nil
+}
+
+func (botInstance *Bot) SetCommandList(commands ...Command) error {
+	var tgCommands []tgbotapi.BotCommand
+	for _, command := range commands {
+		tgCommands = append(tgCommands, tgbotapi.BotCommand{Command: string(command), Description: CommandDescriptions[command]})
+	}
+
+	_, err := botInstance.api.Request(tgbotapi.NewSetMyCommands(tgCommands...))
+	return err
 }
 
 func (botInstance *Bot) GetUpdateChannel(timeout int) UpdatesChannel {

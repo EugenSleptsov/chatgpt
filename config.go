@@ -8,6 +8,22 @@ import (
 	"strings"
 )
 
+type Config struct {
+	TelegramToken     string
+	GPTToken          string
+	TimeoutValue      int
+	MaxMessages       int
+	AdminId           int64
+	IgnoreReportIds   []int64
+	AuthorizedUserIds []int64
+	CommandMenu       []string
+}
+
+func (c *Config) String() string {
+	return fmt.Sprintf("Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUserIds: %v,\n}",
+		c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUserIds)
+}
+
 func readConfig(filename string) (*Config, error) {
 	config := make(map[string]string)
 	lines, err := util.ReadLines(filename)
@@ -61,6 +77,12 @@ func readConfig(filename string) (*Config, error) {
 		}
 	}
 
+	commandMenuRaw := strings.Split(config["command_menu"], ",")
+	var commandMenu []string
+	for _, command := range commandMenuRaw {
+		commandMenu = append(commandMenu, command)
+	}
+
 	return &Config{
 		TelegramToken:     config["telegram_token"],
 		GPTToken:          config["gpt_token"],
@@ -69,6 +91,7 @@ func readConfig(filename string) (*Config, error) {
 		AdminId:           adminID,
 		IgnoreReportIds:   ignoreReportIds,
 		AuthorizedUserIds: authorizedUserIDs,
+		CommandMenu:       commandMenu,
 	}, nil
 }
 

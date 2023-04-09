@@ -27,9 +27,14 @@ max_messages = 10
 admin_id = YOUR_TELEGRAM_ADMIN_USER_ID (optional)
 ignore_report_ids = COMMA_SEPARATED_USER_IDS_TO_IGNORE (optional)
 authorized_user_ids = COMMA_SEPARATED_USER_IDS (optional)
+command_menu = COMMAND_LIST (optional)
 ```
 
-Replace YOUR_TELEGRAM_BOT_TOKEN with your actual Telegram bot token and YOUR_OPENAI_API_KEY with your OpenAI API key. Additionally, you can set the timeout_value, max_messages, admin_id, ignore_report_ids, and authorized_users to customize the bot's behavior. The admin_id, ignore_report_ids, and authorized_users are optional and can be left empty if not needed. If authorized_users is left empty, the bot will be available for public use.
+Replace YOUR_TELEGRAM_BOT_TOKEN with your actual Telegram bot token and YOUR_OPENAI_API_KEY with your OpenAI API key.
+
+Additionally, you can set the timeout_value, max_messages, admin_id, ignore_report_ids, and authorized_users to customize the bot's behavior. The admin_id, ignore_report_ids, and authorized_users are optional and can be left empty if not needed. If authorized_users is left empty, the bot will be available for public use.
+
+You can also customize the command_menu to change the list of available commands. If command_menu is left empty, the default list of commands will be used.
 
 ## Running the bot
 After building the project and creating the bot.conf file, run the bot:

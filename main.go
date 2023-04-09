@@ -12,24 +12,9 @@ import (
 
 var botStorage storage.Storage
 
-type Config struct {
-	TelegramToken     string
-	GPTToken          string
-	TimeoutValue      int
-	MaxMessages       int
-	AdminId           int64
-	IgnoreReportIds   []int64
-	AuthorizedUserIds []int64
-}
-
 type ConversationEntry struct {
 	Prompt   gpt.Message
 	Response gpt.Message
-}
-
-func (c *Config) String() string {
-	return fmt.Sprintf("Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUserIds: %v,\n}",
-		c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUserIds)
 }
 
 func main() {
@@ -41,6 +26,19 @@ func main() {
 	bot, err := telegram.NewBot(config.TelegramToken)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	var commandMenu []telegram.Command
+	for _, command := range config.CommandMenu {
+		if _, ok := telegram.CommandDescriptions[telegram.Command(command)]; ok {
+			commandMenu = append(commandMenu, telegram.Command(command))
+		}
+	}
+
+	if len(commandMenu) > 0 {
+		_ = bot.SetCommandList(commandMenu...)
+	} else {
+		_ = bot.SetCommandList(telegram.DefaultCommandList...)
 	}
 
 	gptClient := &gpt.GPTClient{

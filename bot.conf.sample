@@ -5,6 +5,7 @@ max_messages=10
 admin_id=
 ignore_report_ids=
 authorized_user_ids=
+command_menu=
 
 #example commentary
 #you can always leave authorized_users empty to make bot public
