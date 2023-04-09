@@ -26,6 +26,13 @@ func NewBot(token string) (*Bot, error) {
 		Username: api.Self.UserName,
 	}
 
+	_, _ = bot.api.Request(tgbotapi.NewSetMyCommands(
+		tgbotapi.BotCommand{Command: "help", Description: "Справка по командам"},
+		tgbotapi.BotCommand{Command: "history", Description: "Показать историю переписки"},
+		tgbotapi.BotCommand{Command: "rollback", Description: "Отменить последнее сообщение"},
+		tgbotapi.BotCommand{Command: "clear", Description: "Очистить историю переписки"},
+	))
+
 	log.Printf("Authorized on account %s", bot.api.Self.UserName)
 	return bot, nil
 }
