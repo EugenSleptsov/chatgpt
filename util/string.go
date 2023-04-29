@@ -1,5 +1,7 @@
 package util
 
+import "strings"
+
 // Title Make first letter capital
 func Title(s string) string {
 	if len(s) == 0 {
@@ -25,4 +27,20 @@ func Pluralize(number int, variations [3]string) string {
 	}
 
 	return variations[index]
+}
+
+// FixMarkdown Abrupt Telegram markdown fix
+func FixMarkdown(text string) string {
+	text = strings.TrimRight(text, "`")
+	tripleCnt := strings.Count(text, "```")
+	singleCnt := strings.Count(strings.Replace(text, "```", "", -1), "`")
+
+	if tripleCnt%2 == 1 {
+		text += "```"
+	}
+	if singleCnt%2 == 1 {
+		text += "`"
+	}
+
+	return text
 }

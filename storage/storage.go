@@ -21,6 +21,7 @@ type ChatSettings struct {
 	Temperature float32
 	Model       string
 	MaxMessages int
+	UseMarkdown bool
 }
 
 type ConversationEntry struct {

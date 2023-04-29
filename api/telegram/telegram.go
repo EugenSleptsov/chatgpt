@@ -1,10 +1,12 @@
 package telegram
 
 import (
+	"GPTBot/util"
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 )
 
 type Bot struct {
@@ -82,8 +84,12 @@ func (botInstance *Bot) GetUpdateChannel(timeout int) UpdatesChannel {
 	return ourChannel
 }
 
-func (botInstance *Bot) Reply(chatID int64, replyTo int, text string) {
+func (botInstance *Bot) Reply(chatID int64, replyTo int, text string, isMarkdown bool) {
 	msg := tgbotapi.NewMessage(chatID, text)
+	if isMarkdown {
+		msg.ParseMode = "MarkdownV2"
+		msg.Text = util.FixMarkdown(escapeMarkdownV2(msg.Text))
+	}
 	msg.ReplyToMessageID = replyTo
 	_, err := botInstance.api.Send(msg)
 	if err != nil {
@@ -91,8 +97,12 @@ func (botInstance *Bot) Reply(chatID int64, replyTo int, text string) {
 	}
 }
 
-func (botInstance *Bot) Message(message string, adminId int64) {
+func (botInstance *Bot) Message(message string, adminId int64, isMarkdown bool) {
 	msg := tgbotapi.NewMessage(adminId, message)
+	if isMarkdown {
+		msg.ParseMode = "MarkdownV2"
+		msg.Text = util.FixMarkdown(escapeMarkdownV2(msg.Text))
+	}
 	_, err := botInstance.api.Send(msg)
 	if err != nil {
 		log.Printf("Error sending message: %v", err)
@@ -119,4 +129,12 @@ func (botInstance *Bot) SendImage(chatID int64, imageUrl string, caption string)
 	}
 
 	return nil
+}
+
+func escapeMarkdownV2(text string) string {
+	charsToEscape := []string{"_", "*", "[", "]", "(", ")", "~", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"}
+	for _, char := range charsToEscape {
+		text = strings.ReplaceAll(text, char, "\\"+char)
+	}
+	return text
 }

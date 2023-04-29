@@ -75,6 +75,7 @@ func main() {
 					Temperature: 0.8,
 					Model:       "gpt-3.5-turbo",
 					MaxMessages: config.MaxMessages,
+					UseMarkdown: false,
 				},
 				History:          make([]*storage.ConversationEntry, 0),
 				ImageGenNextTime: time.Now(),
@@ -86,13 +87,13 @@ func main() {
 		if len(config.AuthorizedUserIds) > 0 {
 			if !util.IsIdInList(update.Message.From.ID, config.AuthorizedUserIds) {
 				if update.Message.Chat.Type == "private" {
-					bot.Reply(chat.ChatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+					bot.Reply(chat.ChatID, update.Message.MessageID, "Sorry, you do not have access to this bot.", false)
 					log.Printf("Unauthorized access attempt by user %d: %s %s (%s)", update.Message.From.ID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
 
 					// Notify the admin
 					if config.AdminId > 0 {
 						adminMessage := fmt.Sprintf("Unauthorized access attempt by user %d: %s %s (%s)", update.Message.From.ID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
-						bot.Message(adminMessage, config.AdminId)
+						bot.Message(adminMessage, config.AdminId, false)
 					}
 				}
 				continue

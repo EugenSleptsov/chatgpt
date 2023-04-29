@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 )
 
 // worker function that processes updates
@@ -50,7 +51,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 			commandTemperature(bot, update, chat)
 		default:
 			if fromID != config.AdminId {
-				bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
+				bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command), false)
 				break
 			}
 
@@ -87,7 +88,7 @@ func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gp
 	}
 
 	log.Printf("[%s] %s", "ChatGPT", response)
-	bot.Reply(chat.ChatID, messageID, response)
+	bot.Reply(chat.ChatID, messageID, response, false)
 }
 
 func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string, config *Config) {
@@ -115,7 +116,7 @@ func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt 
 	log.Printf("[ChatGPT] sent image %s", imageUrl)
 	if config.AdminId > 0 {
 		if chatID != config.AdminId {
-			bot.Message(fmt.Sprintf("Image with prompt \"%s\" sent to chat %d", prompt, chatID), config.AdminId)
+			bot.Message(fmt.Sprintf("Image with prompt \"%s\" sent to chat %d", prompt, chatID), config.AdminId, false)
 		}
 	}
 }
@@ -144,7 +145,15 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 		chat.History = chat.History[excessMessages:]
 	}
 
-	responsePayload, err := gptClient.CallGPT35(messagesFromHistory(chat.History), chat.Settings.Model, chat.Settings.Temperature)
+	messages := []gpt.Message{
+		{
+			Role:    "system",
+			Content: "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible. Today is " + time.Now().Format("Monday, 2 January 2006"),
+		},
+	}
+	messages = append(messages, messagesFromHistory(chat.History)...)
+
+	responsePayload, err := gptClient.CallGPT35(messages, chat.Settings.Model, chat.Settings.Temperature)
 	if err != nil {
 		log.Printf("Error: %v", err)
 		return
@@ -159,7 +168,7 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 	historyEntry.Response = storage.Message{Role: "assistant", Content: response}
 
 	log.Printf("[%s] %s", "ChatGPT", response)
-	bot.Reply(chat.ChatID, update.Message.MessageID, response)
+	bot.Reply(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
 
 	if config.AdminId == 0 {
 		return
@@ -173,5 +182,5 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 		return
 	}
 
-	bot.Message(fmt.Sprintf("[User: %s %s (%s, ID: %d)] %s\n[ChatGPT] %s\n", update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID, update.Message.Text, response), config.AdminId)
+	bot.Message(fmt.Sprintf("[User: %s %s (%s, ID: %d)] %s\n[ChatGPT] %s\n", update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID, update.Message.Text, response), config.AdminId, false)
 }
