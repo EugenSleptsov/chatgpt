@@ -1,6 +1,6 @@
-# GPT-3.5 Turbo Telegram Bot
+# OpenAI GPT model powered Telegram Bot
 
-This repository contains the source code for a Telegram bot that utilizes OpenAI's GPT-3.5 Turbo to assist users in answering questions and solving tasks.
+This repository contains the source code for a Telegram bot that utilizes OpenAI's GPT models to assist users in answering questions and solving tasks.
 
 ## Prerequisites
 
