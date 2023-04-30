@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 )
 
 // worker function that processes updates
@@ -145,11 +144,9 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 		chat.History = chat.History[excessMessages:]
 	}
 
-	messages := []gpt.Message{
-		{
-			Role:    "system",
-			Content: "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible. Today is " + time.Now().Format("Monday, 2 January 2006"),
-		},
+	var messages []gpt.Message
+	if chat.Settings.SystemPrompt != "" {
+		messages = append(messages, gpt.Message{Role: "system", Content: chat.Settings.SystemPrompt})
 	}
 	messages = append(messages, messagesFromHistory(chat.History)...)
 

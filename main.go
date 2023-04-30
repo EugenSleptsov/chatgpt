@@ -72,10 +72,11 @@ func main() {
 			chat = &storage.Chat{
 				ChatID: update.Message.Chat.ID,
 				Settings: storage.ChatSettings{
-					Temperature: 0.8,
-					Model:       "gpt-3.5-turbo",
-					MaxMessages: config.MaxMessages,
-					UseMarkdown: false,
+					Temperature:  0.8,
+					Model:        "gpt-3.5-turbo",
+					MaxMessages:  config.MaxMessages,
+					UseMarkdown:  false,
+					SystemPrompt: "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible.",
 				},
 				History:          make([]*storage.ConversationEntry, 0),
 				ImageGenNextTime: time.Now(),

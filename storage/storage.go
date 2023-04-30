@@ -18,10 +18,11 @@ type Chat struct {
 }
 
 type ChatSettings struct {
-	Temperature float32
-	Model       string
-	MaxMessages int
-	UseMarkdown bool
+	Temperature  float32
+	Model        string
+	MaxMessages  int
+	UseMarkdown  bool
+	SystemPrompt string
 }
 
 type ConversationEntry struct {
