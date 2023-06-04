@@ -36,13 +36,15 @@ func NewFileStorage(dirPath string) (*FileStorage, error) {
 func (s *FileStorage) Get(chatID int64) (*Chat, bool) {
 	chat, ok := s.chats[chatID]
 	if !ok {
-		chat, err := s.loadChatFromFile(chatID)
+		var err error
+		chat, err = s.loadChatFromFile(chatID)
 		if err != nil {
 			return nil, false
 		}
 		s.chats[chatID] = chat
 		ok = true
 	}
+
 	return chat, ok
 }
 
