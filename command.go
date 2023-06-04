@@ -135,7 +135,7 @@ func commandHistory(bot *telegram.Bot, update telegram.Update, chat *storage.Cha
 }
 
 func commandStart(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
-	bot.Reply(chat.ChatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help. ```Hehe```", true)
+	bot.Reply(chat.ChatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help.", true)
 }
 
 func commandClear(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
@@ -192,6 +192,24 @@ func commandTemperature(bot *telegram.Bot, update telegram.Update, chat *storage
 		} else {
 			chat.Settings.Temperature = float32(temperature)
 			bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Температура установлена на %.1f.", temperature), false)
+		}
+	}
+}
+
+func commandModel(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
+	if len(update.Message.CommandArguments()) == 0 {
+		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Текущая модель %s.", chat.Settings.Model), false)
+	} else {
+		model := update.Message.CommandArguments()
+		if model != gpt.ModelGPT3 && model != gpt.ModelGPT4 && model != gpt.ModelGPT3Turbo {
+			bot.Reply(chat.ChatID, update.Message.MessageID, "Неверное название модели.", false)
+		} else {
+			if model == gpt.ModelGPT3 {
+				model = gpt.ModelGPT3Turbo
+			}
+
+			chat.Settings.Model = model
+			bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s.", model), false)
 		}
 	}
 }

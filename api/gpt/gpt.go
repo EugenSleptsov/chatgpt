@@ -49,9 +49,12 @@ type ResponseImagePayload struct {
 }
 
 const (
-	ImageSize256  = "256x256"
-	ImageSize512  = "512x512"
-	ImageSize1024 = "1024x1024"
+	ImageSize256   = "256x256"
+	ImageSize512   = "512x512"
+	ImageSize1024  = "1024x1024"
+	ModelGPT3      = "gpt-3"
+	ModelGPT3Turbo = "gpt-3.5-turbo"
+	ModelGPT4      = "gpt-4"
 )
 
 type GPTClient struct {

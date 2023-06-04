@@ -48,6 +48,8 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 			commandImagine(bot, update, gptClient, chat, config)
 		case "temperature":
 			commandTemperature(bot, update, chat)
+		case "model":
+			commandModel(bot, update, chat)
 		default:
 			if fromID != config.AdminId {
 				bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command), false)
