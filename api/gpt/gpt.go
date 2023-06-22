@@ -79,7 +79,7 @@ func (gptClient *GPTClient) CallGPT35(chatConversation []Message, aimodel string
 		return nil, err
 	}
 	defer resp.Body.Close()
-	log.Printf("Competions / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	log.Printf("Completions / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
