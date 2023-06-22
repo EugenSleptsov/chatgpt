@@ -201,15 +201,18 @@ func commandModel(bot *telegram.Bot, update telegram.Update, chat *storage.Chat)
 		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Текущая модель %s.", chat.Settings.Model), false)
 	} else {
 		model := update.Message.CommandArguments()
-		if model != gpt.ModelGPT3 && model != gpt.ModelGPT4 && model != gpt.ModelGPT3Turbo {
+		switch model {
+		case gpt.ModelGPT3, gpt.ModelGPT3Turbo:
+			chat.Settings.Model = gpt.ModelGPT3Turbo
+			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-3.5-turbo.", false)
+		case gpt.ModelGPT316k, gpt.ModelGPT316k2:
+			chat.Settings.Model = gpt.ModelGPT316k
+			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-3.5-turbo-16k.", false)
+		case gpt.ModelGPT4:
+			chat.Settings.Model = gpt.ModelGPT4
+			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-4.", false)
+		default:
 			bot.Reply(chat.ChatID, update.Message.MessageID, "Неверное название модели.", false)
-		} else {
-			if model == gpt.ModelGPT3 {
-				model = gpt.ModelGPT3Turbo
-			}
-
-			chat.Settings.Model = model
-			bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s.", model), false)
 		}
 	}
 }
