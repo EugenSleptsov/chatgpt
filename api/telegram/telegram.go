@@ -84,7 +84,15 @@ func (botInstance *Bot) GetUpdateChannel(timeout int) UpdatesChannel {
 	return ourChannel
 }
 
-func (botInstance *Bot) Reply(chatID int64, replyTo int, text string, isMarkdown bool) {
+func (botInstance *Bot) ReplyMarkdown(chatID int64, replyTo int, text string) {
+	botInstance._reply(chatID, replyTo, text, true)
+}
+
+func (botInstance *Bot) Reply(chatID int64, replyTo int, text string) {
+	botInstance._reply(chatID, replyTo, text, false)
+}
+
+func (botInstance *Bot) _reply(chatID int64, replyTo int, text string, isMarkdown bool) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	if isMarkdown {
 		msg.ParseMode = "MarkdownV2"

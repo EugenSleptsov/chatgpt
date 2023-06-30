@@ -88,7 +88,7 @@ func main() {
 		if len(config.AuthorizedUserIds) > 0 {
 			if !util.IsIdInList(update.Message.From.ID, config.AuthorizedUserIds) {
 				if update.Message.Chat.Type == "private" {
-					bot.Reply(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.", false)
+					bot.Reply(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
 					log.Printf("Unauthorized access attempt by user %d: %s %s (%s)", update.Message.From.ID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
 
 					// Notify the admin

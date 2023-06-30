@@ -50,9 +50,11 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 			commandTemperature(bot, update, chat)
 		case "model":
 			commandModel(bot, update, chat)
+		case "system":
+			commandSystem(bot, update, chat)
 		default:
 			if fromID != config.AdminId {
-				bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command), false)
+				bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
 				break
 			}
 
@@ -89,7 +91,7 @@ func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gp
 	}
 
 	log.Printf("[%s] %s", "ChatGPT", response)
-	bot.Reply(chat.ChatID, messageID, response, false)
+	bot.Reply(chat.ChatID, messageID, response)
 }
 
 func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string, config *Config) {
@@ -167,7 +169,11 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 	historyEntry.Response = storage.Message{Role: "assistant", Content: response}
 
 	log.Printf("[%s] %s", "ChatGPT", response)
-	bot.Reply(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
+	if chat.Settings.UseMarkdown {
+		bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response)
+	} else {
+		bot.Reply(chat.ChatID, update.Message.MessageID, response)
+	}
 
 	if config.AdminId == 0 {
 		return
