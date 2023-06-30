@@ -199,7 +199,11 @@ func commandTemperature(bot *telegram.Bot, update telegram.Update, chat *storage
 
 func commandSystem(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprint(chat.Settings.SystemPrompt))
+		if chat.Settings.SystemPrompt == "" {
+			bot.Reply(chat.ChatID, update.Message.MessageID, "Системное сообщение не установлено.")
+		} else {
+			bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprint(chat.Settings.SystemPrompt))
+		}
 	} else {
 		chat.Settings.SystemPrompt = update.Message.CommandArguments()
 		if len(chat.Settings.SystemPrompt) > 1024 {
