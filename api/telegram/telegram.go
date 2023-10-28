@@ -139,6 +139,10 @@ func (botInstance *Bot) SendImage(chatID int64, imageUrl string, caption string)
 	return nil
 }
 
+func (botInstance *Bot) GetUserCount(chatID int64) (int, error) {
+	return botInstance.api.GetChatMembersCount(tgbotapi.ChatMemberCountConfig{ChatConfig: tgbotapi.ChatConfig{ChatID: chatID}})
+}
+
 func escapeMarkdownV2(text string) string {
 	charsToEscape := []string{"_", "*", "[", "]", "(", ")", "~", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"}
 	for _, char := range charsToEscape {

@@ -127,7 +127,8 @@ func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt 
 func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chat *storage.Chat, fromID int64) {
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
-	if update.Message.Chat.IsGroup() {
+	userCount, _ := bot.GetUserCount(chat.ChatID)
+	if update.Message.Chat.IsGroup() || userCount > 2 {
 		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == bot.Username
 		if !strings.Contains(update.Message.Text, "@"+bot.Username) && !isReplyToBot {
 			return
