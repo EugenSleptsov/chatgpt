@@ -228,6 +228,9 @@ func commandModel(bot *telegram.Bot, update telegram.Update, chat *storage.Chat)
 		case gpt.ModelGPT4:
 			chat.Settings.Model = gpt.ModelGPT4
 			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-4.")
+		case gpt.ModelGPT4Preview:
+			chat.Settings.Model = gpt.ModelGPT4Preview
+			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-4-1106-preview.")
 		default:
 			bot.Reply(chat.ChatID, update.Message.MessageID, "Неверное название модели.")
 		}
