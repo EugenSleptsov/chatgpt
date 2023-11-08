@@ -225,10 +225,7 @@ func commandModel(bot *telegram.Bot, update telegram.Update, chat *storage.Chat)
 		case gpt.ModelGPT316k, gpt.ModelGPT316k2:
 			chat.Settings.Model = gpt.ModelGPT316k
 			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-3.5-turbo-16k.")
-		case gpt.ModelGPT4:
-			chat.Settings.Model = gpt.ModelGPT4
-			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-4.")
-		case gpt.ModelGPT4Preview:
+		case gpt.ModelGPT4, gpt.ModelGPT4Preview:
 			chat.Settings.Model = gpt.ModelGPT4Preview
 			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-4-1106-preview.")
 		default:
