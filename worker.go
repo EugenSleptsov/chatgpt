@@ -144,7 +144,7 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 	historyEntry := &storage.ConversationEntry{Prompt: userMessage, Response: storage.Message{}}
 
 	chat.History = append(chat.History, historyEntry)
-	if len(chat.History) > config.MaxMessages {
+	if len(chat.History) > chat.Settings.MaxMessages {
 		excessMessages := len(chat.History) - chat.Settings.MaxMessages
 		chat.History = chat.History[excessMessages:]
 	}
