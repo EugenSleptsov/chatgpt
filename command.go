@@ -113,7 +113,7 @@ func commandEnhance(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 }
 
 func commandHelp(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
-	helpText := `Список доступных команд и их описание:
+	helpText := `@ Список доступных команд и их описание:
 /help - Показывает список доступных команд и их описание.
 /start - Отправляет приветственное сообщение, описывающее цель бота.
 /history - Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании.
