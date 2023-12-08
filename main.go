@@ -18,29 +18,20 @@ type ConversationEntry struct {
 }
 
 func main() {
+	// CONFIGURATION
 	config, err := readConfig("bot.conf")
 	if err != nil {
 		log.Fatalf("Error reading bot.conf: %v", err)
 	}
 
+	// TELEGRAM BOT INITIALIZATION
 	bot, err := telegram.NewBot(config.TelegramToken)
 	if err != nil {
 		log.Fatal(err)
 	}
+	bot.SetCommandList(config.CommandMenu)
 
-	var commandMenu []telegram.Command
-	for _, command := range config.CommandMenu {
-		if _, ok := telegram.CommandDescriptions[telegram.Command(command)]; ok {
-			commandMenu = append(commandMenu, telegram.Command(command))
-		}
-	}
-
-	if len(commandMenu) > 0 {
-		_ = bot.SetCommandList(commandMenu...)
-	} else {
-		_ = bot.SetCommandList(telegram.DefaultCommandList...)
-	}
-
+	// GPT CLIENT INITIALIZATION
 	gptClient := &gpt.GPTClient{
 		ApiKey: config.GPTToken,
 	}

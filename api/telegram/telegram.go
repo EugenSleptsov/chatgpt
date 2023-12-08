@@ -3,7 +3,7 @@ package telegram
 import (
 	"GPTBot/util"
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -55,7 +55,22 @@ func NewBot(token string) (*Bot, error) {
 	return bot, nil
 }
 
-func (botInstance *Bot) SetCommandList(commands ...Command) error {
+func (botInstance *Bot) SetCommandList(rawCommandMenu []string) {
+	var commandMenu []Command
+	for _, command := range rawCommandMenu {
+		if _, ok := CommandDescriptions[Command(command)]; ok {
+			commandMenu = append(commandMenu, Command(command))
+		}
+	}
+
+	if len(commandMenu) > 0 {
+		_ = botInstance._setCommandList(commandMenu...)
+	} else {
+		_ = botInstance._setCommandList(DefaultCommandList...)
+	}
+}
+
+func (botInstance *Bot) _setCommandList(commands ...Command) error {
 	var tgCommands []tgbotapi.BotCommand
 	for _, command := range commands {
 		tgCommands = append(tgCommands, tgbotapi.BotCommand{Command: string(command), Description: CommandDescriptions[command]})
@@ -122,9 +137,14 @@ func (botInstance *Bot) SendImage(chatID int64, imageUrl string, caption string)
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(response.Body)
 
-	imageData, err := ioutil.ReadAll(response.Body)
+	imageData, err := io.ReadAll(response.Body)
 	if err != nil {
 		return err
 	}
