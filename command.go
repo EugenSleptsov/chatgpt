@@ -81,7 +81,7 @@ func commandReload(bot *telegram.Bot, update telegram.Update, chat *storage.Chat
 
 func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to translate. Usage: /translate <text>")
+		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
 	} else {
 		prompt := update.Message.CommandArguments()
 		translationPrompt := fmt.Sprintf("Translate the following text to English: \"%s\". You should answer only with translated text without explanations and quotation marks", prompt)
@@ -92,7 +92,7 @@ func commandTranslate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.
 
 func commandGrammar(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to correct. Usage: /grammar <text>")
+		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо скорректировать. Использование: /grammar <text>")
 	} else {
 		prompt := update.Message.CommandArguments()
 		grammarPrompt := fmt.Sprintf("Correct the following text: \"%s\". Answer with corrected text only.", prompt)
@@ -103,7 +103,7 @@ func commandGrammar(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 
 func commandEnhance(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to enhance. Usage: /enhance <text>")
+		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо улучшить. Использование: /enhance <text>")
 	} else {
 		prompt := update.Message.CommandArguments()
 		enhancePrompt := fmt.Sprintf("Review and improve the following text: \"%s\". Answer with improved text only.", prompt)
@@ -136,7 +136,7 @@ func commandHistory(bot *telegram.Bot, update telegram.Update, chat *storage.Cha
 }
 
 func commandStart(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
-	bot.Reply(chat.ChatID, update.Message.MessageID, "Здравствуйте! Я помощник GPT-3.5 Turbo, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help.")
+	bot.Reply(chat.ChatID, update.Message.MessageID, "Здравствуйте! Я чатбот-помощник, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help.")
 }
 
 func commandClear(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) {
@@ -176,7 +176,7 @@ func commandImagine(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 	}
 
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chat.ChatID, update.Message.MessageID, "Please provide a text to generate an image. Usage: /image <text>")
+		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
 	} else {
 		chat.ImageGenNextTime = now.Add(time.Second * 900)
 		gptImage(bot, chat.ChatID, gptClient, update.Message.CommandArguments(), config)

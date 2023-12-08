@@ -85,7 +85,7 @@ func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gp
 		return
 	}
 
-	response := "I'm sorry, there was a problem. You can try again."
+	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
 	if len(responsePayload.Choices) > 0 {
 		response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
 	}
@@ -155,15 +155,20 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 	}
 	messages = append(messages, messagesFromHistory(chat.History)...)
 
-	responsePayload, err := gptClient.CallGPT35(messages, chat.Settings.Model, chat.Settings.Temperature)
-	if err != nil {
-		log.Printf("Error: %v", err)
-		return
-	}
+	// quality of life, we do 2 requests if the first one fails
+	tryLimit := 2
+	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
+	for i := 0; i < tryLimit; i++ {
+		responsePayload, err := gptClient.CallGPT35(messages, chat.Settings.Model, chat.Settings.Temperature)
+		if err != nil {
+			log.Printf("Error: %v", err)
+			return
+		}
 
-	response := "I'm sorry, there was a problem in answering. You can try again"
-	if len(responsePayload.Choices) > 0 {
-		response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
+		if len(responsePayload.Choices) > 0 {
+			response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
+			break
+		}
 	}
 
 	// Add the assistant's response to the conversation history
