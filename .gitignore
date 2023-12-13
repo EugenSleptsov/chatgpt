@@ -1,2 +1,4 @@
 bot.conf
 data/
+log/*.log
+GPTBot

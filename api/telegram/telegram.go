@@ -20,17 +20,19 @@ type Update tgbotapi.Update
 type Command string
 
 const (
-	CommandHelp     Command = "help"
-	CommandHistory  Command = "history"
-	CommandRollback Command = "rollback"
-	CommandClear    Command = "clear"
+	CommandHelp      Command = "help"
+	CommandHistory   Command = "history"
+	CommandRollback  Command = "rollback"
+	CommandClear     Command = "clear"
+	CommandSummarize Command = "summarize"
 )
 
 var CommandDescriptions = map[Command]string{
-	CommandHelp:     "Справка по командам",
-	CommandHistory:  "Показать историю переписки",
-	CommandRollback: "Отменить последнее сообщение",
-	CommandClear:    "Очистить историю переписки",
+	CommandHelp:      "Справка по командам",
+	CommandHistory:   "Показать историю переписки",
+	CommandRollback:  "Отменить последнее сообщение",
+	CommandClear:     "Очистить историю переписки",
+	CommandSummarize: "Суммаризировать историю переписки",
 }
 
 var DefaultCommandList = []Command{
@@ -38,6 +40,7 @@ var DefaultCommandList = []Command{
 	CommandHistory,
 	CommandRollback,
 	CommandClear,
+	CommandSummarize,
 }
 
 func NewBot(token string) (*Bot, error) {

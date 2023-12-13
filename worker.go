@@ -52,6 +52,8 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 			commandModel(bot, update, chat)
 		case "system":
 			commandSystem(bot, update, chat)
+		case "summarize":
+			commandSummarize(bot, update, gptClient, chat)
 		default:
 			if fromID != config.AdminId {
 				// bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
@@ -127,8 +129,7 @@ func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt 
 func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chat *storage.Chat, fromID int64) {
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
-	userCount, _ := bot.GetUserCount(chat.ChatID)
-	if update.Message.Chat.IsGroup() || userCount > 2 {
+	if chat.ChatID < 0 { // group chat
 		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == bot.Username
 		if !strings.Contains(update.Message.Text, "@"+bot.Username) && !isReplyToBot {
 			return
@@ -148,6 +149,19 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 		excessMessages := len(chat.History) - chat.Settings.MaxMessages
 		chat.History = chat.History[excessMessages:]
 	}
+
+	// putting history to log file
+	// every newline is a new message
+	var lines []string
+	name := update.Message.From.FirstName + " " + update.Message.From.LastName
+	for _, v := range strings.Split(update.Message.Text, "\n") {
+		if v != "" {
+			lines = append(lines, name+": "+v)
+		}
+	}
+
+	// saving lines to log file
+	util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
 
 	var messages []gpt.Message
 	if chat.Settings.SystemPrompt != "" {

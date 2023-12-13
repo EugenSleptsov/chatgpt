@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -124,7 +125,8 @@ func commandHelp(bot *telegram.Bot, update telegram.Update, chat *storage.Chat) 
 /enhance <text> - Улучшает <text> с помощью GPT
 /imagine <text> - Генерирует изображение по описанию <text> размера 512x512
 /temperature <n> - Устанавливает температуру (креативность) для GPT. Допустимые значения: 0.0 - 1.2
-/system <text> - Устанавливает системный промпт для GPT. Пример: "You are a helpful assistant that translates."`
+/system <text> - Устанавливает системный промпт для GPT. Пример: "You are a helpful assistant that translates."
+/summarize <n> - Генерирует краткое содержание последних <n> сообщений из истории разговоров для текущего чата. <n> по умолчанию равно 50.`
 	bot.Reply(chat.ChatID, update.Message.MessageID, helpText)
 }
 
@@ -232,4 +234,40 @@ func commandModel(bot *telegram.Bot, update telegram.Update, chat *storage.Chat)
 			bot.Reply(chat.ChatID, update.Message.MessageID, "Неверное название модели.")
 		}
 	}
+}
+
+func commandSummarize(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+	messageCount := 50
+	if len(update.Message.CommandArguments()) > 0 {
+		messageCount, _ = strconv.Atoi(update.Message.CommandArguments())
+		if messageCount <= 0 {
+			messageCount = 50
+		}
+
+		if messageCount > 100 {
+			messageCount = 100
+		}
+	}
+
+	bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Генерирую краткое содержание последних %d сообщений...", messageCount))
+	// open log file
+	lines, err := util.ReadLastLines(fmt.Sprintf("log/%d.log", chat.ChatID), messageCount)
+	if err != nil {
+		bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка")
+		return
+	}
+	log.Printf("Lines: %v", lines)
+
+	// cut lines to messageCount
+	if len(lines) > messageCount {
+		lines = lines[len(lines)-messageCount:]
+	}
+	if len(lines) == 0 {
+		bot.Reply(chat.ChatID, update.Message.MessageID, "История чата пуста")
+		return
+	}
+
+	systemPrompt := "Ты - бот с острым языком и чувством юмора. Твоя задача - создать краткий смешной пересказ последних сообщений чата. Ты можешь добавлять свои комментарии в процессе пересказа, будто ты доктор Кокс или доктор Хаус. Не нужно передавать переписку дословно, также твое сообщение должно быть не более 300 слов (но не нужно насильно стремиться к этому числу)."
+	chatLog := strings.Join(lines, "\n")
+	gptText(bot, chat, update.Message.MessageID, gptClient, systemPrompt, "Вот сообщения чата, которые ты должен обработать:\n\n"+chatLog)
 }
