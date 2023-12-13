@@ -83,7 +83,14 @@ func main() {
 			name := update.Message.From.FirstName + " " + update.Message.From.LastName
 			for _, v := range strings.Split(update.Message.Text, "\n") {
 				if v != "" {
-					lines = append(lines, name+": "+v)
+					lines = append(lines, v)
+				}
+			}
+
+			// для групповых чатов указываем имя пользователя
+			if chat.ChatID < 0 {
+				for i := range lines {
+					lines[i] = fmt.Sprintf("%s: %s", name, lines[i])
 				}
 			}
 
