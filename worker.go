@@ -73,6 +73,19 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		return
 	}
 
+	// putting history to log file
+	// every newline is a new message
+	var lines []string
+	name := update.Message.From.FirstName + " " + update.Message.From.LastName
+	for _, v := range strings.Split(update.Message.Text, "\n") {
+		if v != "" {
+			lines = append(lines, name+": "+v)
+		}
+	}
+
+	// saving lines to log file
+	util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
+
 	gptChat(bot, update, gptClient, config, chat, fromID)
 }
 
@@ -149,19 +162,6 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 		excessMessages := len(chat.History) - chat.Settings.MaxMessages
 		chat.History = chat.History[excessMessages:]
 	}
-
-	// putting history to log file
-	// every newline is a new message
-	var lines []string
-	name := update.Message.From.FirstName + " " + update.Message.From.LastName
-	for _, v := range strings.Split(update.Message.Text, "\n") {
-		if v != "" {
-			lines = append(lines, name+": "+v)
-		}
-	}
-
-	// saving lines to log file
-	util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
 
 	var messages []gpt.Message
 	if chat.Settings.SystemPrompt != "" {
