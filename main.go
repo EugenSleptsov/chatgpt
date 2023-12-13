@@ -76,18 +76,20 @@ func main() {
 			_ = botStorage.Set(chatID, chat)
 		}
 
-		// putting history to log file
-		// every newline is a new message
-		var lines []string
-		name := update.Message.From.FirstName + " " + update.Message.From.LastName
-		for _, v := range strings.Split(update.Message.Text, "\n") {
-			if v != "" {
-				lines = append(lines, name+": "+v)
+		if !update.Message.IsCommand() {
+			// putting history to log file
+			// every newline is a new message
+			var lines []string
+			name := update.Message.From.FirstName + " " + update.Message.From.LastName
+			for _, v := range strings.Split(update.Message.Text, "\n") {
+				if v != "" {
+					lines = append(lines, name+": "+v)
+				}
 			}
-		}
 
-		// saving lines to log file
-		util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
+			// saving lines to log file
+			util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
+		}
 
 		// If no authorized users are provided, make the bot public
 		if len(config.AuthorizedUserIds) > 0 {
