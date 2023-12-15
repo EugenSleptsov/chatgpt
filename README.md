@@ -56,6 +56,8 @@ The bot should now be running, and you can interact with it on Telegram. Send th
 * /imagine `text` - Generates an image based on `text`
 * /temperature `value` - Sets the temperature value for the GPT-3.5 Turbo API
 * /system `value` - Sets the system prompt for the GPT-3.5 Turbo API
+* /model `value` - Sets openai model for API calls (gpt-3/gpt-4)
+* /summarize `num` - Provides sarcastic summary for last `num` messages in group/private chat
 
 ## Admin Bot Commands
 * /reload - Reloads config in case if you have changed parameters (for example, added new authorized users)
@@ -64,3 +66,7 @@ The bot should now be running, and you can interact with it on Telegram. Send th
 
 ## Contributing
 Contributions are welcome! Please feel free to submit issues or pull requests for enhancements or bug fixes.
+
+## Special Thanks
+Huge thanks to JetBrains for support, which greatly contributed to the development of this project.
+https://www.jetbrains.com/community/opensource
