@@ -244,12 +244,11 @@ func commandSummarize(bot *telegram.Bot, update telegram.Update, gptClient *gpt.
 			messageCount = 50
 		}
 
-		if messageCount > 100 {
-			messageCount = 100
+		if messageCount > 500 {
+			messageCount = 500
 		}
 	}
 
-	bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Генерирую краткое содержание последних %d сообщений...", messageCount))
 	// open log file
 	lines, err := util.ReadLastLines(fmt.Sprintf("log/%d.log", chat.ChatID), messageCount)
 	if err != nil {
@@ -261,6 +260,8 @@ func commandSummarize(bot *telegram.Bot, update telegram.Update, gptClient *gpt.
 		bot.Reply(chat.ChatID, update.Message.MessageID, "История чата пуста")
 		return
 	}
+
+	bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Генерирую краткое содержание последних %d сообщений...", len(lines)))
 
 	systemPrompt := "Ты - бот с острым языком и чувством юмора. Твоя задача - создать краткий смешной пересказ последних сообщений чата. Ты можешь добавлять свои комментарии в процессе пересказа, будто ты доктор Кокс или доктор Хаус. Не нужно передавать переписку дословно, также твое сообщение должно быть не более 300 слов (но не нужно насильно стремиться к этому числу)."
 	if chat.ChatID > 0 { // private chats also can be summarized
