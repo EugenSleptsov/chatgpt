@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -40,6 +40,7 @@ type ResponseCompletionsPayload struct {
 type RequestImagePayload struct {
 	Prompt string `json:"prompt"`
 	Size   string `json:"size"`
+	Model  string `json:"model"`
 }
 
 type ResponseImagePayload struct {
@@ -58,6 +59,8 @@ const (
 	ModelGPT316k2    = "gpt-316"
 	ModelGPT4        = "gpt-4"
 	ModelGPT4Preview = "gpt-4-1106-preview"
+	ModelDalle2      = "dall-e-2"
+	ModelDalle3      = "dall-e-3"
 )
 
 type GPTClient struct {
@@ -82,7 +85,7 @@ func (gptClient *GPTClient) CallGPT35(chatConversation []Message, aimodel string
 	defer resp.Body.Close()
 	log.Printf("Completions / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +103,7 @@ func (gptClient *GPTClient) GenerateImage(prompt string, size string) (string, e
 	jsonPayload, err := json.Marshal(RequestImagePayload{
 		Prompt: prompt,
 		Size:   getImageSize(size),
+		Model:  ModelDalle3,
 	})
 	if err != nil {
 		return "", err
@@ -112,7 +116,7 @@ func (gptClient *GPTClient) GenerateImage(prompt string, size string) (string, e
 	defer resp.Body.Close()
 	log.Printf("Image / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}

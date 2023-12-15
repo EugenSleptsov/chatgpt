@@ -97,7 +97,7 @@ func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gp
 }
 
 func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string, config *Config) {
-	imageUrl, err := gptClient.GenerateImage(prompt, gpt.ImageSize512)
+	imageUrl, err := gptClient.GenerateImage(prompt, gpt.ImageSize1024)
 	if err != nil {
 		log.Printf("Error generating image: %v", err)
 		return
