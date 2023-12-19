@@ -236,7 +236,7 @@ func commandModel(bot *telegram.Bot, update telegram.Update, chat *storage.Chat)
 	}
 }
 
-func commandSummarize(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func commandSummarize(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {
 	messageCount := 50
 	if len(update.Message.CommandArguments()) > 0 {
 		messageCount, _ = strconv.Atoi(update.Message.CommandArguments())
@@ -263,7 +263,7 @@ func commandSummarize(bot *telegram.Bot, update telegram.Update, gptClient *gpt.
 
 	bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Генерирую краткое содержание последних %d сообщений...", len(lines)))
 
-	systemPrompt := "Ты - бот с острым языком и чувством юмора. Твоя задача - создать краткий смешной пересказ последних сообщений чата. Ты должен добавлять свои комментарии в процессе пересказа, будто ты доктор Кокс или доктор Хаус. Ни в коем случае не нужно передавать переписку дословно, также твое сообщение должно быть не более 400 слов."
+	systemPrompt := config.SummarizePrompt
 	if chat.ChatID > 0 { // private chats also can be summarized
 		name := update.Message.From.FirstName + " " + update.Message.From.LastName
 		systemPrompt = "Ты - бот с острым языком и чувством юмора. Твоя задача - создать краткий смешной пересказ сообщений твоего собеседника. Ты можешь добавлять свои комментарии в процессе пересказа, будто ты доктор Кокс или доктор Хаус. Не нужно передавать переписку дословно. На данный момент ты общаешься как раз со своим собеседником, которого зовут " + name + " и сообщение будет адресовано ему"

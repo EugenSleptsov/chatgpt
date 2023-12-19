@@ -53,7 +53,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		case "system":
 			commandSystem(bot, update, chat)
 		case "summarize":
-			commandSummarize(bot, update, gptClient, chat)
+			commandSummarize(bot, update, gptClient, chat, config)
 		default:
 			if fromID != config.AdminId {
 				// bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))

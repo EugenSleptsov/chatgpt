@@ -165,6 +165,6 @@ func getImageSize(size string) string {
 	case ImageSize256, ImageSize512, ImageSize1024:
 		return size
 	default:
-		return ImageSize512 // Default to 512x512 if size is invalid
+		return ImageSize1024 // Default to 1024x1024 if size is invalid
 	}
 }

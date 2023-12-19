@@ -11,6 +11,7 @@ import (
 type Config struct {
 	TelegramToken     string
 	GPTToken          string
+	SummarizePrompt   string
 	TimeoutValue      int
 	MaxMessages       int
 	AdminId           int64
@@ -20,8 +21,7 @@ type Config struct {
 }
 
 func (c *Config) String() string {
-	return fmt.Sprintf("Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUserIds: %v,\n}",
-		c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUserIds)
+	return fmt.Sprintf("Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUserIds: %v,\n  CommandMenu: %v\n  SummarizePrompt: %s\n}", c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUserIds, c.CommandMenu, c.SummarizePrompt)
 }
 
 func readConfig(filename string) (*Config, error) {
@@ -86,6 +86,7 @@ func readConfig(filename string) (*Config, error) {
 	return &Config{
 		TelegramToken:     config["telegram_token"],
 		GPTToken:          config["gpt_token"],
+		SummarizePrompt:   config["summarize_prompt"],
 		TimeoutValue:      timeoutValue,
 		MaxMessages:       maxMessages,
 		AdminId:           adminID,
