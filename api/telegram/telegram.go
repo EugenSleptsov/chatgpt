@@ -43,7 +43,7 @@ var DefaultCommandList = []Command{
 	CommandSummarize,
 }
 
-func NewBot(token string) (*Bot, error) {
+func NewBot(token string, commandMenu []string) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, err
@@ -53,6 +53,8 @@ func NewBot(token string) (*Bot, error) {
 		api:      api,
 		Username: api.Self.UserName,
 	}
+
+	bot.SetCommandList(commandMenu)
 
 	log.Printf("Authorized on account %s", bot.api.Self.UserName)
 	return bot, nil

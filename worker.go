@@ -18,7 +18,7 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 	// create a pool of worker goroutines
 	numWorkers := 10
 	for i := 0; i < numWorkers; i++ {
-		go worker(updateChan, bot, gptClient, config)
+		go worker(updateChan, bot, gptClient, botStorage, config)
 	}
 
 	for update := range bot.GetUpdateChannel(config.TimeoutValue) {
@@ -90,122 +90,26 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 }
 
 // worker function that processes updates
-func worker(updateChan <-chan telegram.Update, bot *telegram.Bot, gptClient *gpt.GPTClient, config *Config) {
+func worker(updateChan <-chan telegram.Update, bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage, config *Config) {
 	for update := range updateChan {
-		processUpdate(bot, update, gptClient, config)
+		processUpdate(bot, update, gptClient, botStorage, config)
 		botStorage.Save()
 	}
 }
 
-func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config) {
+func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, botStorage storage.Storage, config *Config) {
 	chatID := update.Message.Chat.ID
-	fromID := update.Message.From.ID
-
 	chat, _ := botStorage.Get(chatID)
 
 	// Check for command
 	if update.Message.IsCommand() {
-		command := update.Message.Command()
-		switch command {
-		case "start":
-			commandStart(bot, update, chat)
-		case "clear":
-			commandClear(bot, update, chat)
-		case "history":
-			commandHistory(bot, update, chat)
-		case "rollback":
-			commandRollback(bot, update, chat)
-		case "help":
-			commandHelp(bot, update, chat)
-		case "translate":
-			commandTranslate(bot, update, gptClient, chat)
-		case "grammar":
-			commandGrammar(bot, update, gptClient, chat)
-		case "enhance":
-			commandEnhance(bot, update, gptClient, chat)
-		case "imagine":
-			commandImagine(bot, update, gptClient, chat, config)
-		case "temperature":
-			commandTemperature(bot, update, chat)
-		case "model":
-			commandModel(bot, update, chat)
-		case "system":
-			commandSystem(bot, update, chat)
-		case "summarize":
-			commandSummarize(bot, update, gptClient, chat, config)
-		default:
-			if fromID != config.AdminId {
-				// bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
-				break
-			}
-
-			switch command {
-			case "reload":
-				commandReload(bot, update, chat)
-			case "adduser":
-				commandAddUser(bot, update, chat, config)
-			case "removeuser":
-				commandRemoveUser(bot, update, chat, config)
-			}
-		}
-
-		return
-	}
-
-	gptChat(bot, update, gptClient, config, chat, fromID)
-}
-
-func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
-	responsePayload, err := gptClient.CallGPT35([]gpt.Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userPrompt},
-	}, chat.Settings.Model, 0.6)
-
-	if err != nil {
-		log.Printf("Error: %v", err)
-		return
-	}
-
-	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
-	if len(responsePayload.Choices) > 0 {
-		response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
-	}
-
-	log.Printf("[%s] %s", "ChatGPT", response)
-	bot.Reply(chat.ChatID, messageID, response)
-}
-
-func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string, config *Config) {
-	imageUrl, err := gptClient.GenerateImage(prompt, gpt.ImageSize1024)
-	if err != nil {
-		log.Printf("Error generating image: %v", err)
-		return
-	}
-
-	enhancedCaption := prompt
-	responsePayload, err := gptClient.CallGPT35([]gpt.Message{
-		{Role: "system", Content: "You are an assistant that generates natural language description (prompt) for an artificial intelligence (AI) that generates images"},
-		{Role: "user", Content: fmt.Sprintf("Please improve this prompt: \"%s\". Answer with improved prompt only. Keep prompt at most 200 characters long. Your prompt must be in one sentence.", prompt)},
-	}, "gpt-3.5-turbo", 0.7)
-	if err == nil {
-		enhancedCaption = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
-	}
-
-	err = bot.SendImage(chatID, imageUrl, enhancedCaption)
-	if err != nil {
-		log.Printf("Error sending image: %v", err)
-		return
-	}
-
-	log.Printf("[ChatGPT] sent image %s", imageUrl)
-	if config.AdminId > 0 {
-		if chatID != config.AdminId {
-			bot.Message(fmt.Sprintf("Image with prompt \"%s\" sent to chat %d", prompt, chatID), config.AdminId, false)
-		}
+		callCommand(bot, update, gptClient, chat, config)
+	} else {
+		callReply(bot, update, gptClient, chat, config)
 	}
 }
 
-func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, config *Config, chat *storage.Chat, fromID int64) {
+func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
 	if chat.ChatID < 0 { // group chat
@@ -265,11 +169,11 @@ func gptChat(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient
 		return
 	}
 
-	if fromID == config.AdminId {
+	if update.Message.From.ID == config.AdminId {
 		return
 	}
 
-	if util.IsIdInList(fromID, config.IgnoreReportIds) {
+	if util.IsIdInList(update.Message.From.ID, config.IgnoreReportIds) {
 		return
 	}
 

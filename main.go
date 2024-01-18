@@ -7,28 +7,23 @@ import (
 	"log"
 )
 
-var botStorage storage.Storage
-
 func main() {
 	config, err := readConfig("bot.conf")
-	if err != nil {
-		log.Fatalf("Error reading bot.conf: %v", err)
-	}
+	handleError(err, "Error reading config file")
 
-	bot, err := telegram.NewBot(config.TelegramToken)
-	if err != nil {
-		log.Fatal(err)
-	}
-	bot.SetCommandList(config.CommandMenu)
+	bot, err := telegram.NewBot(config.TelegramToken, config.CommandMenu)
+	handleError(err, "Error creating Telegram bot")
 
-	gptClient := &gpt.GPTClient{
-		ApiKey: config.GPTToken,
-	}
+	botStorage, err := storage.NewFileStorage("data")
+	handleError(err, "Error creating storage")
 
-	botStorage, err = storage.NewFileStorage("data")
-	if err != nil {
-		log.Fatalf("Error creating storage: %v", err)
-	}
+	gptClient := gpt.NewGPTClient(config.GPTToken)
 
 	start(bot, gptClient, botStorage, config)
+}
+
+func handleError(err error, message string) {
+	if err != nil {
+		log.Fatalf("%s: %v", message, err)
+	}
 }

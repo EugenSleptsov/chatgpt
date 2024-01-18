@@ -2,6 +2,7 @@ package main
 
 import (
 	"GPTBot/util"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -45,11 +46,11 @@ func readConfig(filename string) (*Config, error) {
 
 	timeoutValue, err := strconv.Atoi(config["timeout_value"])
 	if err != nil {
-		log.Fatalf("Error converting timeout_value to integer: %v", err)
+		return nil, errors.New(fmt.Sprintf("Error converting timeout_value to integer: %v", err))
 	}
 	maxMessages, err := strconv.Atoi(config["max_messages"])
 	if err != nil {
-		log.Fatalf("Error converting max_messages to integer: %v", err)
+		return nil, errors.New(fmt.Sprintf("Error converting max_messages to integer: %v", err))
 	}
 
 	var adminID int64

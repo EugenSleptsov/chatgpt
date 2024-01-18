@@ -67,6 +67,10 @@ type GPTClient struct {
 	ApiKey string
 }
 
+func NewGPTClient(apiKey string) *GPTClient {
+	return &GPTClient{ApiKey: apiKey}
+}
+
 func (gptClient *GPTClient) CallGPT35(chatConversation []Message, aimodel string, temperature float32) (*ResponseCompletionsPayload, error) {
 	jsonPayload, err := json.Marshal(RequestCompletionsPayload{
 		Model:       aimodel,
