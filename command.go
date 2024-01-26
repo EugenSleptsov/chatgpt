@@ -3,6 +3,7 @@ package main
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	commands "GPTBot/commands"
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
@@ -14,6 +15,12 @@ import (
 
 func callCommand(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {
 	command := update.Message.Command()
+
+	if commands.CommandList[command] != nil {
+		commands.CommandList[command].Execute(bot, update, gptClient, chat)
+		return
+	}
+
 	switch command {
 	case "start":
 		commandStart(bot, update, chat)
@@ -43,7 +50,7 @@ func callCommand(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTCl
 		commandSummarize(bot, update, gptClient, chat, config)
 	default:
 		if update.Message.From.ID != config.AdminId {
-			// bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", command))
+			// bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Неизвестная команда /%s", commands))
 			break
 		}
 
