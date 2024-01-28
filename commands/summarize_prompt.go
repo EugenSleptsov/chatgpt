@@ -14,7 +14,7 @@ func (c *CommandSummarizePrompt) Name() string {
 }
 
 func (c *CommandSummarizePrompt) Description() string {
-	return "Show summarize_prompt"
+	return "Устанавливает промпт для команды /summarize. Использование: /summarize_prompt <text>"
 }
 
 func (c *CommandSummarizePrompt) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

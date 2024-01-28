@@ -15,7 +15,7 @@ func (c *CommandHistory) Name() string {
 }
 
 func (c *CommandHistory) Description() string {
-	return "Show chat history"
+	return "Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании."
 }
 
 func (c *CommandHistory) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

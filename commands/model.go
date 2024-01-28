@@ -14,7 +14,7 @@ func (c *CommandModel) Name() string {
 }
 
 func (c *CommandModel) Description() string {
-	return "Show model name"
+	return "Устанавливает модель для GPT."
 }
 
 func (c *CommandModel) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

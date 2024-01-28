@@ -13,7 +13,7 @@ func (c *CommandClear) Name() string {
 }
 
 func (c *CommandClear) Description() string {
-	return "Clear chat history"
+	return "Очищает историю разговоров для текущего чата."
 }
 
 func (c *CommandClear) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

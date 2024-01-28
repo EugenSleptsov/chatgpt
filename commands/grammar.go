@@ -14,7 +14,7 @@ func (c *CommandGrammar) Name() string {
 }
 
 func (c *CommandGrammar) Description() string {
-	return "Show grammar"
+	return "Исправляет грамматические ошибки в <text>. Использование: /grammar <text>"
 }
 
 func (c *CommandGrammar) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

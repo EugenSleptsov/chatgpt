@@ -14,7 +14,7 @@ func (c *CommandSystem) Name() string {
 }
 
 func (c *CommandSystem) Description() string {
-	return "Show system information"
+	return "Устанавливает системный промпт для GPT. Пример: \"You are a helpful assistant that translates.\". Использование: /system <text>"
 }
 
 func (c *CommandSystem) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

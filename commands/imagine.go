@@ -17,7 +17,7 @@ func (c *CommandImagine) Name() string {
 }
 
 func (c *CommandImagine) Description() string {
-	return "Show imagine"
+	return "Генерирует изображение по описанию <text> размера 512x512. Использование: /imagine <text>"
 }
 
 func (c *CommandImagine) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

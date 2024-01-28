@@ -14,7 +14,7 @@ func (c *CommandEnhance) Name() string {
 }
 
 func (c *CommandEnhance) Description() string {
-	return "Show enhance"
+	return "Улучшает <text> с помощью GPT. Использование: /enhance <text>"
 }
 
 func (c *CommandEnhance) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

@@ -13,7 +13,7 @@ func (c *CommandStart) Name() string {
 }
 
 func (c *CommandStart) Description() string {
-	return "Start chat with bot"
+	return "Отправляет приветственное сообщение, описывающее цель бота."
 }
 
 func (c *CommandStart) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

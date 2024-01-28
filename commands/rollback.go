@@ -16,7 +16,7 @@ func (c *CommandRollback) Name() string {
 }
 
 func (c *CommandRollback) Description() string {
-	return "Rollback last message"
+	return "Удаляет последние <n> сообщений из истории разговоров для текущего чата. Если <n> не указано, то удаляется одно сообщение."
 }
 
 func (c *CommandRollback) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

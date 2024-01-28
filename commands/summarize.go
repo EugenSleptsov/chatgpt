@@ -14,7 +14,7 @@ func (c *CommandSummarize) Name() string {
 }
 
 func (c *CommandSummarize) Description() string {
-	return "Show summarize"
+	return "Генерирует краткое содержание последних <n> сообщений из истории разговоров для текущего чата. <n> по умолчанию равно 50. Максимальное значение <n> равно 500. Использование: /summarize <n>"
 }
 
 func (c *CommandSummarize) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

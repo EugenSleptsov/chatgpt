@@ -14,16 +14,12 @@ func (c *CommandHelp) Name() string {
 }
 
 func (c *CommandHelp) Description() string {
-	return "Returns list of available commands"
+	return "Показывает список доступных команд и их описание."
 }
 
 func (c *CommandHelp) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
-	message := "Available commands:\n"
+	message := "Список доступных команд и их описание:\n"
 	for _, command := range CommandList {
-		if command.Name() == c.Name() {
-			continue
-		}
-
 		message += fmt.Sprintf("/%s - %s\n", command.Name(), command.Description())
 	}
 

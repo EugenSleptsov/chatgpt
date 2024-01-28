@@ -15,7 +15,7 @@ func (c *CommandTemperature) Name() string {
 }
 
 func (c *CommandTemperature) Description() string {
-	return "Show temperature"
+	return "Устанавливает температуру (креативность) для GPT. Допустимые значения: 0.0 - 1.2."
 }
 
 func (c *CommandTemperature) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

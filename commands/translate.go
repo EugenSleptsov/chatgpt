@@ -14,7 +14,7 @@ func (c *CommandTranslate) Name() string {
 }
 
 func (c *CommandTranslate) Description() string {
-	return "Translate message"
+	return "Переводит <text> на любом языке на английский язык. Использование: /translate <text>"
 }
 
 func (c *CommandTranslate) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
