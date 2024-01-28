@@ -12,6 +12,7 @@ import (
 type Bot struct {
 	api      *tgbotapi.BotAPI
 	Username string
+	AdminId  int64
 }
 
 type UpdatesChannel <-chan Update
@@ -166,6 +167,10 @@ func (botInstance *Bot) SendImage(chatID int64, imageUrl string, caption string)
 
 func (botInstance *Bot) GetUserCount(chatID int64) (int, error) {
 	return botInstance.api.GetChatMembersCount(tgbotapi.ChatMemberCountConfig{ChatConfig: tgbotapi.ChatConfig{ChatID: chatID}})
+}
+
+func (botInstance *Bot) SetAdminId(adminId int64) {
+	botInstance.AdminId = adminId
 }
 
 func escapeMarkdownV2(text string) string {

@@ -10,11 +10,11 @@ import (
 type CommandHelp struct{}
 
 func (c *CommandHelp) Name() string {
-	return "helpme"
+	return "help"
 }
 
 func (c *CommandHelp) Description() string {
-	return ""
+	return "Returns list of available commands"
 }
 
 func (c *CommandHelp) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {

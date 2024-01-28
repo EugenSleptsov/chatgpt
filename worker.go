@@ -33,11 +33,12 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 			chat = &storage.Chat{
 				ChatID: update.Message.Chat.ID,
 				Settings: storage.ChatSettings{
-					Temperature:  0.8,
-					Model:        "gpt-3.5-turbo",
-					MaxMessages:  config.MaxMessages,
-					UseMarkdown:  false,
-					SystemPrompt: "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible.",
+					Temperature:     0.8,
+					Model:           "gpt-3.5-turbo",
+					MaxMessages:     config.MaxMessages,
+					UseMarkdown:     false,
+					SystemPrompt:    "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible.",
+					SummarizePrompt: config.SummarizePrompt,
 				},
 				History:          make([]*storage.ConversationEntry, 0),
 				ImageGenNextTime: time.Now(),
@@ -137,7 +138,12 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 	if chat.Settings.SystemPrompt != "" {
 		messages = append(messages, gpt.Message{Role: "system", Content: chat.Settings.SystemPrompt})
 	}
-	messages = append(messages, messagesFromHistory(chat.History)...)
+	for _, entry := range chat.History {
+		messages = append(messages, gpt.Message{Role: entry.Prompt.Role, Content: entry.Prompt.Content})
+		if entry.Response != (storage.Message{}) {
+			messages = append(messages, gpt.Message{Role: entry.Response.Role, Content: entry.Response.Content})
+		}
+	}
 
 	// quality of life, we do 2 requests if the first one fails
 	tryLimit := 2
