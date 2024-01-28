@@ -13,6 +13,7 @@ func main() {
 
 	bot, err := telegram.NewBot(config.TelegramToken, config.CommandMenu)
 	handleError(err, "Error creating Telegram bot")
+	bot.SetAdminId(config.AdminId)
 
 	botStorage, err := storage.NewFileStorage("data")
 	handleError(err, "Error creating storage")

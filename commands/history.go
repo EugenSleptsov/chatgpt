@@ -1,15 +1,28 @@
-package main
+package commands
 
 import (
 	"GPTBot/api/gpt"
+	"GPTBot/api/telegram"
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
 )
 
-type ConversationEntry struct {
-	Prompt   gpt.Message
-	Response gpt.Message
+type CommandHistory struct{}
+
+func (c *CommandHistory) Name() string {
+	return "history"
+}
+
+func (c *CommandHistory) Description() string {
+	return "Show chat history"
+}
+
+func (c *CommandHistory) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+	historyMessages := formatHistory(messagesFromHistory(chat.History))
+	for _, message := range historyMessages {
+		bot.Reply(chat.ChatID, update.Message.MessageID, message)
+	}
 }
 
 func formatHistory(history []gpt.Message) []string {
@@ -43,23 +56,16 @@ func formatHistory(history []gpt.Message) []string {
 }
 
 func messagesFromHistory(storageHistory []*storage.ConversationEntry) []gpt.Message {
-	var history []*ConversationEntry
+	var messages []gpt.Message
 	for _, entry := range storageHistory {
 		prompt := entry.Prompt
 		response := entry.Response
 
-		history = append(history, &ConversationEntry{
-			Prompt:   gpt.Message{Role: prompt.Role, Content: prompt.Content},
-			Response: gpt.Message{Role: response.Role, Content: response.Content},
-		})
-	}
-
-	var messages []gpt.Message
-	for _, entry := range history {
-		messages = append(messages, entry.Prompt)
-		if entry.Response != (gpt.Message{}) {
-			messages = append(messages, entry.Response)
+		messages = append(messages, gpt.Message{Role: prompt.Role, Content: prompt.Content})
+		if response != (storage.Message{}) {
+			messages = append(messages, gpt.Message{Role: response.Role, Content: response.Content})
 		}
 	}
+
 	return messages
 }
