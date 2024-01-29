@@ -9,6 +9,9 @@ import (
 
 type CommandSummarize struct{}
 
+const SummarizeDefaultMessageCount = 50
+const SummarizeMaxMessageCount = 500
+
 func (c *CommandSummarize) Name() string {
 	return "summarize"
 }
@@ -18,15 +21,15 @@ func (c *CommandSummarize) Description() string {
 }
 
 func (c *CommandSummarize) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
-	messageCount := 50
+	messageCount := SummarizeDefaultMessageCount
 	if len(update.Message.CommandArguments()) > 0 {
 		messageCount, _ = strconv.Atoi(update.Message.CommandArguments())
 		if messageCount <= 0 {
-			messageCount = 50
+			messageCount = SummarizeDefaultMessageCount
 		}
 
-		if messageCount > 500 {
-			messageCount = 500
+		if messageCount > SummarizeMaxMessageCount {
+			messageCount = SummarizeMaxMessageCount
 		}
 	}
 

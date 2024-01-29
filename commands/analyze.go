@@ -10,6 +10,9 @@ import (
 
 type CommandAnalyze struct{}
 
+const AnalyzeDefaultMessageCount = 50
+const AnalyzeMaxMessageCount = 500
+
 func (c *CommandAnalyze) Name() string {
 	return "analyze"
 }
@@ -28,7 +31,7 @@ func (c *CommandAnalyze) Execute(bot *telegram.Bot, update telegram.Update, gptC
 	arguments := strings.Split(update.Message.CommandArguments(), " ")
 	messageCount, err := strconv.Atoi(arguments[0])
 	if err != nil {
-		messageCount = 50
+		messageCount = AnalyzeDefaultMessageCount
 		systemPrompt = update.Message.CommandArguments()
 	} else {
 		if len(arguments) < 2 {
@@ -38,7 +41,11 @@ func (c *CommandAnalyze) Execute(bot *telegram.Bot, update telegram.Update, gptC
 
 		systemPrompt = strings.Join(arguments[1:], " ")
 		if messageCount <= 0 {
-			messageCount = 50
+			messageCount = AnalyzeDefaultMessageCount
+		}
+
+		if messageCount > AnalyzeMaxMessageCount {
+			messageCount = AnalyzeMaxMessageCount
 		}
 	}
 

@@ -108,31 +108,38 @@ func (botInstance *Bot) GetUpdateChannel(timeout int) UpdatesChannel {
 }
 
 func (botInstance *Bot) ReplyMarkdown(chatID int64, replyTo int, text string) {
-	botInstance._reply(chatID, replyTo, text, true)
+	botInstance.reply(chatID, replyTo, text, true)
 }
 
 func (botInstance *Bot) Reply(chatID int64, replyTo int, text string) {
-	botInstance._reply(chatID, replyTo, text, false)
+	botInstance.reply(chatID, replyTo, text, false)
 }
 
-func (botInstance *Bot) _reply(chatID int64, replyTo int, text string, isMarkdown bool) {
+func (botInstance *Bot) Message(message string, chatID int64, isMarkdown bool) {
+	botInstance._message(chatID, 0, message, isMarkdown)
+}
+
+func (botInstance *Bot) reply(chatID int64, replyTo int, text string, isMarkdown bool) {
+	botInstance.message(chatID, replyTo, text, isMarkdown)
+}
+
+func (botInstance *Bot) message(chatID int64, replyTo int, text string, isMarkdown bool) {
+	// split long messages
+	for len(text) > 4096 {
+		botInstance._message(chatID, replyTo, text[:4096], isMarkdown)
+		text = text[4096:]
+	}
+	botInstance._message(chatID, replyTo, text, isMarkdown)
+}
+
+func (botInstance *Bot) _message(chatID int64, replyTo int, text string, isMarkdown bool) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	if isMarkdown {
 		msg.ParseMode = "MarkdownV2"
 		msg.Text = util.FixMarkdown(escapeMarkdownV2(msg.Text))
 	}
-	msg.ReplyToMessageID = replyTo
-	_, err := botInstance.api.Send(msg)
-	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
-}
-
-func (botInstance *Bot) Message(message string, adminId int64, isMarkdown bool) {
-	msg := tgbotapi.NewMessage(adminId, message)
-	if isMarkdown {
-		msg.ParseMode = "MarkdownV2"
-		msg.Text = util.FixMarkdown(escapeMarkdownV2(msg.Text))
+	if replyTo != 0 {
+		msg.ReplyToMessageID = replyTo
 	}
 	_, err := botInstance.api.Send(msg)
 	if err != nil {
