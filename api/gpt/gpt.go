@@ -54,7 +54,7 @@ const (
 	ImageSize512     = "512x512"
 	ImageSize1024    = "1024x1024"
 	ModelGPT3        = "gpt-3"
-	ModelGPT3Turbo   = "gpt-3.5-turbo"
+	ModelGPT3Turbo   = "gpt-3.5-turbo-1106"
 	ModelGPT316k     = "gpt-3.5-turbo-16k"
 	ModelGPT316k2    = "gpt-316"
 	ModelGPT4        = "gpt-4"
