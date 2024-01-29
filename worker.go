@@ -113,6 +113,10 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 
 		// check if message is forwarded, then we finish here
 		if update.Message.ForwardFrom != nil {
+			// send admin message that transcribe was done
+			if config.AdminId > 0 {
+				bot.Message(fmt.Sprintf("Transcribe for user %s %s (@%s)", update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName), config.AdminId, false)
+			}
 			return
 		}
 		update.Message.Text = response
