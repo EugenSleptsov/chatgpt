@@ -165,20 +165,15 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 		}
 	}
 
-	// quality of life, we do 2 requests if the first one fails
-	tryLimit := 2
 	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
-	for i := 0; i < tryLimit; i++ {
-		responsePayload, err := gptClient.CallGPT35(messages, chat.Settings.Model, chat.Settings.Temperature)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			return
-		}
+	responsePayload, err := gptClient.CallGPT35(messages, chat.Settings.Model, chat.Settings.Temperature)
+	if err != nil {
+		log.Printf("Error: %v", err)
+		return
+	}
 
-		if len(responsePayload.Choices) > 0 {
-			response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
-			break
-		}
+	if len(responsePayload.Choices) > 0 {
+		response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
 	}
 
 	// Add the assistant's response to the conversation history
@@ -191,6 +186,10 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 		bot.Reply(chat.ChatID, update.Message.MessageID, response)
 	}
 
+	notifyAdmin(bot, config, update, response)
+}
+
+func notifyAdmin(bot *telegram.Bot, config *Config, update telegram.Update, response string) {
 	if config.AdminId == 0 {
 		return
 	}

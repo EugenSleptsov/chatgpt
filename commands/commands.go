@@ -26,6 +26,7 @@ var CommandList = map[string]Command{
 	"model":            &CommandModel{},
 	"imagine":          &CommandImagine{},
 	"system":           &CommandSystem{},
+	"markdown":         &CommandMarkdown{},
 }
 
 type Command interface {
