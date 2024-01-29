@@ -6,9 +6,7 @@ import (
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"strings"
 	"time"
 )
@@ -112,6 +110,11 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		}
 
 		bot.Reply(chatID, update.Message.MessageID, response)
+
+		// check if message is forwarded, then we finish here
+		if update.Message.ForwardFrom != nil {
+			return
+		}
 		update.Message.Text = response
 	}
 
@@ -121,16 +124,6 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	} else {
 		callReply(bot, update, gptClient, chat, config)
 	}
-}
-
-func downloadFile(url string) ([]byte, error) {
-	response, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-
-	return io.ReadAll(response.Body)
 }
 
 func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {

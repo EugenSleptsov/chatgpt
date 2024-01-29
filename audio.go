@@ -3,6 +3,7 @@ package main
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/util"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -27,7 +28,7 @@ func processAudio(bot *telegram.Bot, gptClient *gpt.GPTClient, fileID string) (s
 
 	// Download the audio file content
 	audioURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", bot.Token, file.FilePath)
-	audioContent, err := downloadFile(audioURL)
+	audioContent, err := util.DownloadFile(audioURL)
 	if err != nil {
 		return "", fmt.Errorf("error downloading audio file: %w", err)
 	}

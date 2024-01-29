@@ -2,6 +2,8 @@ package util
 
 import (
 	"bufio"
+	"io"
+	"net/http"
 	"os"
 )
 
@@ -91,4 +93,14 @@ func IsDirExists(dirpath string) bool {
 		return false
 	}
 	return true
+}
+
+func DownloadFile(url string) ([]byte, error) {
+	response, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	return io.ReadAll(response.Body)
 }
