@@ -12,6 +12,7 @@ import (
 type Bot struct {
 	api      *tgbotapi.BotAPI
 	Username string
+	Token    string
 	AdminId  int64
 }
 
@@ -53,6 +54,7 @@ func NewBot(token string, commandMenu []string) (*Bot, error) {
 	bot := &Bot{
 		api:      api,
 		Username: api.Self.UserName,
+		Token:    token,
 	}
 
 	bot.SetCommandList(commandMenu)
@@ -171,6 +173,10 @@ func (botInstance *Bot) GetUserCount(chatID int64) (int, error) {
 
 func (botInstance *Bot) SetAdminId(adminId int64) {
 	botInstance.AdminId = adminId
+}
+
+func (botInstance *Bot) GetFile(fileId string) (tgbotapi.File, error) {
+	return botInstance.api.GetFile(tgbotapi.FileConfig{FileID: fileId})
 }
 
 func escapeMarkdownV2(text string) string {

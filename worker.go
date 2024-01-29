@@ -6,7 +6,9 @@ import (
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -102,12 +104,33 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 	chatID := update.Message.Chat.ID
 	chat, _ := botStorage.Get(chatID)
 
+	if update.Message.Voice != nil {
+		response, err := processAudio(bot, gptClient, update.Message.Voice.FileID)
+		if err != nil {
+			log.Printf("Error: %v", err)
+			return
+		}
+
+		bot.Reply(chatID, update.Message.MessageID, response)
+		update.Message.Text = response
+	}
+
 	// Check for commands
 	if update.Message.IsCommand() {
 		callCommand(bot, update, gptClient, chat, config)
 	} else {
 		callReply(bot, update, gptClient, chat, config)
 	}
+}
+
+func downloadFile(url string) ([]byte, error) {
+	response, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	return io.ReadAll(response.Body)
 }
 
 func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {
