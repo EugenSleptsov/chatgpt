@@ -25,13 +25,13 @@ func (c *CommandModel) Execute(bot *telegram.Bot, update telegram.Update, gptCli
 		switch model {
 		case gpt.ModelGPT3, gpt.ModelGPT3Turbo:
 			chat.Settings.Model = gpt.ModelGPT3Turbo
-			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-3.5-turbo.")
+			bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s", chat.Settings.Model))
 		case gpt.ModelGPT316k, gpt.ModelGPT316k2:
 			chat.Settings.Model = gpt.ModelGPT316k
-			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-3.5-turbo-16k.")
+			bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s", chat.Settings.Model))
 		case gpt.ModelGPT4, gpt.ModelGPT4Preview:
 			chat.Settings.Model = gpt.ModelGPT4Preview
-			bot.Reply(chat.ChatID, update.Message.MessageID, "Модель установлена на gpt-4-1106-preview.")
+			bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s", chat.Settings.Model))
 		default:
 			bot.Reply(chat.ChatID, update.Message.MessageID, "Неверное название модели.")
 		}
