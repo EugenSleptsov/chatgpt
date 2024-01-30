@@ -133,7 +133,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {
 	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
-	if chat.ChatID < 0 { // group chat
+	if chat.ChatID < 0 && update.Message.Voice == nil { // group chat
 		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == bot.Username
 		if !strings.Contains(update.Message.Text, "@"+bot.Username) && !isReplyToBot {
 			return
