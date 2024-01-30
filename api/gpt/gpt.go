@@ -58,7 +58,7 @@ const (
 	ModelGPT316k     = "gpt-3.5-turbo-16k"
 	ModelGPT316k2    = "gpt-316"
 	ModelGPT4        = "gpt-4"
-	ModelGPT4Preview = "gpt-4-1106-preview"
+	ModelGPT4Preview = "gpt-4-turbo-preview"
 	ModelDalle2      = "dall-e-2"
 	ModelDalle3      = "dall-e-3"
 )
