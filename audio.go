@@ -4,16 +4,29 @@ import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/util"
-	"bytes"
+	byteslib "bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strings"
 )
 
 const audioEndpoint = "https://api.openai.com/v1/audio/transcriptions"
+const voiceEndpoint = "https://api.openai.com/v1/audio/speech"
 const audioModel = "whisper-1"
+const voiceModel = "tts-1"
+const voiceModelHD = "tts-1-hd"
+
+const (
+	voiceAlloy   = "alloy"
+	voiceEcho    = "echo"
+	voiceFable   = "fable"
+	voiceOnyx    = "onyx"
+	voiceNova    = "nova"
+	voiceShimmer = "shimmer"
+)
 
 type TranscriptionResponse struct {
 	Text string `json:"text"`
@@ -38,7 +51,7 @@ func processAudio(bot *telegram.Bot, gptClient *gpt.GPTClient, fileID string) (s
 
 func transcribeAudio(apiKey string, audioContent []byte) (string, error) {
 	// Create a new multipart writer
-	body := &bytes.Buffer{}
+	body := &byteslib.Buffer{}
 	writer := multipart.NewWriter(body)
 
 	// Add the audio file to the request body
@@ -88,4 +101,29 @@ func transcribeAudio(apiKey string, audioContent []byte) (string, error) {
 	}
 
 	return transcriptionResponse.Text, nil
+}
+
+func processVoice(bot *telegram.Bot, gptClient *gpt.GPTClient, chatID int64, inputText string) error {
+	payload := fmt.Sprintf(`{"model": "%s", "voice": "%s", "input": "%s"}`, voiceModel, voiceOnyx, inputText)
+
+	request, err := http.NewRequest("POST", voiceEndpoint, strings.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+gptClient.ApiKey)
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	bytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
+	return bot.AudioUpload(chatID, bytes)
 }

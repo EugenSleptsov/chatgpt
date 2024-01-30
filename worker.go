@@ -65,7 +65,7 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 			}
 
 			// saving lines to log file
-			util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
+			_ = util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
 		}
 
 		// If no authorized users are provided, make the bot public
@@ -184,6 +184,16 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 		bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response)
 	} else {
 		bot.Reply(chat.ChatID, update.Message.MessageID, response)
+	}
+
+	// initial message was Voice
+	if update.Message.Voice != nil {
+		log.Print("Audio response")
+		err = processVoice(bot, gptClient, chat.ChatID, response)
+		if err != nil {
+			log.Printf("Error: %v", err)
+			return
+		}
 	}
 
 	notifyAdmin(bot, config, update, response)

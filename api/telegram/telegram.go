@@ -186,6 +186,16 @@ func (botInstance *Bot) GetFile(fileId string) (tgbotapi.File, error) {
 	return botInstance.api.GetFile(tgbotapi.FileConfig{FileID: fileId})
 }
 
+func (botInstance *Bot) AudioUpload(chatID int64, bytes []byte) error {
+	audioMsg := tgbotapi.NewAudio(chatID, tgbotapi.FileBytes{Name: "audio.ogg", Bytes: bytes})
+	_, err := botInstance.api.Send(audioMsg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func escapeMarkdownV2(text string) string {
 	charsToEscape := []string{"_", "*", "[", "]", "(", ")", "~", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"}
 	for _, char := range charsToEscape {
