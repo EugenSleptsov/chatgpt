@@ -12,6 +12,7 @@ type CommandTranslate struct{}
 
 const RUSSIAN = "ru"
 const ENGLISH = "en"
+const TURKISH = "tr"
 
 func (c *CommandTranslate) Name() string {
 	return "translate"
@@ -29,9 +30,12 @@ func (c *CommandTranslate) Execute(bot *telegram.Bot, update telegram.Update, gp
 		prompt := update.Message.CommandArguments()
 		arguments := strings.Split(update.Message.CommandArguments(), " ")
 		if len(arguments) > 1 {
-			if arguments[0] == RUSSIAN {
-				language = RUSSIAN
+			switch arguments[0] {
+			case RUSSIAN, ENGLISH, TURKISH:
+				language = arguments[0]
 				prompt = strings.Join(arguments[1:], " ")
+			default:
+				prompt = strings.Join(arguments, " ")
 			}
 		}
 
@@ -39,6 +43,8 @@ func (c *CommandTranslate) Execute(bot *telegram.Bot, update telegram.Update, gp
 		switch language {
 		case RUSSIAN:
 			translationPrompt = fmt.Sprintf("Переведи следующий текст на русский язык: \"%s\". Ты должен ответить только переведенным текстом без объяснений и кавычек", prompt)
+		case TURKISH:
+			translationPrompt = fmt.Sprintf("Türkçe'ye aşağıdaki metni çevir: \"%s\". Sade yalnızca çevrilmiş metinle cevap vermelisin, açıklamalar ve alıntı işaretleri olmadan", prompt)
 		}
 
 		systemPrompt := "You are a helpful assistant that translates."
