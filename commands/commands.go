@@ -36,7 +36,7 @@ type Command interface {
 }
 
 func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
-	responsePayload, err := gptClient.CallGPT35([]gpt.Message{
+	responsePayload, err := gptClient.CallGPT([]gpt.Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
 	}, chat.Settings.Model, 0.6)

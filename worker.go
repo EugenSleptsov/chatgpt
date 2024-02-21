@@ -166,7 +166,7 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 	}
 
 	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
-	responsePayload, err := gptClient.CallGPT35(messages, chat.Settings.Model, chat.Settings.Temperature)
+	responsePayload, err := gptClient.CallGPT(messages, chat.Settings.Model, chat.Settings.Temperature)
 	if err != nil {
 		log.Printf("Error: %v", err)
 		return
@@ -213,4 +213,30 @@ func notifyAdmin(bot *telegram.Bot, config *Config, update telegram.Update, resp
 	}
 
 	bot.Message(fmt.Sprintf("[User: %s %s (%s, ID: %d)] %s\n[ChatGPT] %s\n", update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID, update.Message.Text, response), config.AdminId, false)
+}
+
+func processAudio(bot *telegram.Bot, gptClient *gpt.GPTClient, fileID string) (string, error) {
+	// Download the voice message file
+	file, err := bot.GetFile(fileID)
+	if err != nil {
+		return "", fmt.Errorf("error getting file: %w", err)
+	}
+
+	// Download the audio file content
+	audioURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", bot.Token, file.FilePath)
+	audioContent, err := util.DownloadFile(audioURL)
+	if err != nil {
+		return "", fmt.Errorf("error downloading audio file: %w", err)
+	}
+
+	return gptClient.TranscribeAudio(audioContent)
+}
+
+func processVoice(bot *telegram.Bot, gptClient *gpt.GPTClient, chatID int64, inputText string) error {
+	bytes, err := gptClient.GenerateVoice(inputText, gpt.VoiceModel, gpt.VoiceOnyx)
+	if err != nil {
+		return err
+	}
+
+	return bot.AudioUpload(chatID, bytes)
 }
