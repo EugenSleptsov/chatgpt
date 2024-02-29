@@ -50,7 +50,7 @@ func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt 
 		{Role: "user", Content: fmt.Sprintf("Please improve this prompt: \"%s\". Answer with improved prompt only. Keep prompt at most 200 characters long. Your prompt must be in one sentence.", prompt)},
 	}, "gpt-3.5-turbo", 0.7)
 	if err == nil {
-		enhancedCaption = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
+		enhancedCaption = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 
 	err = bot.SendImage(chatID, imageUrl, enhancedCaption)

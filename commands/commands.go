@@ -37,8 +37,8 @@ type Command interface {
 
 func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
 	responsePayload, err := gptClient.CallGPT([]gpt.Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userPrompt},
+		{Role: "system", Content: []gpt.Content{{Type: gpt.TypeText, Text: systemPrompt}}},
+		{Role: "user", Content: []gpt.Content{{Type: gpt.TypeText, Text: userPrompt}}},
 	}, chat.Settings.Model, 0.6)
 
 	if err != nil {
@@ -48,7 +48,7 @@ func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gp
 
 	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
 	if len(responsePayload.Choices) > 0 {
-		response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
+		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 
 	log.Printf("[%s] %s", "ChatGPT", response)

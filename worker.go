@@ -122,12 +122,57 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 		update.Message.Text = response
 	}
 
+	if len(update.Message.Photo) > 0 {
+		callImageReply(bot, update, gptClient, chat)
+		return
+	}
+
 	// Check for commands
 	if update.Message.IsCommand() {
 		callCommand(bot, update, gptClient, chat, config)
 	} else {
 		callReply(bot, update, gptClient, chat, config)
 	}
+}
+
+func callImageReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+	image := update.Message.Photo[len(update.Message.Photo)-1]
+	fileId := image.FileID
+
+	file, err := bot.GetFile(fileId)
+	if err != nil {
+		log.Printf("Error: %v", err)
+		return
+	}
+
+	url := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", bot.Token, file.FilePath)
+	log.Printf("Image URL: %s", url)
+
+	prompt := "Пожалуйста опишите изображение"
+	if update.Message.Caption != "" {
+		prompt = update.Message.Caption
+	}
+
+	messages := []gpt.Message{
+		{Role: "user", Content: []gpt.Content{
+			{Type: gpt.TypeText, Text: prompt},
+			{Type: gpt.TypeImageUrl, ImageUrl: gpt.ImageUrl{Url: url}},
+		}},
+	}
+
+	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
+	responsePayload, err := gptClient.CallGPT(messages, gpt.ModelGPT4Vision, 0.8)
+	if err != nil {
+		log.Printf("Error: %v", err)
+		return
+	}
+
+	if len(responsePayload.Choices) > 0 {
+		log.Print(responsePayload)
+		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
+	}
+
+	bot.Reply(chat.ChatID, update.Message.MessageID, response)
 }
 
 func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {
@@ -173,7 +218,7 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 	}
 
 	if len(responsePayload.Choices) > 0 {
-		response = strings.TrimSpace(responsePayload.Choices[0].Message.Content)
+		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 
 	// Add the assistant's response to the conversation history

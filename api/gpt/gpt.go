@@ -9,15 +9,32 @@ import (
 	"time"
 )
 
+const (
+	TypeText     = "text"
+	TypeImageUrl = "image_url"
+)
+
+type ImageUrl struct {
+	Url    string `json:"url"`
+	Detail string `json:"detail,omitempty"`
+}
+
+type Content struct {
+	Type     string   `json:"type"`
+	Text     string   `json:"text,omitempty"`
+	ImageUrl ImageUrl `json:"image_url,omitempty"`
+}
+
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"`
 }
 
 type RequestCompletionsPayload struct {
 	Model       string    `json:"model"`
 	Messages    []Message `json:"messages"`
 	Temperature float32   `json:"temperature,omitempty"`
+	MaxTokens   int       `json:"max_tokens,omitempty"`
 }
 
 type ResponseCompletionsPayload struct {
@@ -40,16 +57,32 @@ type GPTClient struct {
 	ApiKey string
 }
 
+const (
+	ModelGPT3        = "gpt-3"
+	ModelGPT3Turbo   = "gpt-3.5-turbo-1106"
+	ModelGPT316k     = "gpt-3.5-turbo-16k"
+	ModelGPT316k2    = "gpt-316"
+	ModelGPT4        = "gpt-4"
+	ModelGPT4Preview = "gpt-4-turbo-preview"
+	ModelGPT4Vision  = "gpt-4-vision-preview"
+)
+
 func NewGPTClient(apiKey string) *GPTClient {
 	return &GPTClient{ApiKey: apiKey}
 }
 
 func (gptClient *GPTClient) CallGPT(chatConversation []Message, aimodel string, temperature float32) (*ResponseCompletionsPayload, error) {
-	jsonPayload, err := json.Marshal(RequestCompletionsPayload{
+	requestPayload := RequestCompletionsPayload{
 		Model:       aimodel,
 		Messages:    chatConversation,
 		Temperature: temperature,
-	})
+	}
+
+	if aimodel == ModelGPT4Vision {
+		requestPayload.MaxTokens = 4096
+	}
+
+	jsonPayload, err := json.Marshal(requestPayload)
 	if err != nil {
 		return nil, err
 	}
