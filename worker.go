@@ -172,7 +172,11 @@ func callImageReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 
-	bot.Reply(chat.ChatID, update.Message.MessageID, response)
+	if chat.Settings.UseMarkdown {
+		bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response)
+	} else {
+		bot.Reply(chat.ChatID, update.Message.MessageID, response)
+	}
 }
 
 func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {
