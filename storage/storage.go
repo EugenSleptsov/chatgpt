@@ -24,6 +24,7 @@ type ChatSettings struct {
 	UseMarkdown     bool
 	SystemPrompt    string
 	SummarizePrompt string
+	Token           string
 }
 
 type ConversationEntry struct {

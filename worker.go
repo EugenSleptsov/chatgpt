@@ -39,6 +39,7 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 					UseMarkdown:     false,
 					SystemPrompt:    "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible.",
 					SummarizePrompt: config.SummarizePrompt,
+					Token:           config.GPTToken,
 				},
 				History:          make([]*storage.ConversationEntry, 0),
 				ImageGenNextTime: time.Now(),
