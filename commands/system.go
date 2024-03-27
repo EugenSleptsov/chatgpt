@@ -17,6 +17,10 @@ func (c *CommandSystem) Description() string {
 	return "Устанавливает системный промпт для GPT. Пример: \"You are a helpful assistant that translates.\". Использование: /system <text>"
 }
 
+func (c *CommandSystem) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandSystem) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
 		if chat.Settings.SystemPrompt == "" {

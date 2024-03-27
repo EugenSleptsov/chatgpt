@@ -17,6 +17,10 @@ func (c *CommandModel) Description() string {
 	return "Устанавливает модель для GPT."
 }
 
+func (c *CommandModel) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandModel) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Текущая модель %s.", chat.Settings.Model))

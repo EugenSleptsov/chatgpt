@@ -17,6 +17,10 @@ func (c *CommandEnhance) Description() string {
 	return "Улучшает <text> с помощью GPT. Использование: /enhance <text>"
 }
 
+func (c *CommandEnhance) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandEnhance) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо улучшить. Использование: /enhance <text>")

@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"GPTBot/util"
@@ -26,7 +26,7 @@ func (c *Config) String() string {
 	return fmt.Sprintf("Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUserIds: %v,\n  CommandMenu: %v\n  SummarizePrompt: %s\n}", c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUserIds, c.CommandMenu, c.SummarizePrompt)
 }
 
-func readConfig(filename string) (*Config, error) {
+func ReadConfig(filename string) (*Config, error) {
 	config := make(map[string]string)
 	lines, err := util.ReadLines(filename)
 	if err != nil {
@@ -99,7 +99,7 @@ func readConfig(filename string) (*Config, error) {
 	}, nil
 }
 
-func updateConfig(filename string, config *Config) error {
+func UpdateConfig(filename string, config *Config) error {
 	oldLines, err := util.ReadLines(filename)
 	if err != nil {
 		return err

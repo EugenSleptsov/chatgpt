@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	conf "GPTBot/config"
 	"GPTBot/util"
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -12,6 +13,7 @@ import (
 
 type Bot struct {
 	api      *tgbotapi.BotAPI
+	Config   *conf.Config
 	Username string
 	Token    string
 	AdminId  int64
@@ -47,24 +49,26 @@ var DefaultCommandList = []Command{
 	CommandSummarize,
 }
 
-func NewInstance(token string, commandMenu []string, logbottoken string) (*Bot, error) {
-	api, err := tgbotapi.NewBotAPI(token)
+func NewInstance(config *conf.Config) (*Bot, error) {
+	api, err := tgbotapi.NewBotAPI(config.TelegramToken)
 	if err != nil {
 		return nil, err
 	}
 
 	bot := &Bot{
 		api:      api,
+		Config:   config,
 		Username: api.Self.UserName,
-		Token:    token,
+		Token:    config.TelegramToken,
 	}
 
-	bot.SetCommandList(commandMenu)
+	bot.SetAdminId(config.AdminId)
+	bot.SetCommandList(config.CommandMenu)
 
 	log.Printf("Authorized on account %s", bot.api.Self.UserName)
 
-	if logbottoken != "" {
-		logBot, err := NewLogBot(logbottoken)
+	if config.TelegramTokenLogBot != "" {
+		logBot, err := NewLogBot(config.TelegramTokenLogBot)
 		if err != nil {
 			return nil, err
 		}

@@ -22,6 +22,10 @@ func (c *CommandTranslate) Description() string {
 	return "Переводит <text> на любом языке на <lang> (по умолчанию en). Использование: /translate <lang> <text>. Доступные языки: ru, en"
 }
 
+func (c *CommandTranslate) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandTranslate) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")

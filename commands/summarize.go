@@ -20,6 +20,10 @@ func (c *CommandSummarize) Description() string {
 	return "Генерирует краткое содержание последних <n> сообщений из истории разговоров для текущего чата. <n> по умолчанию равно 50. Максимальное значение <n> равно 500. Использование: /summarize <n>"
 }
 
+func (c *CommandSummarize) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandSummarize) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	messageCount := SummarizeDefaultMessageCount
 	if len(update.Message.CommandArguments()) > 0 {

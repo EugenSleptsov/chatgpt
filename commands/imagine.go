@@ -20,6 +20,10 @@ func (c *CommandImagine) Description() string {
 	return "Генерирует изображение по описанию <text> размера 1024x1024. Использование: /imagine <text>"
 }
 
+func (c *CommandImagine) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandImagine) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	now := time.Now()
 	nextTime := chat.ImageGenNextTime

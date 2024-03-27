@@ -3,6 +3,7 @@ package main
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/commands"
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
@@ -11,17 +12,17 @@ import (
 	"time"
 )
 
-func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage, config *Config) {
+func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage) {
 	// buffer up to 100 update messages
 	updateChan := make(chan telegram.Update, 100)
 
 	// create a pool of worker goroutines
 	numWorkers := 10
 	for i := 0; i < numWorkers; i++ {
-		go worker(updateChan, bot, gptClient, botStorage, config)
+		go worker(updateChan, bot, gptClient, botStorage)
 	}
 
-	for update := range bot.GetUpdateChannel(config.TimeoutValue) {
+	for update := range bot.GetUpdateChannel(bot.Config.TimeoutValue) {
 		// Ignore any non-Message Updates
 		if update.Message == nil {
 			continue
@@ -35,11 +36,11 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 				Settings: storage.ChatSettings{
 					Temperature:     0.8,
 					Model:           "gpt-3.5-turbo",
-					MaxMessages:     config.MaxMessages,
+					MaxMessages:     bot.Config.MaxMessages,
 					UseMarkdown:     false,
 					SystemPrompt:    "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible.",
-					SummarizePrompt: config.SummarizePrompt,
-					Token:           config.GPTToken,
+					SummarizePrompt: bot.Config.SummarizePrompt,
+					Token:           bot.Config.GPTToken,
 				},
 				History:          make([]*storage.ConversationEntry, 0),
 				ImageGenNextTime: time.Now(),
@@ -71,8 +72,8 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 		}
 
 		// If no authorized users are provided, make the bot public
-		if len(config.AuthorizedUserIds) > 0 {
-			if !util.IsIdInList(update.Message.From.ID, config.AuthorizedUserIds) {
+		if len(bot.Config.AuthorizedUserIds) > 0 {
+			if !util.IsIdInList(update.Message.From.ID, bot.Config.AuthorizedUserIds) {
 				if update.Message.Chat.Type == "private" {
 					bot.Reply(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
 					bot.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
@@ -87,14 +88,14 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 }
 
 // worker function that processes updates
-func worker(updateChan <-chan telegram.Update, bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage, config *Config) {
+func worker(updateChan <-chan telegram.Update, bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage) {
 	for update := range updateChan {
-		processUpdate(bot, update, gptClient, botStorage, config)
+		processUpdate(bot, update, gptClient, botStorage)
 		botStorage.Save()
 	}
 }
 
-func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, botStorage storage.Storage, config *Config) {
+func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, botStorage storage.Storage) {
 	chatID := update.Message.Chat.ID
 	chat, _ := botStorage.Get(chatID)
 	chat.Title = telegram.GetChatTitle(update)
@@ -123,9 +124,9 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 
 	// Check for commands
 	if update.Message.IsCommand() {
-		callCommand(bot, update, gptClient, chat, config)
+		callCommand(bot, update, gptClient, chat)
 	} else {
-		callReply(bot, update, gptClient, chat, config)
+		callReply(bot, update, gptClient, chat)
 	}
 }
 
@@ -173,7 +174,18 @@ func callImageReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 	}
 }
 
-func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {
+func callCommand(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+	command := update.Message.Command()
+
+	if commands.CommandList[command] != nil {
+		_command := commands.CommandList[command]
+		if update.Message.From.ID == bot.AdminId || !_command.IsAdmin() {
+			commands.CommandList[command].Execute(bot, update, gptClient, chat)
+		}
+	}
+}
+
+func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if chat.ChatID < 0 && update.Message.Voice == nil { // group chat
 		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == bot.Username
 		if !strings.Contains(update.Message.Text, "@"+bot.Username) && !isReplyToBot {
@@ -237,7 +249,7 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 		}
 	}
 
-	if !util.IsIdInList(update.Message.From.ID, config.IgnoreReportIds) {
+	if !util.IsIdInList(update.Message.From.ID, bot.Config.IgnoreReportIds) {
 		bot.Log(fmt.Sprintf("[%s]\nMessage: %s\nResponse: %s", chat.Title, update.Message.Text, response))
 	}
 }

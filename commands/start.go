@@ -16,6 +16,10 @@ func (c *CommandStart) Description() string {
 	return "Отправляет приветственное сообщение, описывающее цель бота."
 }
 
+func (c *CommandStart) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandStart) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	bot.Reply(chat.ChatID, update.Message.MessageID, "Здравствуйте! Я чатбот-помощник, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help.")
 }

@@ -18,6 +18,10 @@ func (c *CommandHistory) Description() string {
 	return "Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании."
 }
 
+func (c *CommandHistory) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandHistory) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	historyMessages := formatHistory(messagesFromHistory(chat.History))
 	for _, message := range historyMessages {

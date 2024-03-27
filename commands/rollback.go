@@ -19,6 +19,10 @@ func (c *CommandRollback) Description() string {
 	return "Удаляет последние <n> сообщений из истории разговоров для текущего чата. Если <n> не указано, то удаляется одно сообщение."
 }
 
+func (c *CommandRollback) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandRollback) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	number := 1
 	if len(update.Message.CommandArguments()) > 0 {

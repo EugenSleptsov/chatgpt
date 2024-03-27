@@ -17,6 +17,10 @@ func (c *CommandSummarizePrompt) Description() string {
 	return "Устанавливает промпт для команды /summarize. Использование: /summarize_prompt <text>"
 }
 
+func (c *CommandSummarizePrompt) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandSummarizePrompt) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprint("Текущий промпт для команды /summarize: ", chat.Settings.SummarizePrompt))

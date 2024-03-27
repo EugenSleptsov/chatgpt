@@ -16,6 +16,10 @@ func (c *CommandMarkdown) Description() string {
 	return "Использование Markdown в сообщениях. Использование: /markdown <on|off>"
 }
 
+func (c *CommandMarkdown) IsAdmin() bool {
+	return false
+}
+
 func (c *CommandMarkdown) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	if update.Message.CommandArguments() == "on" {
 		chat.Settings.UseMarkdown = true

@@ -27,12 +27,17 @@ var CommandList = map[string]Command{
 	"imagine":          &CommandImagine{},
 	"system":           &CommandSystem{},
 	"markdown":         &CommandMarkdown{},
+
+	"reload":     &CommandAdminReload{},
+	"adduser":    &CommandAdminAddUser{},
+	"removeuser": &CommandAdminRemoveUser{},
 }
 
 type Command interface {
 	Name() string
 	Description() string
 	Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat)
+	IsAdmin() bool
 }
 
 func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
