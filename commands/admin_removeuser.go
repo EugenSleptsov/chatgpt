@@ -13,11 +13,11 @@ import (
 type CommandAdminRemoveUser struct{}
 
 func (c *CommandAdminRemoveUser) Name() string {
-	return "adduser"
+	return "removeuser"
 }
 
 func (c *CommandAdminRemoveUser) Description() string {
-	return "Добавляет пользователя в авторизованные."
+	return "Удаляет пользователя из авторизованных."
 }
 
 func (c *CommandAdminRemoveUser) IsAdmin() bool {

@@ -232,7 +232,7 @@ func escapeMarkdownV2(text string) string {
 
 func GetChatTitle(update Update) string {
 	if update.Message.Chat.ID > 0 {
-		return fmt.Sprintf("%s %s [@%s]", update.Message.Chat.FirstName, update.Message.Chat.LastName, update.Message.Chat.UserName)
+		return fmt.Sprintf("%s %s [@%s / %d]", update.Message.Chat.FirstName, update.Message.Chat.LastName, update.Message.Chat.UserName, update.Message.Chat.ID)
 	}
 
 	return fmt.Sprintf("Chat %d [%s]", update.Message.Chat.ID, update.Message.Chat.Title)
