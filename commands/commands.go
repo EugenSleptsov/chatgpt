@@ -51,7 +51,7 @@ func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gp
 		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 
-	log.Printf("[%s] %s", "ChatGPT", response)
+	bot.Log(fmt.Sprintf("[%s]\nSystemPrompt: %s\nUserPrompt: %s\nResponse: %s", chat.Title, systemPrompt, userPrompt, response))
 	bot.Reply(chat.ChatID, messageID, response)
 }
 

@@ -7,6 +7,7 @@ ignore_report_ids=
 authorized_user_ids=
 command_menu=
 summarize_prompt=You're a bot with a sharp tongue and a sense of humor. Your task is to create a brief hilarious recap of the latest chat messages. You should add your own comments during the recap, like if you were Dr. Cox or Dr. House. You should not parrot the conversation verbatim, also your message should not exceed 400 words.
+telegram_token_log_bot=
 
 #example commentary
 #you can always leave authorized_users empty to make bot public

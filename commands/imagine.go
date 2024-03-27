@@ -33,6 +33,7 @@ func (c *CommandImagine) Execute(bot *telegram.Bot, update telegram.Update, gptC
 		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
 	} else {
 		chat.ImageGenNextTime = now.Add(time.Second * 900)
+		bot.Log(fmt.Sprintf("[%s] Image prompt: \"%s\"", chat.Title, update.Message.CommandArguments()))
 		gptImage(bot, chat.ChatID, gptClient, update.Message.CommandArguments())
 	}
 }
@@ -57,12 +58,5 @@ func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt 
 	if err != nil {
 		log.Printf("Error sending image: %v", err)
 		return
-	}
-
-	log.Printf("[ChatGPT] sent image %s", imageUrl)
-	if bot.AdminId > 0 {
-		if chatID != bot.AdminId {
-			bot.Message(fmt.Sprintf("Image with prompt \"%s\" sent to chat %d", prompt, chatID), bot.AdminId, false)
-		}
 	}
 }

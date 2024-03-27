@@ -11,7 +11,7 @@ func main() {
 	config, err := readConfig("bot.conf")
 	handleError(err, "Error reading config file")
 
-	bot, err := telegram.NewBot(config.TelegramToken, config.CommandMenu)
+	bot, err := telegram.NewInstance(config.TelegramToken, config.CommandMenu, config.TelegramTokenLogBot)
 	handleError(err, "Error creating Telegram bot")
 	bot.SetAdminId(config.AdminId)
 

@@ -10,15 +10,16 @@ import (
 )
 
 type Config struct {
-	TelegramToken     string
-	GPTToken          string
-	SummarizePrompt   string
-	TimeoutValue      int
-	MaxMessages       int
-	AdminId           int64
-	IgnoreReportIds   []int64
-	AuthorizedUserIds []int64
-	CommandMenu       []string
+	TelegramToken       string
+	GPTToken            string
+	SummarizePrompt     string
+	TimeoutValue        int
+	MaxMessages         int
+	AdminId             int64
+	IgnoreReportIds     []int64
+	AuthorizedUserIds   []int64
+	CommandMenu         []string
+	TelegramTokenLogBot string
 }
 
 func (c *Config) String() string {
@@ -85,15 +86,16 @@ func readConfig(filename string) (*Config, error) {
 	}
 
 	return &Config{
-		TelegramToken:     config["telegram_token"],
-		GPTToken:          config["gpt_token"],
-		SummarizePrompt:   config["summarize_prompt"],
-		TimeoutValue:      timeoutValue,
-		MaxMessages:       maxMessages,
-		AdminId:           adminID,
-		IgnoreReportIds:   ignoreReportIds,
-		AuthorizedUserIds: authorizedUserIDs,
-		CommandMenu:       commandMenu,
+		TelegramToken:       config["telegram_token"],
+		GPTToken:            config["gpt_token"],
+		SummarizePrompt:     config["summarize_prompt"],
+		TimeoutValue:        timeoutValue,
+		MaxMessages:         maxMessages,
+		AdminId:             adminID,
+		IgnoreReportIds:     ignoreReportIds,
+		AuthorizedUserIds:   authorizedUserIDs,
+		CommandMenu:         commandMenu,
+		TelegramTokenLogBot: config["telegram_token_log_bot"],
 	}, nil
 }
 

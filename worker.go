@@ -43,6 +43,7 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 				},
 				History:          make([]*storage.ConversationEntry, 0),
 				ImageGenNextTime: time.Now(),
+				Title:            telegram.GetChatTitle(update),
 			}
 			_ = botStorage.Set(chatID, chat)
 		}
@@ -74,13 +75,7 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 			if !util.IsIdInList(update.Message.From.ID, config.AuthorizedUserIds) {
 				if update.Message.Chat.Type == "private" {
 					bot.Reply(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
-					attemptMessage := fmt.Sprintf("Unauthorized access attempt by user %d: %s %s (@%s)", update.Message.From.ID, update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName)
-					log.Print(attemptMessage)
-
-					// Notify the admin
-					if config.AdminId > 0 {
-						bot.Message(attemptMessage, config.AdminId, false)
-					}
+					bot.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
 				}
 				continue
 			}
@@ -102,6 +97,7 @@ func worker(updateChan <-chan telegram.Update, bot *telegram.Bot, gptClient *gpt
 func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, botStorage storage.Storage, config *Config) {
 	chatID := update.Message.Chat.ID
 	chat, _ := botStorage.Get(chatID)
+	chat.Title = telegram.GetChatTitle(update)
 
 	if update.Message.Voice != nil {
 		response, err := processAudio(bot, gptClient, update.Message.Voice.FileID)
@@ -114,10 +110,7 @@ func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPT
 
 		// check if message is forwarded, then we finish here
 		if update.Message.ForwardFrom != nil {
-			// send admin message that transcribe was done
-			if config.AdminId > 0 {
-				bot.Message(fmt.Sprintf("Transcribe for user %s %s (@%s)", update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName), config.AdminId, false)
-			}
+			bot.Log(fmt.Sprintf("[%s] %s", telegram.GetChatTitle(update), "Transcribe was done"))
 			return
 		}
 		update.Message.Text = response
@@ -181,8 +174,6 @@ func callImageReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 }
 
 func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat, config *Config) {
-	log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-
 	if chat.ChatID < 0 && update.Message.Voice == nil { // group chat
 		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == bot.Username
 		if !strings.Contains(update.Message.Text, "@"+bot.Username) && !isReplyToBot {
@@ -246,23 +237,9 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 		}
 	}
 
-	notifyAdmin(bot, config, update, response)
-}
-
-func notifyAdmin(bot *telegram.Bot, config *Config, update telegram.Update, response string) {
-	if config.AdminId == 0 {
-		return
+	if !util.IsIdInList(update.Message.From.ID, config.IgnoreReportIds) {
+		bot.Log(fmt.Sprintf("[%s]\nMessage: %s\nResponse: %s", chat.Title, update.Message.Text, response))
 	}
-
-	if update.Message.From.ID == config.AdminId {
-		return
-	}
-
-	if util.IsIdInList(update.Message.From.ID, config.IgnoreReportIds) {
-		return
-	}
-
-	bot.Message(fmt.Sprintf("[User: %s %s (%s, ID: %d)] %s\n[ChatGPT] %s\n", update.Message.From.FirstName, update.Message.From.LastName, update.Message.From.UserName, update.Message.From.ID, update.Message.Text, response), config.AdminId, false)
 }
 
 func processAudio(bot *telegram.Bot, gptClient *gpt.GPTClient, fileID string) (string, error) {

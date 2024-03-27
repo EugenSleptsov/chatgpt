@@ -15,6 +15,7 @@ type Chat struct {
 	Settings         ChatSettings
 	History          []*ConversationEntry
 	ImageGenNextTime time.Time
+	Title            string
 }
 
 type ChatSettings struct {

@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"GPTBot/util"
+	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"io"
 	"log"
@@ -14,6 +15,7 @@ type Bot struct {
 	Username string
 	Token    string
 	AdminId  int64
+	LogBot   *LogBot
 }
 
 type UpdatesChannel <-chan Update
@@ -45,7 +47,7 @@ var DefaultCommandList = []Command{
 	CommandSummarize,
 }
 
-func NewBot(token string, commandMenu []string) (*Bot, error) {
+func NewInstance(token string, commandMenu []string, logbottoken string) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, err
@@ -60,6 +62,15 @@ func NewBot(token string, commandMenu []string) (*Bot, error) {
 	bot.SetCommandList(commandMenu)
 
 	log.Printf("Authorized on account %s", bot.api.Self.UserName)
+
+	if logbottoken != "" {
+		logBot, err := NewLogBot(logbottoken)
+		if err != nil {
+			return nil, err
+		}
+		bot.LogBot = logBot
+	}
+
 	return bot, nil
 }
 
@@ -196,10 +207,29 @@ func (botInstance *Bot) AudioUpload(chatID int64, bytes []byte) error {
 	return nil
 }
 
+func (botInstance *Bot) Log(message string) {
+	log.Print(message)
+
+	if botInstance.LogBot != nil && botInstance.AdminId != 0 {
+		err := botInstance.LogBot.SendMessage(botInstance.AdminId, message)
+		if err != nil {
+			log.Printf("Error sending log message: %v", err)
+		}
+	}
+}
+
 func escapeMarkdownV2(text string) string {
 	charsToEscape := []string{"_", "*", "[", "]", "(", ")", "~", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"}
 	for _, char := range charsToEscape {
 		text = strings.ReplaceAll(text, char, "\\"+char)
 	}
 	return text
+}
+
+func GetChatTitle(update Update) string {
+	if update.Message.Chat.ID > 0 {
+		return fmt.Sprintf("%s %s [@%s]", update.Message.Chat.FirstName, update.Message.Chat.LastName, update.Message.Chat.UserName)
+	}
+
+	return fmt.Sprintf("Chat %d [%s]", update.Message.Chat.ID, update.Message.Chat.Title)
 }
