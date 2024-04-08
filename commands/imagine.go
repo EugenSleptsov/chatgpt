@@ -6,7 +6,6 @@ import (
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 )
@@ -28,7 +27,7 @@ func (c *CommandImagine) IsAdmin() bool {
 func (c *CommandImagine) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	now := time.Now()
 	nextTime := chat.ImageGenNextTime
-	if nextTime.After(now) && update.Message.From.ID != bot.AdminId {
+	if nextTime.After(now) && update.Message.From.ID != bot.AdminId && !util.IsIdInList(update.Message.From.ID, bot.Config.IgnoreReportIds) {
 		nextTimeStr := nextTime.Format("15:04:05")
 		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Your next image generation will be available at %s.", nextTimeStr))
 		return
@@ -37,20 +36,20 @@ func (c *CommandImagine) Execute(bot *telegram.Bot, update telegram.Update, gptC
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
 	} else {
-		// check config.IgnoreReportIds
-		if !util.IsIdInList(update.Message.From.ID, bot.Config.IgnoreReportIds) {
-			chat.ImageGenNextTime = now.Add(time.Second * 900)
-		}
+		chat.ImageGenNextTime = now.Add(time.Second * 900)
 		bot.Log(fmt.Sprintf("[%s] Image prompt: \"%s\"", chat.Title, update.Message.CommandArguments()))
-		gptImage(bot, chat.ChatID, gptClient, update.Message.CommandArguments())
+		err := gptImage(bot, chat.ChatID, gptClient, update.Message.CommandArguments())
+		if err != nil {
+			bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
+		}
 	}
 }
 
-func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string) {
+func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string) error {
 	imageUrl, err := gptClient.GenerateImage(prompt, gpt.ImageSize1024)
 	if err != nil {
-		log.Printf("Error generating image: %v", err)
-		return
+		bot.Log(fmt.Sprintf("[%d] Error generating image: %v", chatID, err))
+		return err
 	}
 
 	enhancedCaption := prompt
@@ -64,7 +63,9 @@ func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt 
 
 	err = bot.SendImage(chatID, imageUrl, enhancedCaption)
 	if err != nil {
-		log.Printf("Error sending image: %v", err)
-		return
+		bot.Log(fmt.Sprintf("[%d] Error sending image: %v", chatID, err))
+		return err
 	}
+
+	return nil
 }
