@@ -4,6 +4,7 @@ import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
+	"GPTBot/util"
 	"fmt"
 	"log"
 	"strings"
@@ -36,7 +37,10 @@ func (c *CommandImagine) Execute(bot *telegram.Bot, update telegram.Update, gptC
 	if len(update.Message.CommandArguments()) == 0 {
 		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
 	} else {
-		chat.ImageGenNextTime = now.Add(time.Second * 900)
+		// check config.IgnoreReportIds
+		if !util.IsIdInList(update.Message.From.ID, bot.Config.IgnoreReportIds) {
+			chat.ImageGenNextTime = now.Add(time.Second * 900)
+		}
 		bot.Log(fmt.Sprintf("[%s] Image prompt: \"%s\"", chat.Title, update.Message.CommandArguments()))
 		gptImage(bot, chat.ChatID, gptClient, update.Message.CommandArguments())
 	}
