@@ -57,6 +57,7 @@ func (gptClient *GPTClient) GenerateImage(prompt string, size string) (string, e
 	}
 
 	if len(responseData.Data) == 0 {
+		log.Printf("Empty data array in response: %s", string(body))
 		return "", fmt.Errorf("empty data array in response")
 	}
 
