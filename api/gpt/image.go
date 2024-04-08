@@ -18,6 +18,11 @@ type ResponseImagePayload struct {
 	Data []struct {
 		URL string `json:"url"`
 	} `json:"data"`
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Type    string `json:"type"`
+	}
 }
 
 const (
@@ -58,6 +63,11 @@ func (gptClient *GPTClient) GenerateImage(prompt string, size string) (string, e
 
 	if len(responseData.Data) == 0 {
 		log.Printf("Empty data array in response: %s", string(body))
+
+		if responseData.Error.Message != "" && responseData.Error.Code == "content_policy_violation" {
+			return "", fmt.Errorf("content policy violation: %s", responseData.Error.Message)
+		}
+
 		return "", fmt.Errorf("empty data array in response")
 	}
 
