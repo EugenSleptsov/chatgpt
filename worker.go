@@ -12,79 +12,94 @@ import (
 	"time"
 )
 
-func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage) {
-	// buffer up to 100 update messages
-	updateChan := make(chan telegram.Update, 100)
+const (
+	numWorkers       = 10
+	updateBufferSize = 100
+)
 
-	// create a pool of worker goroutines
-	numWorkers := 10
+func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage) {
+	updateChan := make(chan telegram.Update, updateBufferSize)
 	for i := 0; i < numWorkers; i++ {
 		go worker(updateChan, bot, gptClient, botStorage)
 	}
 
 	for update := range bot.GetUpdateChannel(bot.Config.TimeoutValue) {
-		// Ignore any non-Message Updates
-		if update.Message == nil {
-			continue
-		}
-
-		chatID := update.Message.Chat.ID
-		chat, ok := botStorage.Get(chatID)
-		if !ok {
-			chat = &storage.Chat{
-				ChatID: update.Message.Chat.ID,
-				Settings: storage.ChatSettings{
-					Temperature:     0.8,
-					Model:           gpt.ModelGPT3Turbo,
-					MaxMessages:     bot.Config.MaxMessages,
-					UseMarkdown:     false,
-					SystemPrompt:    "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible.",
-					SummarizePrompt: bot.Config.SummarizePrompt,
-					Token:           bot.Config.GPTToken,
-				},
-				History:          make([]*storage.ConversationEntry, 0),
-				ImageGenNextTime: time.Now(),
-				Title:            telegram.GetChatTitle(update),
-			}
-			_ = botStorage.Set(chatID, chat)
-		}
-
-		if !update.Message.IsCommand() {
-			// putting history to log file
-			// every newline is a new message
-			var lines []string
-			name := update.Message.From.FirstName + " " + update.Message.From.LastName
-			for _, v := range strings.Split(update.Message.Text, "\n") {
-				if v != "" {
-					lines = append(lines, v)
-				}
-			}
-
-			// для групповых чатов указываем имя пользователя
-			if chat.ChatID < 0 {
-				for i := range lines {
-					lines[i] = fmt.Sprintf("%s: %s", name, lines[i])
-				}
-			}
-
-			// saving lines to log file
-			_ = util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
-		}
-
-		// If no authorized users are provided, make the bot public
-		if len(bot.Config.AuthorizedUserIds) > 0 {
-			if !util.IsIdInList(update.Message.From.ID, bot.Config.AuthorizedUserIds) {
-				if update.Message.Chat.Type == "private" {
-					bot.Reply(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
-					bot.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
-				}
-				continue
-			}
-		}
-
-		// Send the Update to the worker goroutines via the channel
-		updateChan <- update
+		handleUpdate(bot, botStorage, update, updateChan)
 	}
+}
+
+func handleUpdate(bot *telegram.Bot, botStorage storage.Storage, update telegram.Update, updateChan chan<- telegram.Update) {
+	// Ignore any non-Message Updates
+	if update.Message == nil {
+		return
+	}
+
+	chatID := update.Message.Chat.ID
+	chat, ok := botStorage.Get(chatID)
+	if !ok {
+		chat = createNewChat(update, bot)
+		_ = botStorage.Set(chatID, chat)
+	}
+
+	if !update.Message.IsCommand() {
+		logMessage(update, chat)
+	}
+
+	// If no authorized users are provided, make the bot public
+	if !isAuthorizedUser(update.Message.From.ID, bot.Config.AuthorizedUserIds) {
+		if update.Message.Chat.Type == "private" {
+			bot.Reply(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+			bot.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
+		}
+		return
+	}
+
+	// Send the Update to the worker goroutines via the channel
+	updateChan <- update
+}
+
+func logMessage(update telegram.Update, chat *storage.Chat) {
+	// putting history to log file
+	// every newline is a new message
+	var lines []string
+	name := update.Message.From.FirstName + " " + update.Message.From.LastName
+	for _, v := range strings.Split(update.Message.Text, "\n") {
+		if v != "" {
+			lines = append(lines, v)
+		}
+	}
+
+	// для групповых чатов указываем имя пользователя
+	if chat.ChatID < 0 {
+		for i := range lines {
+			lines[i] = fmt.Sprintf("%s: %s", name, lines[i])
+		}
+	}
+
+	// saving lines to log file
+	util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
+}
+
+func createNewChat(update telegram.Update, bot *telegram.Bot) *storage.Chat {
+	return &storage.Chat{
+		ChatID: update.Message.Chat.ID,
+		Settings: storage.ChatSettings{
+			Temperature:     0.8,
+			Model:           gpt.ModelGPT3Turbo,
+			MaxMessages:     bot.Config.MaxMessages,
+			UseMarkdown:     true,
+			SystemPrompt:    "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible.",
+			SummarizePrompt: bot.Config.SummarizePrompt,
+			Token:           bot.Config.GPTToken,
+		},
+		History:          make([]*storage.ConversationEntry, 0),
+		ImageGenNextTime: time.Now(),
+		Title:            telegram.GetChatTitle(update),
+	}
+}
+
+func isAuthorizedUser(userID int64, authorizedUserIds []int64) bool {
+	return len(authorizedUserIds) == 0 || util.IsIdInList(userID, authorizedUserIds)
 }
 
 // worker function that processes updates
@@ -177,10 +192,9 @@ func callImageReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 func callCommand(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
 	command := update.Message.Command()
 
-	if commands.CommandList[command] != nil {
-		_command := commands.CommandList[command]
-		if update.Message.From.ID == bot.AdminId || !_command.IsAdmin() {
-			commands.CommandList[command].Execute(bot, update, gptClient, chat)
+	if cmd, exists := commands.CommandList[command]; exists {
+		if update.Message.From.ID == bot.AdminId || !cmd.IsAdmin() {
+			cmd.Execute(bot, update, gptClient, chat)
 		}
 	}
 }
