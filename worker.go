@@ -35,7 +35,7 @@ func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Stora
 				ChatID: update.Message.Chat.ID,
 				Settings: storage.ChatSettings{
 					Temperature:     0.8,
-					Model:           "gpt-3.5-turbo",
+					Model:           gpt.ModelGPT3Turbo,
 					MaxMessages:     bot.Config.MaxMessages,
 					UseMarkdown:     false,
 					SystemPrompt:    "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible.",

@@ -3,7 +3,6 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -77,7 +76,7 @@ func (s *FileStorage) chatFilePath(chatID int64) string {
 
 func (s *FileStorage) loadChatFromFile(chatID int64) (*Chat, error) {
 	filePath := s.chatFilePath(chatID)
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -97,5 +96,5 @@ func (s *FileStorage) saveChatToFile(chatID int64, chat *Chat) error {
 		return err
 	}
 
-	return ioutil.WriteFile(filePath, data, 0644)
+	return os.WriteFile(filePath, data, 0644)
 }

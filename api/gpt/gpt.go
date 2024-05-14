@@ -57,23 +57,51 @@ type GPTClient struct {
 	ApiKey string
 }
 
+// model names
 const (
 	ModelGPT3        = "gpt-3"
-	ModelGPT3Turbo   = "gpt-3.5-turbo-1106"
+	ModelGPT3Turbo   = "gpt-3.5-turbo"
+	ModelGPT3TurboX  = "gpt-3.5-turbo-1106"
 	ModelGPT316k     = "gpt-3.5-turbo-16k"
 	ModelGPT316k2    = "gpt-316"
 	ModelGPT4        = "gpt-4"
+	ModelGPT4Turbo   = "gpt-4-turbo"
 	ModelGPT4Preview = "gpt-4-turbo-preview"
 	ModelGPT4Vision  = "gpt-4-vision-preview"
+	ModelGPT4Omni    = "gpt-4o"
 )
+
+// outer model names
+const (
+	OuterModelGPT3 = "gpt-3.5-turbo"
+	OuterModelGPT4 = "gpt-4o"
+)
+
+var ModelMap = map[string]string{
+	ModelGPT3:        OuterModelGPT3,
+	ModelGPT3Turbo:   OuterModelGPT3,
+	ModelGPT3TurboX:  OuterModelGPT3,
+	ModelGPT316k:     OuterModelGPT3,
+	ModelGPT316k2:    OuterModelGPT3,
+	ModelGPT4:        OuterModelGPT4,
+	ModelGPT4Turbo:   OuterModelGPT4,
+	ModelGPT4Preview: OuterModelGPT4,
+	ModelGPT4Vision:  OuterModelGPT4,
+	ModelGPT4Omni:    OuterModelGPT4,
+}
 
 func NewGPTClient(apiKey string) *GPTClient {
 	return &GPTClient{ApiKey: apiKey}
 }
 
 func (gptClient *GPTClient) CallGPT(chatConversation []Message, aimodel string, temperature float32) (*ResponseCompletionsPayload, error) {
+	outerAiModel := ModelMap[aimodel]
+	if outerAiModel == "" {
+		outerAiModel = OuterModelGPT3
+	}
+
 	requestPayload := RequestCompletionsPayload{
-		Model:       aimodel,
+		Model:       outerAiModel,
 		Messages:    chatConversation,
 		Temperature: temperature,
 	}

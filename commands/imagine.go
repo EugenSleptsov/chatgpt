@@ -56,7 +56,7 @@ func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt 
 	responsePayload, err := gptClient.CallGPT([]gpt.Message{
 		{Role: "system", Content: "You are an assistant that generates natural language description (prompt) for an artificial intelligence (AI) that generates images"},
 		{Role: "user", Content: fmt.Sprintf("Please improve this prompt: \"%s\". Answer with improved prompt only. Keep prompt at most 200 characters long. Your prompt must be in one sentence.", prompt)},
-	}, "gpt-3.5-turbo", 0.7)
+	}, gpt.OuterModelGPT4, 0.7)
 	if err == nil {
 		enhancedCaption = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
