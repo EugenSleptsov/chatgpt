@@ -37,15 +37,17 @@ func (c *CommandImagine) Execute(bot *telegram.Bot, update telegram.Update, gptC
 		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
 	} else {
 		chat.ImageGenNextTime = now.Add(time.Second * 900)
-		bot.Log(fmt.Sprintf("[%s] Image prompt: \"%s\"", chat.Title, update.Message.CommandArguments()))
-		err := gptImage(bot, chat.ChatID, gptClient, update.Message.CommandArguments())
+		aiModel := gpt.OuterModelGPT4
+
+		bot.Log(fmt.Sprintf("[%s | %s] Image prompt: \"%s\"", chat.Title, aiModel, update.Message.CommandArguments()))
+		err := gptImage(bot, aiModel, chat.ChatID, gptClient, update.Message.CommandArguments())
 		if err != nil {
 			bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
 		}
 	}
 }
 
-func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt string) error {
+func gptImage(bot *telegram.Bot, aiModel string, chatID int64, gptClient *gpt.GPTClient, prompt string) error {
 	imageUrl, err := gptClient.GenerateImage(prompt, gpt.ImageSize1024)
 	if err != nil {
 		bot.Log(fmt.Sprintf("[%d] Error generating image: %v", chatID, err))
@@ -56,7 +58,7 @@ func gptImage(bot *telegram.Bot, chatID int64, gptClient *gpt.GPTClient, prompt 
 	responsePayload, err := gptClient.CallGPT([]gpt.Message{
 		{Role: "system", Content: "You are an assistant that generates natural language description (prompt) for an artificial intelligence (AI) that generates images"},
 		{Role: "user", Content: fmt.Sprintf("Please improve this prompt: \"%s\". Answer with improved prompt only. Keep prompt at most 200 characters long. Your prompt must be in one sentence.", prompt)},
-	}, gpt.OuterModelGPT4, 0.7)
+	}, aiModel, 0.7)
 	if err == nil {
 		enhancedCaption = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}

@@ -250,7 +250,7 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 	}
 
 	if !util.IsIdInList(update.Message.From.ID, bot.Config.IgnoreReportIds) {
-		bot.Log(fmt.Sprintf("[%s]\nMessage: %s\nResponse: %s", chat.Title, update.Message.Text, response))
+		bot.Log(fmt.Sprintf("[%s | %s]\nMessage: %s\nResponse: %s", chat.Title, chat.Settings.Model, update.Message.Text, response))
 	}
 }
 
