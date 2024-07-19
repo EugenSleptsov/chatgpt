@@ -88,7 +88,7 @@ func createNewChat(update telegram.Update, bot *telegram.Bot) *storage.Chat {
 		ChatID: update.Message.Chat.ID,
 		Settings: storage.ChatSettings{
 			Temperature:     0.8,
-			Model:           gpt.ModelGPT3Turbo,
+			Model:           gpt.ModelGPT4OmniMini,
 			MaxMessages:     bot.Config.MaxMessages,
 			UseMarkdown:     true,
 			SystemPrompt:    "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible.",
