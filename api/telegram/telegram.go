@@ -122,20 +122,16 @@ func (botInstance *Bot) GetUpdateChannel(timeout int) UpdatesChannel {
 	return ourChannel
 }
 
-func (botInstance *Bot) ReplyMarkdown(chatID int64, replyTo int, text string) {
-	botInstance.reply(chatID, replyTo, text, true)
+func (botInstance *Bot) ReplyMarkdown(chatID int64, replyTo int, text string, isMarkdown bool) {
+	botInstance.message(chatID, replyTo, text, isMarkdown)
 }
 
 func (botInstance *Bot) Reply(chatID int64, replyTo int, text string) {
-	botInstance.reply(chatID, replyTo, text, false)
+	botInstance.message(chatID, replyTo, text, false)
 }
 
 func (botInstance *Bot) Message(message string, chatID int64, isMarkdown bool) {
-	botInstance._message(chatID, 0, message, isMarkdown)
-}
-
-func (botInstance *Bot) reply(chatID int64, replyTo int, text string, isMarkdown bool) {
-	botInstance.message(chatID, replyTo, text, isMarkdown)
+	botInstance.message(chatID, 0, message, isMarkdown)
 }
 
 func (botInstance *Bot) message(chatID int64, replyTo int, text string, isMarkdown bool) {

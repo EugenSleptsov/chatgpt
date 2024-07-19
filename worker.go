@@ -77,7 +77,10 @@ func logMessage(update telegram.Update, chat *storage.Chat) {
 	}
 
 	// saving lines to log file
-	util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
+	err := util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
+	if err != nil {
+		return
+	}
 }
 
 func createNewChat(update telegram.Update, bot *telegram.Bot) *storage.Chat {
@@ -182,11 +185,7 @@ func callImageReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GP
 		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 
-	if chat.Settings.UseMarkdown {
-		bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response)
-	} else {
-		bot.Reply(chat.ChatID, update.Message.MessageID, response)
-	}
+	bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
 }
 
 func callCommand(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
@@ -247,11 +246,7 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 	historyEntry.Response = storage.Message{Role: "assistant", Content: response}
 
 	log.Printf("[%s] %s", "ChatGPT", response)
-	if chat.Settings.UseMarkdown {
-		bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response)
-	} else {
-		bot.Reply(chat.ChatID, update.Message.MessageID, response)
-	}
+	bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
 
 	// initial message was Voice
 	if update.Message.Voice != nil {
