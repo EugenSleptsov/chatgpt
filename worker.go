@@ -12,23 +12,6 @@ import (
 	"time"
 )
 
-const (
-	numWorkers       = 10
-	updateBufferSize = 100
-)
-
-func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage, logClient *log.Log) {
-	updateChan := make(chan telegram.Update, updateBufferSize)
-	for i := 0; i < numWorkers; i++ {
-		worker := NewWorker(bot, gptClient, botStorage, logClient)
-		go worker.Start(updateChan)
-	}
-
-	for update := range bot.GetUpdateChannel(bot.Config.TimeoutValue) {
-		updateChan <- update
-	}
-}
-
 type Worker struct {
 	TelegramClient *telegram.Bot
 	GptClient      *gpt.GPTClient

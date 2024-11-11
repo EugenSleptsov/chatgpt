@@ -8,6 +8,11 @@ import (
 	"GPTBot/storage"
 )
 
+const (
+	numWorkers       = 10
+	updateBufferSize = 100
+)
+
 func main() {
 	logClient := log.NewLog()
 
@@ -21,5 +26,18 @@ func main() {
 	logClient.LogFatal(err)
 
 	gptClient := gpt.NewGPTClient(config.GPTToken)
-	start(bot, gptClient, botStorage, logClient)
+
+	Init(bot, gptClient, botStorage, logClient)
+}
+
+func Init(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage, logClient *log.Log) {
+	updateChan := make(chan telegram.Update, updateBufferSize)
+	for i := 0; i < numWorkers; i++ {
+		worker := NewWorker(bot, gptClient, botStorage, logClient)
+		go worker.Start(updateChan)
+	}
+
+	for update := range bot.GetUpdateChannel(bot.Config.TimeoutValue) {
+		updateChan <- update
+	}
 }
