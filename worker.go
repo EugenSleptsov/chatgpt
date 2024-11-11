@@ -2,12 +2,12 @@ package main
 
 import (
 	"GPTBot/api/gpt"
+	"GPTBot/api/log"
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 )
@@ -17,48 +17,42 @@ const (
 	updateBufferSize = 100
 )
 
-func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage) {
+func start(bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage, logClient *log.Log) {
 	updateChan := make(chan telegram.Update, updateBufferSize)
 	for i := 0; i < numWorkers; i++ {
-		go worker(updateChan, bot, gptClient, botStorage)
+		worker := NewWorker(bot, gptClient, botStorage, logClient)
+		go worker.Start(updateChan)
 	}
 
 	for update := range bot.GetUpdateChannel(bot.Config.TimeoutValue) {
-		handleUpdate(bot, botStorage, update, updateChan)
+		updateChan <- update
 	}
 }
 
-func handleUpdate(bot *telegram.Bot, botStorage storage.Storage, update telegram.Update, updateChan chan<- telegram.Update) {
-	// Ignore any non-Message Updates
-	if update.Message == nil {
-		return
-	}
-
-	chatID := update.Message.Chat.ID
-	chat, ok := botStorage.Get(chatID)
-	if !ok {
-		chat = createNewChat(update, bot)
-		_ = botStorage.Set(chatID, chat)
-	}
-
-	if !update.Message.IsCommand() {
-		logMessage(update, chat)
-	}
-
-	// If no authorized users are provided, make the bot public
-	if !isAuthorizedUser(update.Message.From.ID, bot.Config.AuthorizedUserIds) {
-		if update.Message.Chat.Type == "private" {
-			bot.Reply(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
-			bot.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
-		}
-		return
-	}
-
-	// Send the Update to the worker goroutines via the channel
-	updateChan <- update
+type Worker struct {
+	TelegramClient *telegram.Bot
+	GptClient      *gpt.GPTClient
+	StorageClient  storage.Storage
+	LogClient      *log.Log
 }
 
-func logMessage(update telegram.Update, chat *storage.Chat) {
+func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, storageClient storage.Storage, logClient *log.Log) *Worker {
+	return &Worker{
+		TelegramClient: telegramClient,
+		GptClient:      gptClient,
+		StorageClient:  storageClient,
+		LogClient:      logClient,
+	}
+}
+
+func (w *Worker) Start(updateChan <-chan telegram.Update) {
+	for update := range updateChan {
+		w.ProcessUpdate(update)
+		w.StorageClient.Save()
+	}
+}
+
+func (w *Worker) LogMessage(update telegram.Update, chat *storage.Chat) {
 	// putting history to log file
 	// every newline is a new message
 	var lines []string
@@ -76,11 +70,94 @@ func logMessage(update telegram.Update, chat *storage.Chat) {
 		}
 	}
 
-	// saving lines to log file
-	err := util.AddLines(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
-	if err != nil {
+	w.LogClient.LogToFile(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
+}
+
+func (w *Worker) ProcessUpdate(update telegram.Update) {
+	// Ignore any non-Message Updates
+	if update.Message == nil {
 		return
 	}
+
+	chatID := update.Message.Chat.ID
+	chat, ok := w.StorageClient.Get(chatID)
+	if !ok {
+		chat = createNewChat(update, w.TelegramClient)
+		_ = w.StorageClient.Set(chatID, chat)
+	}
+	chat.Title = telegram.GetChatTitle(update)
+
+	if !update.Message.IsCommand() {
+		w.LogMessage(update, chat)
+	}
+
+	// If no authorized users are provided, make the bot public
+	if !w.TelegramClient.IsAuthorizedUser(update.Message.From.ID) {
+		if update.Message.Chat.Type == "private" {
+			w.TelegramClient.Reply(chatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+			w.TelegramClient.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
+		}
+		return
+	}
+
+	if update.Message.Voice != nil {
+		response, err := w.processAudio(update.Message.Voice.FileID)
+		w.LogClient.LogError(err)
+		w.TelegramClient.Reply(chatID, update.Message.MessageID, response)
+
+		// check if message is forwarded, then we finish here
+		if update.Message.ForwardFrom != nil {
+			w.TelegramClient.Log(fmt.Sprintf("[%s] %s", telegram.GetChatTitle(update), "Transcribe was done"))
+			return
+		}
+		update.Message.Text = response
+	}
+
+	if len(update.Message.Photo) > 0 {
+		w.CallImageReply(update, chat)
+		return
+	}
+
+	// Check for commands
+	if update.Message.IsCommand() {
+		w.CallCommand(update, chat)
+	} else {
+		w.CallReply(update, chat)
+	}
+}
+
+func (w *Worker) CallImageReply(update telegram.Update, chat *storage.Chat) {
+	image := update.Message.Photo[len(update.Message.Photo)-1]
+	fileId := image.FileID
+
+	file, err := w.TelegramClient.GetFile(fileId)
+	w.LogClient.LogError(err)
+
+	url := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", w.TelegramClient.Token, file.FilePath)
+	w.LogClient.LogSystemF("Image URL: %s", url)
+
+	prompt := "Пожалуйста опишите изображение"
+	if update.Message.Caption != "" {
+		prompt = update.Message.Caption
+	}
+
+	messages := []gpt.Message{
+		{Role: "user", Content: []gpt.Content{
+			{Type: gpt.TypeText, Text: prompt},
+			{Type: gpt.TypeImageUrl, ImageUrl: gpt.ImageUrl{Url: url}},
+		}},
+	}
+
+	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
+	responsePayload, err := w.GptClient.CallGPT(messages, gpt.ModelGPT4Vision, 0.8)
+	w.LogClient.LogError(err)
+
+	if len(responsePayload.Choices) > 0 {
+		w.LogClient.LogSystem(responsePayload)
+		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
+	}
+
+	w.TelegramClient.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
 }
 
 func createNewChat(update telegram.Update, bot *telegram.Bot) *storage.Chat {
@@ -101,112 +178,25 @@ func createNewChat(update telegram.Update, bot *telegram.Bot) *storage.Chat {
 	}
 }
 
-func isAuthorizedUser(userID int64, authorizedUserIds []int64) bool {
-	return len(authorizedUserIds) == 0 || util.IsIdInList(userID, authorizedUserIds)
-}
-
-// worker function that processes updates
-func worker(updateChan <-chan telegram.Update, bot *telegram.Bot, gptClient *gpt.GPTClient, botStorage storage.Storage) {
-	for update := range updateChan {
-		processUpdate(bot, update, gptClient, botStorage)
-		botStorage.Save()
-	}
-}
-
-func processUpdate(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, botStorage storage.Storage) {
-	chatID := update.Message.Chat.ID
-	chat, _ := botStorage.Get(chatID)
-	chat.Title = telegram.GetChatTitle(update)
-
-	if update.Message.Voice != nil {
-		response, err := processAudio(bot, gptClient, update.Message.Voice.FileID)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			return
-		}
-
-		bot.Reply(chatID, update.Message.MessageID, response)
-
-		// check if message is forwarded, then we finish here
-		if update.Message.ForwardFrom != nil {
-			bot.Log(fmt.Sprintf("[%s] %s", telegram.GetChatTitle(update), "Transcribe was done"))
-			return
-		}
-		update.Message.Text = response
-	}
-
-	if len(update.Message.Photo) > 0 {
-		callImageReply(bot, update, gptClient, chat)
-		return
-	}
-
-	// Check for commands
-	if update.Message.IsCommand() {
-		callCommand(bot, update, gptClient, chat)
-	} else {
-		callReply(bot, update, gptClient, chat)
-	}
-}
-
-func callImageReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
-	image := update.Message.Photo[len(update.Message.Photo)-1]
-	fileId := image.FileID
-
-	file, err := bot.GetFile(fileId)
-	if err != nil {
-		log.Printf("Error: %v", err)
-		return
-	}
-
-	url := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", bot.Token, file.FilePath)
-	log.Printf("Image URL: %s", url)
-
-	prompt := "Пожалуйста опишите изображение"
-	if update.Message.Caption != "" {
-		prompt = update.Message.Caption
-	}
-
-	messages := []gpt.Message{
-		{Role: "user", Content: []gpt.Content{
-			{Type: gpt.TypeText, Text: prompt},
-			{Type: gpt.TypeImageUrl, ImageUrl: gpt.ImageUrl{Url: url}},
-		}},
-	}
-
-	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
-	responsePayload, err := gptClient.CallGPT(messages, gpt.ModelGPT4Vision, 0.8)
-	if err != nil {
-		log.Printf("Error: %v", err)
-		return
-	}
-
-	if len(responsePayload.Choices) > 0 {
-		log.Print(responsePayload)
-		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
-	}
-
-	bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
-}
-
-func callCommand(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (w *Worker) CallCommand(update telegram.Update, chat *storage.Chat) {
 	command := update.Message.Command()
 
 	if cmd, exists := commands.CommandList[command]; exists {
-		if update.Message.From.ID == bot.AdminId || !cmd.IsAdmin() {
-			cmd.Execute(bot, update, gptClient, chat)
+		if update.Message.From.ID == w.TelegramClient.AdminId || !cmd.IsAdmin() {
+			cmd.Execute(w.TelegramClient, update, w.GptClient, chat)
 		}
 	}
 }
 
-func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (w *Worker) CallReply(update telegram.Update, chat *storage.Chat) {
 	if chat.ChatID < 0 && update.Message.Voice == nil { // group chat
-		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == bot.Username
-		if !strings.Contains(update.Message.Text, "@"+bot.Username) && !isReplyToBot {
+		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == w.TelegramClient.Username
+		if !strings.Contains(update.Message.Text, "@"+w.TelegramClient.Username) && !isReplyToBot {
 			return
 		}
 
-		if strings.Contains(update.Message.Text, "@"+bot.Username) {
-			update.Message.Text = strings.Replace(update.Message.Text, "@"+bot.Username, "", -1)
+		if strings.Contains(update.Message.Text, "@"+w.TelegramClient.Username) {
+			update.Message.Text = strings.Replace(update.Message.Text, "@"+w.TelegramClient.Username, "", -1)
 		}
 	}
 
@@ -232,11 +222,8 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 	}
 
 	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
-	responsePayload, err := gptClient.CallGPT(messages, chat.Settings.Model, chat.Settings.Temperature)
-	if err != nil {
-		log.Printf("Error: %v", err)
-		return
-	}
+	responsePayload, err := w.GptClient.CallGPT(messages, chat.Settings.Model, chat.Settings.Temperature)
+	w.LogClient.LogError(err)
 
 	if len(responsePayload.Choices) > 0 {
 		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
@@ -244,47 +231,35 @@ func callReply(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClie
 
 	// Add the assistant's response to the conversation history
 	historyEntry.Response = storage.Message{Role: "assistant", Content: response}
-
-	log.Printf("[%s] %s", "ChatGPT", response)
-	bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
+	w.LogClient.LogSystemF("[%s] %s", "ChatGPT", response)
+	w.TelegramClient.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
 
 	// initial message was Voice
 	if update.Message.Voice != nil {
-		log.Print("Audio response")
-		err = processVoice(bot, gptClient, chat.ChatID, response)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			return
-		}
+		w.LogClient.LogSystem("Audio response")
+
+		bytes, err := w.GptClient.GenerateVoice(response, gpt.VoiceModel, gpt.VoiceOnyx)
+		w.LogClient.LogError(err)
+		err = w.TelegramClient.AudioUpload(chat.ChatID, bytes)
+		w.LogClient.LogError(err)
 	}
 
-	if !util.IsIdInList(update.Message.From.ID, bot.Config.IgnoreReportIds) {
-		bot.Log(fmt.Sprintf("[%s | %s]\nMessage: %s\nResponse: %s", chat.Title, chat.Settings.Model, update.Message.Text, response))
-	}
+	w.TelegramClient.ReportAdmin(update.Message.From.ID, fmt.Sprintf("[%s | %s]\nMessage: %s\nResponse: %s", chat.Title, chat.Settings.Model, update.Message.Text, response))
 }
 
-func processAudio(bot *telegram.Bot, gptClient *gpt.GPTClient, fileID string) (string, error) {
+func (w *Worker) processAudio(fileID string) (string, error) {
 	// Download the voice message file
-	file, err := bot.GetFile(fileID)
+	file, err := w.TelegramClient.GetFile(fileID)
 	if err != nil {
 		return "", fmt.Errorf("error getting file: %w", err)
 	}
 
 	// Download the audio file content
-	audioURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", bot.Token, file.FilePath)
+	audioURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", w.TelegramClient.Token, file.FilePath)
 	audioContent, err := util.DownloadFile(audioURL)
 	if err != nil {
 		return "", fmt.Errorf("error downloading audio file: %w", err)
 	}
 
-	return gptClient.TranscribeAudio(audioContent)
-}
-
-func processVoice(bot *telegram.Bot, gptClient *gpt.GPTClient, chatID int64, inputText string) error {
-	bytes, err := gptClient.GenerateVoice(inputText, gpt.VoiceModel, gpt.VoiceOnyx)
-	if err != nil {
-		return err
-	}
-
-	return bot.AudioUpload(chatID, bytes)
+	return w.GptClient.TranscribeAudio(audioContent)
 }

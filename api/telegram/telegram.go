@@ -233,3 +233,13 @@ func GetChatTitle(update Update) string {
 
 	return fmt.Sprintf("Chat %d [%s]", update.Message.Chat.ID, update.Message.Chat.Title)
 }
+
+func (botInstance *Bot) IsAuthorizedUser(userID int64) bool {
+	return len(botInstance.Config.AuthorizedUserIds) == 0 || util.IsIdInList(userID, botInstance.Config.AuthorizedUserIds)
+}
+
+func (botInstance *Bot) ReportAdmin(userId int64, message string) {
+	if !util.IsIdInList(userId, botInstance.Config.IgnoreReportIds) {
+		botInstance.Log(message)
+	}
+}
