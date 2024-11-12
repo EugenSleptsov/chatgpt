@@ -7,7 +7,10 @@ import (
 	"strconv"
 )
 
-type CommandSummarize struct{}
+type CommandSummarize struct {
+	TelegramBot *telegram.Bot
+	GptClient   *gpt.GPTClient
+}
 
 const SummarizeDefaultMessageCount = 50
 const SummarizeMaxMessageCount = 500
@@ -24,7 +27,7 @@ func (c *CommandSummarize) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSummarize) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (c *CommandSummarize) Execute(update telegram.Update, chat *storage.Chat) {
 	messageCount := SummarizeDefaultMessageCount
 	if len(update.Message.CommandArguments()) > 0 {
 		messageCount, _ = strconv.Atoi(update.Message.CommandArguments())
@@ -37,5 +40,5 @@ func (c *CommandSummarize) Execute(bot *telegram.Bot, update telegram.Update, gp
 		}
 	}
 
-	summarizeText(bot, chat, update.Message.MessageID, gptClient, chat.Settings.SummarizePrompt, messageCount)
+	summarizeText(c.TelegramBot, chat, update.Message.MessageID, c.GptClient, chat.Settings.SummarizePrompt, messageCount)
 }

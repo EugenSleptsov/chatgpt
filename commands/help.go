@@ -1,13 +1,15 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
 	"fmt"
 )
 
-type CommandHelp struct{}
+type CommandHelp struct {
+	TelegramBot     *telegram.Bot
+	CommandRegistry CommandRegistry
+}
 
 func (c *CommandHelp) Name() string {
 	return "help"
@@ -21,7 +23,9 @@ func (c *CommandHelp) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandHelp) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (c *CommandHelp) Execute(update telegram.Update, chat *storage.Chat) {
+	CommandList := c.CommandRegistry.GetCommands()
+
 	message := "Список доступных команд и их описание:\n"
 	var adminCommands []Command
 	for _, command := range CommandList {
@@ -33,12 +37,12 @@ func (c *CommandHelp) Execute(bot *telegram.Bot, update telegram.Update, gptClie
 		message += fmt.Sprintf("/%s - %s\n", command.Name(), command.Description())
 	}
 
-	if bot.AdminId == update.Message.From.ID {
+	if c.TelegramBot.AdminId == update.Message.From.ID {
 		message += "\nКоманды администратора:\n"
 		for _, command := range adminCommands {
 			message += fmt.Sprintf("/%s - %s\n", command.Name(), command.Description())
 		}
 	}
 
-	bot.Reply(update.Message.Chat.ID, update.Message.MessageID, message)
+	c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, message)
 }

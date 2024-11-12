@@ -8,7 +8,9 @@ import (
 	"fmt"
 )
 
-type CommandHistory struct{}
+type CommandHistory struct {
+	TelegramBot *telegram.Bot
+}
 
 func (c *CommandHistory) Name() string {
 	return "history"
@@ -22,10 +24,10 @@ func (c *CommandHistory) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandHistory) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (c *CommandHistory) Execute(update telegram.Update, chat *storage.Chat) {
 	historyMessages := formatHistory(messagesFromHistory(chat.History))
 	for _, message := range historyMessages {
-		bot.Reply(chat.ChatID, update.Message.MessageID, message)
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, message)
 	}
 }
 

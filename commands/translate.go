@@ -8,7 +8,10 @@ import (
 	"strings"
 )
 
-type CommandTranslate struct{}
+type CommandTranslate struct {
+	TelegramBot *telegram.Bot
+	GptClient   *gpt.GPTClient
+}
 
 const RUSSIAN = "ru"
 const ENGLISH = "en"
@@ -26,9 +29,9 @@ func (c *CommandTranslate) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandTranslate) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (c *CommandTranslate) Execute(update telegram.Update, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
 	} else {
 		language := ENGLISH
 		prompt := update.Message.CommandArguments()
@@ -52,6 +55,6 @@ func (c *CommandTranslate) Execute(bot *telegram.Bot, update telegram.Update, gp
 		}
 
 		systemPrompt := "You are a helpful assistant that translates."
-		gptText(bot, chat, update.Message.MessageID, gptClient, systemPrompt, translationPrompt)
+		gptText(c.TelegramBot, chat, update.Message.MessageID, c.GptClient, systemPrompt, translationPrompt)
 	}
 }

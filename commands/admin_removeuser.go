@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	conf "GPTBot/config"
 	"GPTBot/storage"
@@ -10,7 +9,9 @@ import (
 	"strconv"
 )
 
-type CommandAdminRemoveUser struct{}
+type CommandAdminRemoveUser struct {
+	TelegramBot *telegram.Bot
+}
 
 func (c *CommandAdminRemoveUser) Name() string {
 	return "removeuser"
@@ -24,32 +25,32 @@ func (c *CommandAdminRemoveUser) IsAdmin() bool {
 	return true
 }
 
-func (c *CommandAdminRemoveUser) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (c *CommandAdminRemoveUser) Execute(update telegram.Update, chat *storage.Chat) {
 	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chatID, update.Message.MessageID, "Please provide a user id to remove")
+		c.TelegramBot.Reply(chatID, update.Message.MessageID, "Please provide a user id to remove")
 	} else {
 		userId, err := strconv.ParseInt(update.Message.CommandArguments(), 10, 64)
 		if err != nil {
-			bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
+			c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
 			return
 		}
 
 		newList := make([]int64, 0)
-		for _, auth := range bot.Config.AuthorizedUserIds {
+		for _, auth := range c.TelegramBot.Config.AuthorizedUserIds {
 			if auth == userId {
-				bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
+				c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
 			} else {
 				newList = append(newList, auth)
 			}
 		}
 
-		bot.Config.AuthorizedUserIds = newList
-		err = conf.UpdateConfig("bot.conf", bot.Config)
+		c.TelegramBot.Config.AuthorizedUserIds = newList
+		err = conf.UpdateConfig("bot.conf", c.TelegramBot.Config)
 		if err != nil {
 			log.Fatalf("Error updating bot.conf: %v", err)
 		}
 
-		bot.Reply(chatID, update.Message.MessageID, "Command successfully ended")
+		c.TelegramBot.Reply(chatID, update.Message.MessageID, "Command successfully ended")
 	}
 }

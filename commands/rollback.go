@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
 	"GPTBot/util"
@@ -9,7 +8,9 @@ import (
 	"strconv"
 )
 
-type CommandRollback struct{}
+type CommandRollback struct {
+	TelegramBot *telegram.Bot
+}
 
 func (c *CommandRollback) Name() string {
 	return "rollback"
@@ -23,7 +24,7 @@ func (c *CommandRollback) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandRollback) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (c *CommandRollback) Execute(update telegram.Update, chat *storage.Chat) {
 	number := 1
 	if len(update.Message.CommandArguments()) > 0 {
 		var err error
@@ -39,8 +40,8 @@ func (c *CommandRollback) Execute(bot *telegram.Bot, update telegram.Update, gpt
 
 	if len(chat.History) > 0 {
 		chat.History = chat.History[:len(chat.History)-number]
-		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
 	} else {
-		bot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров пуста.")
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров пуста.")
 	}
 }

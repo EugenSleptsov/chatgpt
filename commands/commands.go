@@ -10,34 +10,11 @@ import (
 	"strings"
 )
 
-var CommandList = map[string]Command{
-	"help":             &CommandHelp{},
-	"start":            &CommandStart{},
-	"clear":            &CommandClear{},
-	"history":          &CommandHistory{},
-	"rollback":         &CommandRollback{},
-	"translate":        &CommandTranslate{},
-	"enhance":          &CommandEnhance{},
-	"grammar":          &CommandGrammar{},
-	"summarize":        &CommandSummarize{},
-	"summarize_prompt": &CommandSummarizePrompt{},
-	"analyze":          &CommandAnalyze{},
-	"temperature":      &CommandTemperature{},
-	"model":            &CommandModel{},
-	"imagine":          &CommandImagine{},
-	"system":           &CommandSystem{},
-	"markdown":         &CommandMarkdown{},
-
-	"reload":     &CommandAdminReload{},
-	"adduser":    &CommandAdminAddUser{},
-	"removeuser": &CommandAdminRemoveUser{},
-}
-
 type Command interface {
 	Name() string
 	Description() string
-	Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat)
 	IsAdmin() bool
+	Execute(update telegram.Update, chat *storage.Chat)
 }
 
 func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {

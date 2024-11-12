@@ -17,14 +17,16 @@ type Worker struct {
 	GptClient      *gpt.GPTClient
 	StorageClient  storage.Storage
 	LogClient      *log.Log
+	CommandFactory commands.CommandFactory
 }
 
-func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, storageClient storage.Storage, logClient *log.Log) *Worker {
+func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, storageClient storage.Storage, logClient *log.Log, commandFactory commands.CommandFactory) *Worker {
 	return &Worker{
 		TelegramClient: telegramClient,
 		GptClient:      gptClient,
 		StorageClient:  storageClient,
 		LogClient:      logClient,
+		CommandFactory: commandFactory,
 	}
 }
 
@@ -164,10 +166,13 @@ func createNewChat(update telegram.Update, bot *telegram.Bot) *storage.Chat {
 func (w *Worker) CallCommand(update telegram.Update, chat *storage.Chat) {
 	command := update.Message.Command()
 
-	if cmd, exists := commands.CommandList[command]; exists {
-		if update.Message.From.ID == w.TelegramClient.AdminId || !cmd.IsAdmin() {
-			cmd.Execute(w.TelegramClient, update, w.GptClient, chat)
-		}
+	cmd, err := w.CommandFactory.GetCommand(command)
+	if err != nil {
+		return
+	}
+
+	if !cmd.IsAdmin() || update.Message.From.ID == w.TelegramClient.AdminId {
+		cmd.Execute(update, chat)
 	}
 }
 

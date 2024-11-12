@@ -10,7 +10,10 @@ import (
 	"time"
 )
 
-type CommandImagine struct{}
+type CommandImagine struct {
+	TelegramBot *telegram.Bot
+	GptClient   *gpt.GPTClient
+}
 
 func (c *CommandImagine) Name() string {
 	return "imagine"
@@ -24,25 +27,25 @@ func (c *CommandImagine) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandImagine) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (c *CommandImagine) Execute(update telegram.Update, chat *storage.Chat) {
 	now := time.Now()
 	nextTime := chat.ImageGenNextTime
-	if nextTime.After(now) && update.Message.From.ID != bot.AdminId && !util.IsIdInList(update.Message.From.ID, bot.Config.IgnoreReportIds) {
+	if nextTime.After(now) && update.Message.From.ID != c.TelegramBot.AdminId && !util.IsIdInList(update.Message.From.ID, c.TelegramBot.Config.IgnoreReportIds) {
 		nextTimeStr := nextTime.Format("15:04:05")
-		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Your next image generation will be available at %s.", nextTimeStr))
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Your next image generation will be available at %s.", nextTimeStr))
 		return
 	}
 
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
 	} else {
 		chat.ImageGenNextTime = now.Add(time.Second * 900)
 		aiModel := gpt.OuterModelGPT4
 
-		bot.Log(fmt.Sprintf("[%s | %s] Image prompt: \"%s\"", chat.Title, aiModel, update.Message.CommandArguments()))
-		err := gptImage(bot, aiModel, chat.ChatID, gptClient, update.Message.CommandArguments())
+		c.TelegramBot.Log(fmt.Sprintf("[%s | %s] Image prompt: \"%s\"", chat.Title, aiModel, update.Message.CommandArguments()))
+		err := gptImage(c.TelegramBot, aiModel, chat.ChatID, c.GptClient, update.Message.CommandArguments())
 		if err != nil {
-			bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
+			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
 		}
 	}
 }

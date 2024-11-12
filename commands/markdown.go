@@ -1,12 +1,13 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
 )
 
-type CommandMarkdown struct{}
+type CommandMarkdown struct {
+	TelegramBot *telegram.Bot
+}
 
 func (c *CommandMarkdown) Name() string {
 	return "markdown"
@@ -20,15 +21,15 @@ func (c *CommandMarkdown) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandMarkdown) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (c *CommandMarkdown) Execute(update telegram.Update, chat *storage.Chat) {
 	if update.Message.CommandArguments() == "on" {
 		chat.Settings.UseMarkdown = true
-		bot.Reply(chat.ChatID, update.Message.MessageID, "Markdown включен")
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Markdown включен")
 	} else if update.Message.CommandArguments() == "off" {
 		chat.Settings.UseMarkdown = false
-		bot.Reply(chat.ChatID, update.Message.MessageID, "Markdown выключен")
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Markdown выключен")
 	} else {
-		bot.Reply(chat.ChatID, update.Message.MessageID, "Текущее состояние Markdown: "+boolToString(chat.Settings.UseMarkdown))
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Текущее состояние Markdown: "+boolToString(chat.Settings.UseMarkdown))
 		return
 	}
 }

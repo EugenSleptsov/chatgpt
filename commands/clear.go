@@ -1,12 +1,13 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
 )
 
-type CommandClear struct{}
+type CommandClear struct {
+	TelegramBot *telegram.Bot
+}
 
 func (c *CommandClear) Name() string {
 	return "clear"
@@ -20,7 +21,7 @@ func (c *CommandClear) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandClear) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (c *CommandClear) Execute(update telegram.Update, chat *storage.Chat) {
 	chat.History = nil
-	bot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров была очищена.")
+	c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров была очищена.")
 }

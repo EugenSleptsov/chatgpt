@@ -7,7 +7,9 @@ import (
 	"fmt"
 )
 
-type CommandModel struct{}
+type CommandModel struct {
+	TelegramBot *telegram.Bot
+}
 
 func (c *CommandModel) Name() string {
 	return "model"
@@ -21,21 +23,21 @@ func (c *CommandModel) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandModel) Execute(bot *telegram.Bot, update telegram.Update, gptClient *gpt.GPTClient, chat *storage.Chat) {
+func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
-		bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Текущая модель %s.", chat.Settings.Model))
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Текущая модель %s.", chat.Settings.Model))
 	} else {
 		model := update.Message.CommandArguments()
 		switch model {
 		case gpt.ModelGPT3:
 		case gpt.ModelGPT4OmniMini:
 			chat.Settings.Model = gpt.ModelGPT4OmniMini
-			bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s", chat.Settings.Model))
+			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s", chat.Settings.Model))
 		case gpt.ModelGPT4:
 			chat.Settings.Model = gpt.ModelGPT4Omni
-			bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s", chat.Settings.Model))
+			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s", chat.Settings.Model))
 		default:
-			bot.Reply(chat.ChatID, update.Message.MessageID, "Неверное название модели.")
+			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Неверное название модели.")
 		}
 	}
 }
