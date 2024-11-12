@@ -2,31 +2,28 @@ package main
 
 import (
 	"GPTBot/api/gpt"
-	"GPTBot/api/log"
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
 	"GPTBot/handler"
-	"GPTBot/storage"
+	"GPTBot/manager"
 	"fmt"
-	"strings"
-	"time"
 )
 
 type Worker struct {
 	TelegramClient *telegram.Bot
 	GptClient      *gpt.GPTClient
-	StorageClient  storage.Storage
-	LogClient      *log.Log
+	ChatManager    *manager.ChatManager
+	ChatLogger     *manager.ChatLogger
 	CommandFactory commands.CommandFactory
 	HandlerFactory handler.UpdateHandlerFactory
 }
 
-func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, storageClient storage.Storage, logClient *log.Log, commandFactory commands.CommandFactory, handlerFactory handler.UpdateHandlerFactory) *Worker {
+func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, storageClient *manager.ChatManager, ChatLogger *manager.ChatLogger, commandFactory commands.CommandFactory, handlerFactory handler.UpdateHandlerFactory) *Worker {
 	return &Worker{
 		TelegramClient: telegramClient,
 		GptClient:      gptClient,
-		StorageClient:  storageClient,
-		LogClient:      logClient,
+		ChatManager:    storageClient,
+		ChatLogger:     ChatLogger,
 		CommandFactory: commandFactory,
 		HandlerFactory: handlerFactory,
 	}
@@ -35,29 +32,8 @@ func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, storageCl
 func (w *Worker) Start(updateChan <-chan telegram.Update) {
 	for update := range updateChan {
 		w.ProcessUpdate(update)
-		w.StorageClient.Save()
+		w.ChatManager.StorageClient.Save()
 	}
-}
-
-func (w *Worker) LogMessage(update telegram.Update, chat *storage.Chat) {
-	// putting history to log file
-	// every newline is a new message
-	var lines []string
-	name := update.Message.From.FirstName + " " + update.Message.From.LastName
-	for _, v := range strings.Split(update.Message.Text, "\n") {
-		if v != "" {
-			lines = append(lines, v)
-		}
-	}
-
-	// для групповых чатов указываем имя пользователя
-	if chat.ChatID < 0 {
-		for i := range lines {
-			lines[i] = fmt.Sprintf("%s: %s", name, lines[i])
-		}
-	}
-
-	w.LogClient.LogToFile(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
 }
 
 func (w *Worker) ProcessUpdate(update telegram.Update) {
@@ -66,10 +42,10 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 		return
 	}
 
-	chat := w.GetOrCreateChat(update)
+	chat := w.ChatManager.GetOrCreateChat(update)
 
 	if !update.Message.IsCommand() {
-		w.LogMessage(update, chat)
+		w.ChatLogger.LogMessage(update, chat)
 	}
 
 	// If no authorized users are provided, make the bot public
@@ -82,30 +58,4 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 	}
 
 	_ = w.HandlerFactory.GetHandler(update).Handle(update, chat)
-}
-
-func (w *Worker) GetOrCreateChat(update telegram.Update) *storage.Chat {
-	chatID := update.Message.Chat.ID
-	chat, ok := w.StorageClient.Get(chatID)
-	if !ok {
-		chat = &storage.Chat{
-			ChatID: update.Message.Chat.ID,
-			Settings: storage.ChatSettings{
-				Temperature:     0.8,
-				Model:           gpt.ModelGPT4OmniMini,
-				MaxMessages:     w.TelegramClient.Config.MaxMessages,
-				UseMarkdown:     true,
-				SystemPrompt:    "You are a helpful ChatGPT bot based on OpenAI GPT Language model. You are a helpful assistant that always tries to help and answer with relevant information as possible.",
-				SummarizePrompt: w.TelegramClient.Config.SummarizePrompt,
-				Token:           w.TelegramClient.Config.GPTToken,
-			},
-			History:          make([]*storage.ConversationEntry, 0),
-			ImageGenNextTime: time.Now(),
-			Title:            telegram.GetChatTitle(update),
-		}
-		_ = w.StorageClient.Set(chatID, chat)
-	}
-	chat.Title = telegram.GetChatTitle(update)
-
-	return chat
 }

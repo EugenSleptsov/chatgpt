@@ -7,6 +7,7 @@ import (
 	"GPTBot/commands"
 	conf "GPTBot/config"
 	"GPTBot/handler"
+	"GPTBot/manager"
 	"GPTBot/storage"
 )
 
@@ -68,9 +69,12 @@ func main() {
 
 	handlerFactory := handler.NewUpdateHandlerFactory(telegramBot, commandFactory, gptClient, logClient)
 
+	chatManager := manager.NewChatManager(botStorage, telegramBot.Config)
+	chatLogger := manager.NewChatLogger(logClient)
+
 	updateChan := make(chan telegram.Update, updateBufferSize)
 	for i := 0; i < numWorkers; i++ {
-		worker := NewWorker(telegramBot, gptClient, botStorage, logClient, commandFactory, handlerFactory)
+		worker := NewWorker(telegramBot, gptClient, chatManager, chatLogger, commandFactory, handlerFactory)
 		go worker.Start(updateChan)
 	}
 
