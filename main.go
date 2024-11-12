@@ -6,6 +6,7 @@ import (
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
 	conf "GPTBot/config"
+	"GPTBot/handler"
 	"GPTBot/storage"
 )
 
@@ -65,12 +66,7 @@ func main() {
 	commandFactory.Register("adduser", func() commands.Command { return &commands.CommandAdminAddUser{TelegramBot: telegramBot} })
 	commandFactory.Register("removeuser", func() commands.Command { return &commands.CommandAdminRemoveUser{TelegramBot: telegramBot} })
 
-	handlerFactory := &ConcreteUpdateHandlerFactory{
-		TelegramBot:    telegramBot,
-		CommandFactory: commandFactory,
-		GptClient:      gptClient,
-		LogClient:      logClient,
-	}
+	handlerFactory := handler.NewUpdateHandlerFactory(telegramBot, commandFactory, gptClient, logClient)
 
 	updateChan := make(chan telegram.Update, updateBufferSize)
 	for i := 0; i < numWorkers; i++ {

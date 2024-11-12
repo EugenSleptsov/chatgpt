@@ -5,6 +5,7 @@ import (
 	"GPTBot/api/log"
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 	"strings"
@@ -17,10 +18,10 @@ type Worker struct {
 	StorageClient  storage.Storage
 	LogClient      *log.Log
 	CommandFactory commands.CommandFactory
-	HandlerFactory UpdateHandlerFactory
+	HandlerFactory handler.UpdateHandlerFactory
 }
 
-func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, storageClient storage.Storage, logClient *log.Log, commandFactory commands.CommandFactory, handlerFactory UpdateHandlerFactory) *Worker {
+func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, storageClient storage.Storage, logClient *log.Log, commandFactory commands.CommandFactory, handlerFactory handler.UpdateHandlerFactory) *Worker {
 	return &Worker{
 		TelegramClient: telegramClient,
 		GptClient:      gptClient,
@@ -80,8 +81,7 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 		return
 	}
 
-	handler := w.HandlerFactory.GetHandler(update)
-	_ = handler.Handle(update, chat)
+	_ = w.HandlerFactory.GetHandler(update).Handle(update, chat)
 }
 
 func (w *Worker) GetOrCreateChat(update telegram.Update) *storage.Chat {
