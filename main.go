@@ -65,9 +65,16 @@ func main() {
 	commandFactory.Register("adduser", func() commands.Command { return &commands.CommandAdminAddUser{TelegramBot: telegramBot} })
 	commandFactory.Register("removeuser", func() commands.Command { return &commands.CommandAdminRemoveUser{TelegramBot: telegramBot} })
 
+	handlerFactory := &ConcreteUpdateHandlerFactory{
+		TelegramBot:    telegramBot,
+		CommandFactory: commandFactory,
+		GptClient:      gptClient,
+		LogClient:      logClient,
+	}
+
 	updateChan := make(chan telegram.Update, updateBufferSize)
 	for i := 0; i < numWorkers; i++ {
-		worker := NewWorker(telegramBot, gptClient, botStorage, logClient, commandFactory)
+		worker := NewWorker(telegramBot, gptClient, botStorage, logClient, commandFactory, handlerFactory)
 		go worker.Start(updateChan)
 	}
 
