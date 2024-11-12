@@ -6,6 +6,7 @@ import (
 	"GPTBot/commands"
 	"GPTBot/handler"
 	"GPTBot/manager"
+	"GPTBot/storage"
 	"fmt"
 )
 
@@ -37,25 +38,46 @@ func (w *Worker) Start(updateChan <-chan telegram.Update) {
 }
 
 func (w *Worker) ProcessUpdate(update telegram.Update) {
-	// Ignore any non-Message Updates
-	if update.Message == nil {
+	if !w.isMessage(update) {
 		return
 	}
 
 	chat := w.ChatManager.GetOrCreateChat(update)
+	w.logIfNonCommandMessage(update, chat)
 
-	if !update.Message.IsCommand() {
-		w.ChatLogger.LogMessage(update, chat)
-	}
-
-	// If no authorized users are provided, make the bot public
-	if !w.TelegramClient.IsAuthorizedUser(update.Message.From.ID) {
-		if update.Message.Chat.Type == "private" {
-			w.TelegramClient.Reply(chat.ChatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
-			w.TelegramClient.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
-		}
+	if !w.isAuthorized(update) {
+		w.handleUnauthorizedAccess(update, chat)
 		return
 	}
 
-	_ = w.HandlerFactory.GetHandler(update).Handle(update, chat)
+	w.handleUpdate(update, chat)
+}
+
+func (w *Worker) isMessage(update telegram.Update) bool {
+	return update.Message != nil
+}
+
+func (w *Worker) logIfNonCommandMessage(update telegram.Update, chat *storage.Chat) {
+	if !update.Message.IsCommand() {
+		w.ChatLogger.LogMessage(update, chat)
+	}
+}
+
+func (w *Worker) isAuthorized(update telegram.Update) bool {
+	return w.TelegramClient.IsAuthorizedUser(update.Message.From.ID)
+}
+
+func (w *Worker) handleUnauthorizedAccess(update telegram.Update, chat *storage.Chat) {
+	if update.Message.Chat.Type != "private" {
+		return
+	}
+
+	w.TelegramClient.Reply(chat.ChatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+	w.TelegramClient.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
+}
+
+func (w *Worker) handleUpdate(update telegram.Update, chat *storage.Chat) {
+	if err := w.HandlerFactory.GetHandler(update).Handle(update, chat); err != nil {
+		w.TelegramClient.Log(fmt.Sprintf("Error handling input: %v", err))
+	}
 }
