@@ -21,19 +21,46 @@ func main() {
 
 	config, err := conf.ReadConfig("bot.conf")
 	logSystem.LogFatal(err)
+	gptClient := gpt.NewGPTClient(config.GPTToken)
 
 	telegramBot, err := telegram.NewInstance(config, logSystem)
 	logSystem.LogFatal(err)
 
+	commandFactory := commands.NewCommandFactory()
+	registerCommands(commandFactory, telegramBot, commandFactory, gptClient)
+
 	botStorage, err := storage.NewFileStorage("data")
 	logSystem.LogFatal(err)
 
-	gptClient := gpt.NewGPTClient(config.GPTToken)
+	startWorkers(
+		telegramBot,
+		gptClient,
+		manager.NewTelegramChatManager(botStorage, telegramBot.Config, logSystem),
+		commandFactory,
+		handler.NewUpdateHandlerFactory(telegramBot, commandFactory, gptClient, logSystem, logSystem),
+	)
+}
 
-	commandFactory := commands.NewCommandFactory()
+func startWorkers(
+	telegramBot *telegram.Bot,
+	gptClient *gpt.GPTClient,
+	chatManager manager.ChatManager,
+	commandFactory commands.CommandFactory,
+	handlerFactory handler.UpdateHandlerFactory,
+) {
+	updateChan := make(chan telegram.Update, updateBufferSize)
+	for i := 0; i < numWorkers; i++ {
+		worker := NewWorker(telegramBot, gptClient, chatManager, commandFactory, handlerFactory)
+		go worker.Start(updateChan)
+	}
+	for update := range telegramBot.GetUpdateChannel(telegramBot.Config.TimeoutValue) {
+		updateChan <- update
+	}
+}
 
+func registerCommands(commandFactory commands.CommandFactory, telegramBot *telegram.Bot, commandRegistry commands.CommandRegistry, gptClient *gpt.GPTClient) {
 	commandFactory.Register("help", func() commands.Command {
-		return &commands.CommandHelp{TelegramBot: telegramBot, CommandRegistry: commandFactory}
+		return &commands.CommandHelp{TelegramBot: telegramBot, CommandRegistry: commandRegistry}
 	})
 	commandFactory.Register("start", func() commands.Command { return &commands.CommandStart{TelegramBot: telegramBot} })
 	commandFactory.Register("clear", func() commands.Command { return &commands.CommandClear{TelegramBot: telegramBot} })
@@ -66,18 +93,4 @@ func main() {
 	commandFactory.Register("reload", func() commands.Command { return &commands.CommandAdminReload{TelegramBot: telegramBot} })
 	commandFactory.Register("adduser", func() commands.Command { return &commands.CommandAdminAddUser{TelegramBot: telegramBot} })
 	commandFactory.Register("removeuser", func() commands.Command { return &commands.CommandAdminRemoveUser{TelegramBot: telegramBot} })
-
-	handlerFactory := handler.NewUpdateHandlerFactory(telegramBot, commandFactory, gptClient, logSystem, logSystem)
-
-	chatManager := manager.NewTelegramChatManager(botStorage, telegramBot.Config, logSystem)
-
-	updateChan := make(chan telegram.Update, updateBufferSize)
-	for i := 0; i < numWorkers; i++ {
-		worker := NewWorker(telegramBot, gptClient, chatManager, commandFactory, handlerFactory)
-		go worker.Start(updateChan)
-	}
-
-	for update := range telegramBot.GetUpdateChannel(telegramBot.Config.TimeoutValue) {
-		updateChan <- update
-	}
 }
