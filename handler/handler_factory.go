@@ -15,15 +15,17 @@ type ConcreteUpdateHandlerFactory struct {
 	TelegramBot    *telegram.Bot
 	CommandFactory commands.CommandFactory
 	GptClient      *gpt.GPTClient
-	LogClient      *log.Log
+	LogClient      log.Log
+	ErrorLogClient log.ErrorLog
 }
 
-func NewUpdateHandlerFactory(telegramBot *telegram.Bot, commandFactory commands.CommandFactory, gptClient *gpt.GPTClient, logClient *log.Log) *ConcreteUpdateHandlerFactory {
+func NewUpdateHandlerFactory(telegramBot *telegram.Bot, commandFactory commands.CommandFactory, gptClient *gpt.GPTClient, logClient log.Log, errorLogClient log.ErrorLog) *ConcreteUpdateHandlerFactory {
 	return &ConcreteUpdateHandlerFactory{
 		TelegramBot:    telegramBot,
 		CommandFactory: commandFactory,
 		GptClient:      gptClient,
 		LogClient:      logClient,
+		ErrorLogClient: errorLogClient,
 	}
 }
 
@@ -39,7 +41,7 @@ func (c *ConcreteUpdateHandlerFactory) GetHandler(update telegram.Update) Update
 		return &VoiceHandler{
 			TelegramClient: c.TelegramBot,
 			GptClient:      c.GptClient,
-			LogClient:      c.LogClient,
+			ErrorLogClient: c.ErrorLogClient,
 		}
 	}
 
@@ -47,6 +49,7 @@ func (c *ConcreteUpdateHandlerFactory) GetHandler(update telegram.Update) Update
 		return &ImageHandler{
 			TelegramClient: c.TelegramBot,
 			GptClient:      c.GptClient,
+			ErrorLogClient: c.ErrorLogClient,
 			LogClient:      c.LogClient,
 		}
 	}
@@ -54,5 +57,7 @@ func (c *ConcreteUpdateHandlerFactory) GetHandler(update telegram.Update) Update
 	return &MessageHandler{
 		TelegramClient: c.TelegramBot,
 		GptClient:      c.GptClient,
+		LogClient:      c.LogClient,
+		ErrorLogClient: c.ErrorLogClient,
 	}
 }

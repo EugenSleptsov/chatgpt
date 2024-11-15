@@ -1,41 +1,15 @@
 package log
 
-import (
-	"GPTBot/util"
-	"log"
-)
-
-type Log struct {
+type Log interface {
+	Log(message string)
+	Logf(format string, v ...interface{})
 }
 
-func NewLog() *Log {
-	return &Log{}
+type ErrorLog interface {
+	LogError(err error)
+	LogFatal(err error)
 }
 
-func (l *Log) LogToFile(file string, lines []string) {
-	// saving lines to log file
-	err := util.AddLines(file, lines)
-	if err != nil {
-		return
-	}
-}
-
-func (l *Log) LogError(err error) {
-	if err != nil {
-		log.Printf("Error: %v\n", err)
-	}
-}
-
-func (l *Log) LogFatal(err error) {
-	if err != nil {
-		log.Fatalf("Fatal error: %v\n", err)
-	}
-}
-
-func (l *Log) LogSystemF(format string, v ...interface{}) {
-	log.Printf(format, v...)
-}
-
-func (l *Log) LogSystem(v ...any) {
-	log.Print(v)
+type FileLog interface {
+	LogToFile(file string, lines []string)
 }

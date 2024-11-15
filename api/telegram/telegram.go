@@ -1,23 +1,25 @@
 package telegram
 
 import (
+	"GPTBot/api/log"
+	"GPTBot/api/telegram/adminlog"
 	conf "GPTBot/config"
 	"GPTBot/util"
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 )
 
 type Bot struct {
-	api      *tgbotapi.BotAPI
-	Config   *conf.Config
-	Username string
-	Token    string
-	AdminId  int64
-	LogBot   *LogBot
+	api            *tgbotapi.BotAPI
+	Config         *conf.Config
+	Username       string
+	Token          string
+	AdminId        int64
+	LogClient      log.Log
+	AdminLogClient adminlog.AdminLogger
 }
 
 type UpdatesChannel <-chan Update
@@ -49,30 +51,31 @@ var DefaultCommandList = []Command{
 	CommandSummarize,
 }
 
-func NewInstance(config *conf.Config) (*Bot, error) {
+func NewInstance(config *conf.Config, logClient log.Log) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(config.TelegramToken)
 	if err != nil {
 		return nil, err
 	}
 
 	bot := &Bot{
-		api:      api,
-		Config:   config,
-		Username: api.Self.UserName,
-		Token:    config.TelegramToken,
+		api:       api,
+		Config:    config,
+		Username:  api.Self.UserName,
+		Token:     config.TelegramToken,
+		LogClient: logClient,
 	}
 
 	bot.SetAdminId(config.AdminId)
 	bot.SetCommandList(config.CommandMenu)
 
-	log.Printf("Authorized on account %s", bot.api.Self.UserName)
+	bot.LogClient.Logf("Authorized on account %s", bot.api.Self.UserName)
 
 	if config.TelegramTokenLogBot != "" {
-		logBot, err := NewLogBot(config.TelegramTokenLogBot)
+		adminLogClient, err := adminlog.NewTelegramAdminLogger(config.TelegramTokenLogBot, config.AdminId)
 		if err != nil {
 			return nil, err
 		}
-		bot.LogBot = logBot
+		bot.AdminLogClient = adminLogClient
 	}
 
 	return bot, nil
@@ -154,7 +157,7 @@ func (botInstance *Bot) _message(chatID int64, replyTo int, text string, isMarkd
 	}
 	_, err := botInstance.api.Send(msg)
 	if err != nil {
-		log.Printf("Error sending message: %v", err)
+		botInstance.LogClient.Logf("Error sending message: %v", err)
 	}
 }
 
@@ -208,13 +211,14 @@ func (botInstance *Bot) AudioUpload(chatID int64, bytes []byte) error {
 }
 
 func (botInstance *Bot) Log(message string) {
-	log.Print(message)
+	botInstance.LogClient.Log(message)
 
-	if botInstance.LogBot != nil && botInstance.AdminId != 0 {
-		err := botInstance.LogBot.SendMessage(botInstance.AdminId, message)
-		if err != nil {
-			log.Printf("Error sending log message: %v", err)
-		}
+	if botInstance.AdminLogClient == nil {
+		return
+	}
+	err := botInstance.AdminLogClient.Log(message)
+	if err != nil {
+		return
 	}
 }
 

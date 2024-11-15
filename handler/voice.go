@@ -12,12 +12,12 @@ import (
 type VoiceHandler struct {
 	TelegramClient *telegram.Bot
 	GptClient      *gpt.GPTClient
-	LogClient      *log.Log
+	ErrorLogClient log.ErrorLog
 }
 
 func (v *VoiceHandler) Handle(update telegram.Update, chat *storage.Chat) error {
 	response, err := v.processAudio(update.Message.Voice.FileID)
-	v.LogClient.LogError(err)
+	v.ErrorLogClient.LogError(err)
 	v.TelegramClient.Reply(chat.ChatID, update.Message.MessageID, response)
 
 	// check if message is forwarded, then we finish here

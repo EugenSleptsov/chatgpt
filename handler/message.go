@@ -12,7 +12,8 @@ import (
 type MessageHandler struct {
 	TelegramClient *telegram.Bot
 	GptClient      *gpt.GPTClient
-	LogClient      *log.Log
+	LogClient      log.Log
+	ErrorLogClient log.ErrorLog
 }
 
 func (m *MessageHandler) Handle(update telegram.Update, chat *storage.Chat) error {
@@ -50,7 +51,7 @@ func (m *MessageHandler) Handle(update telegram.Update, chat *storage.Chat) erro
 
 	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
 	responsePayload, err := m.GptClient.CallGPT(messages, chat.Settings.Model, chat.Settings.Temperature)
-	m.LogClient.LogError(err)
+	m.ErrorLogClient.LogError(err)
 
 	if len(responsePayload.Choices) > 0 {
 		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
@@ -58,17 +59,17 @@ func (m *MessageHandler) Handle(update telegram.Update, chat *storage.Chat) erro
 
 	// Add the assistant's response to the conversation history
 	historyEntry.Response = storage.Message{Role: "assistant", Content: response}
-	m.LogClient.LogSystemF("[%s] %s", "ChatGPT", response)
+	m.LogClient.Logf("[%s] %s", "ChatGPT", response)
 	m.TelegramClient.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
 
 	// initial message was Voice
 	if update.Message.Voice != nil {
-		m.LogClient.LogSystem("Audio response")
+		m.LogClient.Log("Audio response")
 
 		bytes, err := m.GptClient.GenerateVoice(response, gpt.VoiceModel, gpt.VoiceOnyx)
-		m.LogClient.LogError(err)
+		m.ErrorLogClient.LogError(err)
 		err = m.TelegramClient.AudioUpload(chat.ChatID, bytes)
-		m.LogClient.LogError(err)
+		m.ErrorLogClient.LogError(err)
 	}
 
 	m.TelegramClient.ReportAdmin(update.Message.From.ID, fmt.Sprintf("[%s | %s]\nMessage: %s\nResponse: %s", chat.Title, chat.Settings.Model, update.Message.Text, response))

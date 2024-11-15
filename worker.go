@@ -13,18 +13,16 @@ import (
 type Worker struct {
 	TelegramClient *telegram.Bot
 	GptClient      *gpt.GPTClient
-	ChatManager    *manager.ChatManager
-	ChatLogger     *manager.ChatLogger
+	ChatManager    manager.ChatManager
 	CommandFactory commands.CommandFactory
 	HandlerFactory handler.UpdateHandlerFactory
 }
 
-func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, storageClient *manager.ChatManager, ChatLogger *manager.ChatLogger, commandFactory commands.CommandFactory, handlerFactory handler.UpdateHandlerFactory) *Worker {
+func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, chatManager manager.ChatManager, commandFactory commands.CommandFactory, handlerFactory handler.UpdateHandlerFactory) *Worker {
 	return &Worker{
 		TelegramClient: telegramClient,
 		GptClient:      gptClient,
-		ChatManager:    storageClient,
-		ChatLogger:     ChatLogger,
+		ChatManager:    chatManager,
 		CommandFactory: commandFactory,
 		HandlerFactory: handlerFactory,
 	}
@@ -33,7 +31,7 @@ func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, storageCl
 func (w *Worker) Start(updateChan <-chan telegram.Update) {
 	for update := range updateChan {
 		w.ProcessUpdate(update)
-		w.ChatManager.StorageClient.Save()
+		w.ChatManager.GetStorageClient().Save()
 	}
 }
 
@@ -59,7 +57,7 @@ func (w *Worker) isMessage(update telegram.Update) bool {
 
 func (w *Worker) logIfNonCommandMessage(update telegram.Update, chat *storage.Chat) {
 	if !update.Message.IsCommand() {
-		w.ChatLogger.LogMessage(update, chat)
+		w.ChatManager.LogMessage(update, chat)
 	}
 }
 

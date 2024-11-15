@@ -17,16 +17,16 @@ const (
 )
 
 func main() {
-	logClient := log.NewLog()
+	logSystem := log.NewSystem()
 
 	config, err := conf.ReadConfig("bot.conf")
-	logClient.LogFatal(err)
+	logSystem.LogFatal(err)
 
-	telegramBot, err := telegram.NewInstance(config)
-	logClient.LogFatal(err)
+	telegramBot, err := telegram.NewInstance(config, logSystem)
+	logSystem.LogFatal(err)
 
 	botStorage, err := storage.NewFileStorage("data")
-	logClient.LogFatal(err)
+	logSystem.LogFatal(err)
 
 	gptClient := gpt.NewGPTClient(config.GPTToken)
 
@@ -67,14 +67,13 @@ func main() {
 	commandFactory.Register("adduser", func() commands.Command { return &commands.CommandAdminAddUser{TelegramBot: telegramBot} })
 	commandFactory.Register("removeuser", func() commands.Command { return &commands.CommandAdminRemoveUser{TelegramBot: telegramBot} })
 
-	handlerFactory := handler.NewUpdateHandlerFactory(telegramBot, commandFactory, gptClient, logClient)
+	handlerFactory := handler.NewUpdateHandlerFactory(telegramBot, commandFactory, gptClient, logSystem, logSystem)
 
-	chatManager := manager.NewChatManager(botStorage, telegramBot.Config)
-	chatLogger := manager.NewChatLogger(logClient)
+	chatManager := manager.NewTelegramChatManager(botStorage, telegramBot.Config, logSystem)
 
 	updateChan := make(chan telegram.Update, updateBufferSize)
 	for i := 0; i < numWorkers; i++ {
-		worker := NewWorker(telegramBot, gptClient, chatManager, chatLogger, commandFactory, handlerFactory)
+		worker := NewWorker(telegramBot, gptClient, chatManager, commandFactory, handlerFactory)
 		go worker.Start(updateChan)
 	}
 

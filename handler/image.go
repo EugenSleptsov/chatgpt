@@ -12,7 +12,8 @@ import (
 type ImageHandler struct {
 	TelegramClient *telegram.Bot
 	GptClient      *gpt.GPTClient
-	LogClient      *log.Log
+	ErrorLogClient log.ErrorLog
+	LogClient      log.Log
 }
 
 func (i *ImageHandler) Handle(update telegram.Update, chat *storage.Chat) error {
@@ -20,10 +21,10 @@ func (i *ImageHandler) Handle(update telegram.Update, chat *storage.Chat) error 
 	fileId := image.FileID
 
 	file, err := i.TelegramClient.GetFile(fileId)
-	i.LogClient.LogError(err)
+	i.ErrorLogClient.LogError(err)
 
 	url := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", i.TelegramClient.Token, file.FilePath)
-	i.LogClient.LogSystemF("Image URL: %s", url)
+	i.LogClient.Logf("Image URL: %s", url)
 
 	prompt := "Пожалуйста опишите изображение"
 	if update.Message.Caption != "" {
@@ -39,10 +40,10 @@ func (i *ImageHandler) Handle(update telegram.Update, chat *storage.Chat) error 
 
 	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
 	responsePayload, err := i.GptClient.CallGPT(messages, gpt.ModelGPT4Vision, 0.8)
-	i.LogClient.LogError(err)
+	i.ErrorLogClient.LogError(err)
 
 	if len(responsePayload.Choices) > 0 {
-		i.LogClient.LogSystem(responsePayload)
+		i.LogClient.Log(fmt.Sprint(responsePayload))
 		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 
