@@ -14,12 +14,12 @@ type UpdateHandlerFactory interface {
 type ConcreteUpdateHandlerFactory struct {
 	TelegramBot    *telegram.Bot
 	CommandFactory commands.CommandFactory
-	GptClient      *gpt.GPTClient
+	GptClient      gpt.Client
 	LogClient      log.Log
 	ErrorLogClient log.ErrorLog
 }
 
-func NewUpdateHandlerFactory(telegramBot *telegram.Bot, commandFactory commands.CommandFactory, gptClient *gpt.GPTClient, logClient log.Log, errorLogClient log.ErrorLog) *ConcreteUpdateHandlerFactory {
+func NewUpdateHandlerFactory(telegramBot *telegram.Bot, commandFactory commands.CommandFactory, gptClient gpt.Client, logClient log.Log, errorLogClient log.ErrorLog) *ConcreteUpdateHandlerFactory {
 	return &ConcreteUpdateHandlerFactory{
 		TelegramBot:    telegramBot,
 		CommandFactory: commandFactory,

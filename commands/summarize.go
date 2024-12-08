@@ -9,7 +9,7 @@ import (
 
 type CommandSummarize struct {
 	TelegramBot *telegram.Bot
-	GptClient   *gpt.GPTClient
+	GptClient   gpt.Client
 }
 
 const SummarizeDefaultMessageCount = 50

@@ -9,7 +9,7 @@ import (
 
 type CommandGrammar struct {
 	TelegramBot *telegram.Bot
-	GptClient   *gpt.GPTClient
+	GptClient   gpt.Client
 }
 
 func (c *CommandGrammar) Name() string {

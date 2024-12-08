@@ -11,7 +11,7 @@ import (
 
 type MessageHandler struct {
 	TelegramClient *telegram.Bot
-	GptClient      *gpt.GPTClient
+	GptClient      gpt.Client
 	LogClient      log.Log
 	ErrorLogClient log.ErrorLog
 }

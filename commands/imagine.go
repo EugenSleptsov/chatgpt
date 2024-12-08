@@ -12,7 +12,7 @@ import (
 
 type CommandImagine struct {
 	TelegramBot *telegram.Bot
-	GptClient   *gpt.GPTClient
+	GptClient   gpt.Client
 }
 
 func (c *CommandImagine) Name() string {
@@ -50,7 +50,7 @@ func (c *CommandImagine) Execute(update telegram.Update, chat *storage.Chat) {
 	}
 }
 
-func gptImage(bot *telegram.Bot, aiModel string, chatID int64, gptClient *gpt.GPTClient, prompt string) error {
+func gptImage(bot *telegram.Bot, aiModel string, chatID int64, gptClient gpt.Client, prompt string) error {
 	imageUrl, err := gptClient.GenerateImage(prompt, gpt.ImageSize1024)
 	if err != nil {
 		bot.Log(fmt.Sprintf("[%d] Error generating image: %v", chatID, err))

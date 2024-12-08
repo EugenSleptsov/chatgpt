@@ -17,7 +17,7 @@ type Command interface {
 	Execute(update telegram.Update, chat *storage.Chat)
 }
 
-func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gpt.GPTClient, systemPrompt, userPrompt string) {
+func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient gpt.Client, systemPrompt, userPrompt string) {
 	responsePayload, err := gptClient.CallGPT([]gpt.Message{
 		{Role: "system", Content: []gpt.Content{{Type: gpt.TypeText, Text: systemPrompt}}},
 		{Role: "user", Content: []gpt.Content{{Type: gpt.TypeText, Text: userPrompt}}},
@@ -37,7 +37,7 @@ func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gp
 	bot.Reply(chat.ChatID, messageID, response)
 }
 
-func summarizeText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient *gpt.GPTClient, systemPrompt string, messageCount int) {
+func summarizeText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient gpt.Client, systemPrompt string, messageCount int) {
 	// open log file
 	lines, err := util.ReadLastLines(fmt.Sprintf("log/%d.log", chat.ChatID), messageCount)
 	if err != nil {

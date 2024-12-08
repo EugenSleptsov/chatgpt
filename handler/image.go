@@ -11,7 +11,7 @@ import (
 
 type ImageHandler struct {
 	TelegramClient *telegram.Bot
-	GptClient      *gpt.GPTClient
+	GptClient      gpt.Client
 	ErrorLogClient log.ErrorLog
 	LogClient      log.Log
 }

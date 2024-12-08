@@ -29,7 +29,7 @@ type TranscriptionResponse struct {
 	Text string `json:"text"`
 }
 
-func (gptClient *GPTClient) TranscribeAudio(audioContent []byte) (string, error) {
+func (gptClient *OpenAiGPTClient) TranscribeAudio(audioContent []byte) (string, error) {
 	// Create a new multipart writer
 	body := &byteslib.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -83,7 +83,7 @@ func (gptClient *GPTClient) TranscribeAudio(audioContent []byte) (string, error)
 	return transcriptionResponse.Text, nil
 }
 
-func (gptClient *GPTClient) GenerateVoice(inputText string, voiceModel, voiceVoice string) ([]byte, error) {
+func (gptClient *OpenAiGPTClient) GenerateVoice(inputText string, voiceModel, voiceVoice string) ([]byte, error) {
 	payload := fmt.Sprintf(`{"model": "%s", "voice": "%s", "input": "%s"}`, voiceModel, voiceVoice, inputText)
 
 	request, err := http.NewRequest("POST", voiceEndpoint, strings.NewReader(payload))

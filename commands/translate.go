@@ -10,7 +10,7 @@ import (
 
 type CommandTranslate struct {
 	TelegramBot *telegram.Bot
-	GptClient   *gpt.GPTClient
+	GptClient   gpt.Client
 }
 
 const (

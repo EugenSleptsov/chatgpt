@@ -1,7 +1,6 @@
 package main
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
 	"GPTBot/handler"
@@ -12,16 +11,14 @@ import (
 
 type Worker struct {
 	TelegramClient *telegram.Bot
-	GptClient      *gpt.GPTClient
 	ChatManager    manager.ChatManager
 	CommandFactory commands.CommandFactory
 	HandlerFactory handler.UpdateHandlerFactory
 }
 
-func NewWorker(telegramClient *telegram.Bot, gptClient *gpt.GPTClient, chatManager manager.ChatManager, commandFactory commands.CommandFactory, handlerFactory handler.UpdateHandlerFactory) *Worker {
+func NewWorker(telegramClient *telegram.Bot, chatManager manager.ChatManager, commandFactory commands.CommandFactory, handlerFactory handler.UpdateHandlerFactory) *Worker {
 	return &Worker{
 		TelegramClient: telegramClient,
-		GptClient:      gptClient,
 		ChatManager:    chatManager,
 		CommandFactory: commandFactory,
 		HandlerFactory: handlerFactory,

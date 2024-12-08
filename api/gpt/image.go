@@ -33,7 +33,7 @@ const (
 	ModelDalle3   = "dall-e-3"
 )
 
-func (gptClient *GPTClient) GenerateImage(prompt string, size string) (string, error) {
+func (gptClient *OpenAiGPTClient) GenerateImage(prompt string, size string) (string, error) {
 	jsonPayload, err := json.Marshal(RequestImagePayload{
 		Prompt: prompt,
 		Size:   getImageSize(size),

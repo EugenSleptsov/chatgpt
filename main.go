@@ -34,7 +34,6 @@ func main() {
 
 	startWorkers(
 		telegramBot,
-		gptClient,
 		manager.NewTelegramChatManager(botStorage, telegramBot.Config, logSystem),
 		commandFactory,
 		handler.NewUpdateHandlerFactory(telegramBot, commandFactory, gptClient, logSystem, logSystem),
@@ -43,14 +42,13 @@ func main() {
 
 func startWorkers(
 	telegramBot *telegram.Bot,
-	gptClient *gpt.GPTClient,
 	chatManager manager.ChatManager,
 	commandFactory commands.CommandFactory,
 	handlerFactory handler.UpdateHandlerFactory,
 ) {
 	updateChan := make(chan telegram.Update, updateBufferSize)
 	for i := 0; i < numWorkers; i++ {
-		worker := NewWorker(telegramBot, gptClient, chatManager, commandFactory, handlerFactory)
+		worker := NewWorker(telegramBot, chatManager, commandFactory, handlerFactory)
 		go worker.Start(updateChan)
 	}
 	for update := range telegramBot.GetUpdateChannel(telegramBot.Config.TimeoutValue) {
@@ -58,7 +56,7 @@ func startWorkers(
 	}
 }
 
-func registerCommands(commandFactory commands.CommandFactory, telegramBot *telegram.Bot, commandRegistry commands.CommandRegistry, gptClient *gpt.GPTClient) {
+func registerCommands(commandFactory commands.CommandFactory, telegramBot *telegram.Bot, commandRegistry commands.CommandRegistry, gptClient gpt.Client) {
 	commandFactory.Register("help", func() commands.Command {
 		return &commands.CommandHelp{TelegramBot: telegramBot, CommandRegistry: commandRegistry}
 	})
