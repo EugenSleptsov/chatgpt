@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const AdditionalPrompt = `Используй следующие соответствия, если сомневаешься в терминологии:
+const AdditionalPrompt = `
 - "монокристаллическая пластина синтетического HPHT алмаза" - "single-crystal HPHT diamond plates"
 `
 
@@ -38,6 +38,6 @@ func (c *CommandTechTranslate) Execute(update telegram.Update, chat *storage.Cha
 
 	translationPrompt := strings.Join(args, " ")
 
-	systemPrompt := "Ты - помощник, который переводит текст на технический английский язык. Техническая область Физика твердого тела и Полупроводниковая электроника. Ты должен отвечать только переведенным текстом без объяснений и кавычек. Используй следующие соответствия, если сомневаешься в терминологии:" + AdditionalPrompt
+	systemPrompt := "Ты - помощник, который переводит текст на технический английский язык. Техническая область Физика твердого тела и Полупроводниковая электроника. Ты должен отвечать только переведенным текстом без объяснений и кавычек. Используй следующие соответствия, если сомневаешься в терминологии: " + AdditionalPrompt
 	gptText(c.TelegramBot, chat, update.Message.MessageID, c.GptClient, systemPrompt, translationPrompt)
 }
