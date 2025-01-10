@@ -18,6 +18,7 @@ const (
 	ENGLISH = "en"
 	TURKISH = "tr"
 	GERMAN  = "de"
+	FRENCH  = "fr"
 )
 
 var SupportedLanguages = map[string]string{
@@ -25,6 +26,7 @@ var SupportedLanguages = map[string]string{
 	RUSSIAN: "Переведи следующий текст на русский язык",
 	TURKISH: "Türkçe'ye aşağıdaki metni çevir",
 	GERMAN:  "Übersetzen Sie den folgenden Text ins Deutsche",
+	FRENCH:  "Traduisez le texte suivant en français",
 }
 
 func (c *CommandTranslate) Name() string {

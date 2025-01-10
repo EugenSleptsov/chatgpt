@@ -67,6 +67,9 @@ func registerCommands(commandFactory commands.CommandFactory, telegramBot *teleg
 	commandFactory.Register("translate", func() commands.Command {
 		return &commands.CommandTranslate{TelegramBot: telegramBot, GptClient: gptClient}
 	})
+	commandFactory.Register("tech_translate", func() commands.Command {
+		return &commands.CommandTechTranslate{TelegramBot: telegramBot, GptClient: gptClient}
+	})
 	commandFactory.Register("enhance", func() commands.Command {
 		return &commands.CommandEnhance{TelegramBot: telegramBot, GptClient: gptClient}
 	})
