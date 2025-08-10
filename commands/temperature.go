@@ -20,7 +20,7 @@ func (c *CommandTemperature) Description() string {
 }
 
 func (c *CommandTemperature) IsAdmin() bool {
-	return false
+	return true
 }
 
 func (c *CommandTemperature) Execute(update telegram.Update, chat *storage.Chat) {

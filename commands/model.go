@@ -25,19 +25,36 @@ func (c *CommandModel) IsAdmin() bool {
 
 func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Текущая модель %s.", chat.Settings.Model))
-	} else {
-		model := update.Message.CommandArguments()
-		switch model {
-		case gpt.ModelGPT3:
-		case gpt.ModelGPT4OmniMini:
-			chat.Settings.Model = gpt.ModelGPT4OmniMini
-			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s", chat.Settings.Model))
-		case gpt.ModelGPT4:
-			chat.Settings.Model = gpt.ModelGPT4Omni
-			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Модель установлена на %s", chat.Settings.Model))
-		default:
-			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Неверное название модели.")
-		}
+		// Показываем outer-модель
+		c.TelegramBot.Reply(
+			chat.ChatID,
+			update.Message.MessageID,
+			fmt.Sprintf("Текущая модель: %s", gpt.MapModelName(chat.Settings.Model)),
+		)
+		return
 	}
+
+	model := update.Message.CommandArguments()
+	switch model {
+	case gpt.ModelGPT3:
+		chat.Settings.Model = gpt.ModelGPT3
+	case gpt.ModelGPT4OmniMini:
+		chat.Settings.Model = gpt.ModelGPT4OmniMini
+	case gpt.ModelGPT4:
+		chat.Settings.Model = gpt.ModelGPT4Omni
+	case gpt.ModelGPT5:
+		chat.Settings.Model = gpt.ModelGPT5
+	case gpt.ModelGPT5Nano:
+		chat.Settings.Model = gpt.ModelGPT5Nano
+	default:
+		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Неверное название модели.")
+		return
+	}
+
+	// Сообщаем outer-модель, чтобы было понятно, что реально используется
+	c.TelegramBot.Reply(
+		chat.ChatID,
+		update.Message.MessageID,
+		fmt.Sprintf("Модель установлена на %s", gpt.MapModelName(chat.Settings.Model)),
+	)
 }

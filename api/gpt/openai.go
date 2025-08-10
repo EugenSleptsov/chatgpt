@@ -22,6 +22,9 @@ const (
 	ModelGPT4Vision   = "gpt-4-vision-preview"
 	ModelGPT4Omni     = "gpt-4o"
 	ModelGPT4OmniMini = "gpt-4o-mini"
+	ModelGPT5         = "gpt-5"
+	ModelGPT5Mini     = "gpt-5-mini"
+	ModelGPT5Nano     = "gpt-5-nano"
 )
 
 // outer model names
@@ -29,20 +32,25 @@ const (
 	OuterModelGPT3     = "gpt-3.5-turbo"
 	OuterModelGPT4mini = "gpt-4o-mini"
 	OuterModelGPT4     = "gpt-4o"
+	OuterModelGPT5     = "gpt-5"
+	OuterModelGPT5mini = "gpt-5-mini"
+	OuterModelGPT5nano = "gpt-5-nano"
 )
 
 var ModelMap = map[string]string{
-	ModelGPT3:         OuterModelGPT4mini,
-	ModelGPT3Turbo:    OuterModelGPT4mini,
-	ModelGPT3TurboX:   OuterModelGPT4mini,
-	ModelGPT316k:      OuterModelGPT4mini,
-	ModelGPT316k2:     OuterModelGPT4mini,
-	ModelGPT4:         OuterModelGPT4,
-	ModelGPT4Turbo:    OuterModelGPT4,
-	ModelGPT4Preview:  OuterModelGPT4,
-	ModelGPT4Vision:   OuterModelGPT4,
-	ModelGPT4Omni:     OuterModelGPT4,
-	ModelGPT4OmniMini: OuterModelGPT4mini,
+	ModelGPT3:         OuterModelGPT5nano,
+	ModelGPT3Turbo:    OuterModelGPT5nano,
+	ModelGPT3TurboX:   OuterModelGPT5nano,
+	ModelGPT316k:      OuterModelGPT5nano,
+	ModelGPT316k2:     OuterModelGPT5nano,
+	ModelGPT4:         OuterModelGPT5nano,
+	ModelGPT4Turbo:    OuterModelGPT5nano,
+	ModelGPT4Preview:  OuterModelGPT5nano,
+	ModelGPT4Vision:   OuterModelGPT5nano,
+	ModelGPT4Omni:     OuterModelGPT5nano,
+	ModelGPT4OmniMini: OuterModelGPT5nano,
+	ModelGPT5:         OuterModelGPT5,
+	ModelGPT5Mini:     OuterModelGPT5nano,
 }
 
 type RequestCompletionsPayload struct {
@@ -77,15 +85,12 @@ func NewGPTClient(apiKey string) *OpenAiGPTClient {
 }
 
 func (gptClient *OpenAiGPTClient) CallGPT(chatConversation []Message, aimodel string, temperature float32) (*ResponseCompletionsPayload, error) {
-	outerAiModel := ModelMap[aimodel]
-	if outerAiModel == "" {
-		outerAiModel = OuterModelGPT3
-	}
+	outerAiModel := MapModelName(aimodel)
 
 	requestPayload := RequestCompletionsPayload{
-		Model:       outerAiModel,
-		Messages:    chatConversation,
-		Temperature: temperature,
+		Model:    outerAiModel,
+		Messages: chatConversation,
+		// Temperature: temperature,
 	}
 
 	if aimodel == ModelGPT4Vision {
@@ -147,4 +152,11 @@ func (gptClient *OpenAiGPTClient) httpRequest(url, contentType string, payload [
 	}
 
 	return resp, err
+}
+
+func MapModelName(modelName string) string {
+	if mappedModel, exists := ModelMap[modelName]; exists {
+		return mappedModel
+	}
+	return OuterModelGPT5nano // default model if not found
 }
