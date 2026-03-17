@@ -10,6 +10,13 @@ import (
 	"strings"
 )
 
+// Deps holds shared dependencies for all commands.
+type Deps struct {
+	Bot       *telegram.Bot
+	GptClient gpt.Client
+	Registry  CommandRegistry
+}
+
 type Command interface {
 	Name() string
 	Description() string
@@ -17,8 +24,8 @@ type Command interface {
 	Execute(update telegram.Update, chat *storage.Chat)
 }
 
-func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient gpt.Client, systemPrompt, userPrompt string) {
-	responsePayload, err := gptClient.CallGPT([]gpt.Message{
+func (d *Deps) gptText(chat *storage.Chat, messageID int, systemPrompt, userPrompt string) {
+	responsePayload, err := d.GptClient.CallGPT([]gpt.Message{
 		{Role: "system", Content: []gpt.Content{{Type: gpt.TypeText, Text: systemPrompt}}},
 		{Role: "user", Content: []gpt.Content{{Type: gpt.TypeText, Text: userPrompt}}},
 	}, chat.Settings.Model, 0.6)
@@ -33,24 +40,23 @@ func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient gpt
 		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 
-	bot.Log(fmt.Sprintf("[%s | %s]\nSystemPrompt: %s\n\nUserPrompt: %s\n\nResponse: %s", chat.Title, chat.Settings.Model, systemPrompt, userPrompt, response))
-	bot.Reply(chat.ChatID, messageID, response)
+	d.Bot.Log(fmt.Sprintf("[%s | %s]\nSystemPrompt: %s\n\nUserPrompt: %s\n\nResponse: %s", chat.Title, chat.Settings.Model, systemPrompt, userPrompt, response))
+	d.Bot.Reply(chat.ChatID, messageID, response)
 }
 
-func summarizeText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient gpt.Client, systemPrompt string, messageCount int) {
-	// open log file
+func (d *Deps) summarizeText(chat *storage.Chat, messageID int, systemPrompt string, messageCount int) {
 	lines, err := util.ReadLastLines(fmt.Sprintf("log/%d.log", chat.ChatID), messageCount)
 	if err != nil {
-		bot.Reply(chat.ChatID, messageID, "Произошла ошибка")
+		d.Bot.Reply(chat.ChatID, messageID, "Произошла ошибка")
 		return
 	}
 
 	if len(lines) == 0 {
-		bot.Reply(chat.ChatID, messageID, "История чата пуста")
+		d.Bot.Reply(chat.ChatID, messageID, "История чата пуста")
 		return
 	}
 
-	bot.Reply(chat.ChatID, messageID, fmt.Sprintf("Обработка %d сообщений...", len(lines)))
+	d.Bot.Reply(chat.ChatID, messageID, fmt.Sprintf("Обработка %d сообщений...", len(lines)))
 	chatLog := strings.Join(lines, "\n")
-	gptText(bot, chat, messageID, gptClient, systemPrompt, "Вот сообщения чата, которые ты должен обработать:\n\n"+chatLog)
+	d.gptText(chat, messageID, systemPrompt, "Вот сообщения чата, которые ты должен обработать:\n\n"+chatLog)
 }

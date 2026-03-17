@@ -9,7 +9,7 @@ import (
 )
 
 type CommandAdminReload struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandAdminReload) Name() string {
@@ -29,8 +29,8 @@ func (c *CommandAdminReload) Execute(update telegram.Update, chat *storage.Chat)
 
 	config, err := conf.ReadConfig("bot.yaml")
 	if err != nil {
-		log.Fatalf("Error reading bot.conf: %v", err)
+		log.Fatalf("Error reading bot.yaml: %v", err)
 	}
 
-	c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
+	c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
 }

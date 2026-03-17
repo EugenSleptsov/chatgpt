@@ -27,7 +27,8 @@ func main() {
 	logSystem.LogFatal(err)
 
 	commandFactory := commands.NewCommandFactory()
-	registerCommands(commandFactory, telegramBot, commandFactory, gptClient)
+	deps := &commands.Deps{Bot: telegramBot, GptClient: gptClient, Registry: commandFactory}
+	registerCommands(commandFactory, deps)
 
 	botStorage, err := storage.NewFileStorage("data")
 	logSystem.LogFatal(err)
@@ -56,42 +57,25 @@ func startWorkers(
 	}
 }
 
-func registerCommands(commandFactory commands.CommandFactory, telegramBot *telegram.Bot, commandRegistry commands.CommandRegistry, gptClient gpt.Client) {
-	commandFactory.Register("help", func() commands.Command {
-		return &commands.CommandHelp{TelegramBot: telegramBot, CommandRegistry: commandRegistry}
-	})
-	commandFactory.Register("start", func() commands.Command { return &commands.CommandStart{TelegramBot: telegramBot} })
-	commandFactory.Register("clear", func() commands.Command { return &commands.CommandClear{TelegramBot: telegramBot} })
-	commandFactory.Register("history", func() commands.Command { return &commands.CommandHistory{TelegramBot: telegramBot} })
-	commandFactory.Register("rollback", func() commands.Command { return &commands.CommandRollback{TelegramBot: telegramBot} })
-	commandFactory.Register("translate", func() commands.Command {
-		return &commands.CommandTranslate{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("tech_translate", func() commands.Command {
-		return &commands.CommandTechTranslate{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("enhance", func() commands.Command {
-		return &commands.CommandEnhance{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("grammar", func() commands.Command {
-		return &commands.CommandGrammar{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("summarize", func() commands.Command {
-		return &commands.CommandSummarize{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("summarize_prompt", func() commands.Command { return &commands.CommandSummarizePrompt{TelegramBot: telegramBot} })
-	commandFactory.Register("analyze", func() commands.Command {
-		return &commands.CommandAnalyze{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("temperature", func() commands.Command { return &commands.CommandTemperature{TelegramBot: telegramBot} })
-	commandFactory.Register("model", func() commands.Command { return &commands.CommandModel{TelegramBot: telegramBot} })
-	commandFactory.Register("imagine", func() commands.Command {
-		return &commands.CommandImagine{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("system", func() commands.Command { return &commands.CommandSystem{TelegramBot: telegramBot} })
-	commandFactory.Register("markdown", func() commands.Command { return &commands.CommandMarkdown{TelegramBot: telegramBot} })
-
-	commandFactory.Register("reload", func() commands.Command { return &commands.CommandAdminReload{TelegramBot: telegramBot} })
-	commandFactory.Register("adduser", func() commands.Command { return &commands.CommandAdminAddUser{TelegramBot: telegramBot} })
-	commandFactory.Register("removeuser", func() commands.Command { return &commands.CommandAdminRemoveUser{TelegramBot: telegramBot} })
+func registerCommands(factory commands.CommandFactory, d *commands.Deps) {
+	factory.Register("help", func() commands.Command { return &commands.CommandHelp{Deps: d} })
+	factory.Register("start", func() commands.Command { return &commands.CommandStart{Deps: d} })
+	factory.Register("clear", func() commands.Command { return &commands.CommandClear{Deps: d} })
+	factory.Register("history", func() commands.Command { return &commands.CommandHistory{Deps: d} })
+	factory.Register("rollback", func() commands.Command { return &commands.CommandRollback{Deps: d} })
+	factory.Register("translate", func() commands.Command { return &commands.CommandTranslate{Deps: d} })
+	factory.Register("tech_translate", func() commands.Command { return &commands.CommandTechTranslate{Deps: d} })
+	factory.Register("enhance", func() commands.Command { return &commands.CommandEnhance{Deps: d} })
+	factory.Register("grammar", func() commands.Command { return &commands.CommandGrammar{Deps: d} })
+	factory.Register("summarize", func() commands.Command { return &commands.CommandSummarize{Deps: d} })
+	factory.Register("summarize_prompt", func() commands.Command { return &commands.CommandSummarizePrompt{Deps: d} })
+	factory.Register("analyze", func() commands.Command { return &commands.CommandAnalyze{Deps: d} })
+	factory.Register("temperature", func() commands.Command { return &commands.CommandTemperature{Deps: d} })
+	factory.Register("model", func() commands.Command { return &commands.CommandModel{Deps: d} })
+	factory.Register("imagine", func() commands.Command { return &commands.CommandImagine{Deps: d} })
+	factory.Register("system", func() commands.Command { return &commands.CommandSystem{Deps: d} })
+	factory.Register("markdown", func() commands.Command { return &commands.CommandMarkdown{Deps: d} })
+	factory.Register("reload", func() commands.Command { return &commands.CommandAdminReload{Deps: d} })
+	factory.Register("adduser", func() commands.Command { return &commands.CommandAdminAddUser{Deps: d} })
+	factory.Register("removeuser", func() commands.Command { return &commands.CommandAdminRemoveUser{Deps: d} })
 }

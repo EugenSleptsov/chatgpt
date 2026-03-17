@@ -10,7 +10,7 @@ import (
 )
 
 type CommandAdminAddUser struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandAdminAddUser) Name() string {
@@ -28,27 +28,27 @@ func (c *CommandAdminAddUser) IsAdmin() bool {
 func (c *CommandAdminAddUser) Execute(update telegram.Update, chat *storage.Chat) {
 	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
-		c.TelegramBot.Reply(chatID, update.Message.MessageID, "Please provide a user id to add")
+		c.Bot.Reply(chatID, update.Message.MessageID, "Please provide a user id to add")
 	} else {
 		userId, err := strconv.ParseInt(update.Message.CommandArguments(), 10, 64)
 		if err != nil {
-			c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
+			c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
 			return
 		}
 
-		for _, auth := range c.TelegramBot.Config.AuthorizedUserIds {
+		for _, auth := range c.Bot.Config.AuthorizedUserIds {
 			if auth == userId {
-				c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User already added: %d", userId))
+				c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User already added: %d", userId))
 				return
 			}
 		}
 
-		c.TelegramBot.Config.AuthorizedUserIds = append(c.TelegramBot.Config.AuthorizedUserIds, userId)
-		err = conf.UpdateConfig("bot.yaml", c.TelegramBot.Config)
+		c.Bot.Config.AuthorizedUserIds = append(c.Bot.Config.AuthorizedUserIds, userId)
+		err = conf.UpdateConfig("bot.yaml", c.Bot.Config)
 		if err != nil {
-			log.Fatalf("Error updating bot.conf: %v", err)
+			log.Fatalf("Error updating bot.yaml: %v", err)
 		}
 
-		c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User successfully added: %d", userId))
+		c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User successfully added: %d", userId))
 	}
 }

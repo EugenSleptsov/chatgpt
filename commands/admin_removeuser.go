@@ -10,7 +10,7 @@ import (
 )
 
 type CommandAdminRemoveUser struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandAdminRemoveUser) Name() string {
@@ -28,29 +28,29 @@ func (c *CommandAdminRemoveUser) IsAdmin() bool {
 func (c *CommandAdminRemoveUser) Execute(update telegram.Update, chat *storage.Chat) {
 	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
-		c.TelegramBot.Reply(chatID, update.Message.MessageID, "Please provide a user id to remove")
+		c.Bot.Reply(chatID, update.Message.MessageID, "Please provide a user id to remove")
 	} else {
 		userId, err := strconv.ParseInt(update.Message.CommandArguments(), 10, 64)
 		if err != nil {
-			c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
+			c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
 			return
 		}
 
 		newList := make([]int64, 0)
-		for _, auth := range c.TelegramBot.Config.AuthorizedUserIds {
+		for _, auth := range c.Bot.Config.AuthorizedUserIds {
 			if auth == userId {
-				c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
+				c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
 			} else {
 				newList = append(newList, auth)
 			}
 		}
 
-		c.TelegramBot.Config.AuthorizedUserIds = newList
-		err = conf.UpdateConfig("bot.yaml", c.TelegramBot.Config)
+		c.Bot.Config.AuthorizedUserIds = newList
+		err = conf.UpdateConfig("bot.yaml", c.Bot.Config)
 		if err != nil {
-			log.Fatalf("Error updating bot.conf: %v", err)
+			log.Fatalf("Error updating bot.yaml: %v", err)
 		}
 
-		c.TelegramBot.Reply(chatID, update.Message.MessageID, "Command successfully ended")
+		c.Bot.Reply(chatID, update.Message.MessageID, "Command successfully ended")
 	}
 }

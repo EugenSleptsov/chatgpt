@@ -8,7 +8,7 @@ import (
 )
 
 type CommandModel struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandModel) Name() string {
@@ -32,7 +32,7 @@ func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
 		if current != nil {
 			name = current.Label + " (" + current.APIModel + ")"
 		}
-		c.TelegramBot.Reply(
+		c.Bot.Reply(
 			chat.ChatID,
 			update.Message.MessageID,
 			fmt.Sprintf("Текущая модель: %s\n\nДоступные модели:\n%s", name, gpt.TierList()),
@@ -42,7 +42,7 @@ func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
 
 	tier := gpt.FindTier(args)
 	if tier == nil {
-		c.TelegramBot.Reply(
+		c.Bot.Reply(
 			chat.ChatID,
 			update.Message.MessageID,
 			fmt.Sprintf("Модель не найдена: %s\n\nДоступные модели:\n%s", args, gpt.TierList()),
@@ -51,7 +51,7 @@ func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
 	}
 
 	chat.Settings.Model = tier.ID
-	c.TelegramBot.Reply(
+	c.Bot.Reply(
 		chat.ChatID,
 		update.Message.MessageID,
 		fmt.Sprintf("Модель установлена: %s (%s)", tier.Label, tier.Desc),

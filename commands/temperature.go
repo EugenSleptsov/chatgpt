@@ -8,7 +8,7 @@ import (
 )
 
 type CommandTemperature struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandTemperature) Name() string {
@@ -25,14 +25,14 @@ func (c *CommandTemperature) IsAdmin() bool {
 
 func (c *CommandTemperature) Execute(update telegram.Update, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Текущая температура %.1f.", chat.Settings.Temperature))
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Текущая температура %.1f.", chat.Settings.Temperature))
 	} else {
 		temperature, err := strconv.ParseFloat(update.Message.CommandArguments(), 64)
 		if err != nil || temperature < 0.0 || temperature > 1.2 {
-			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Неверное значение температуры. Должно быть от 0.0 до 1.2.")
+			c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Неверное значение температуры. Должно быть от 0.0 до 1.2.")
 		} else {
 			chat.Settings.Temperature = float32(temperature)
-			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Температура установлена на %.1f.", temperature))
+			c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Температура установлена на %.1f.", temperature))
 		}
 	}
 }

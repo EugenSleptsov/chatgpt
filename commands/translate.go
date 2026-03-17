@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
 	"fmt"
@@ -9,8 +8,7 @@ import (
 )
 
 type CommandTranslate struct {
-	TelegramBot *telegram.Bot
-	GptClient   gpt.Client
+	*Deps
 }
 
 const (
@@ -45,7 +43,7 @@ func (c *CommandTranslate) Execute(update telegram.Update, chat *storage.Chat) {
 	args := strings.Fields(update.Message.CommandArguments())
 
 	if len(args) == 0 {
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
 		return
 	}
 
@@ -53,7 +51,7 @@ func (c *CommandTranslate) Execute(update telegram.Update, chat *storage.Chat) {
 	translationPrompt := c.buildTranslationPrompt(language, textToTranslate)
 
 	systemPrompt := "You are a helpful assistant that translates. You should answer only with translated text without explanations and quotation marks."
-	gptText(c.TelegramBot, chat, update.Message.MessageID, c.GptClient, systemPrompt, translationPrompt)
+	c.gptText(chat, update.Message.MessageID, systemPrompt, translationPrompt)
 }
 
 func (c *CommandTranslate) extractLanguageAndText(args []string) (string, string) {

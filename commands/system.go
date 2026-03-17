@@ -7,7 +7,7 @@ import (
 )
 
 type CommandSystem struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandSystem) Name() string {
@@ -25,15 +25,15 @@ func (c *CommandSystem) IsAdmin() bool {
 func (c *CommandSystem) Execute(update telegram.Update, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
 		if chat.Settings.SystemPrompt == "" {
-			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Системное сообщение не установлено.")
+			c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Системное сообщение не установлено.")
 		} else {
-			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprint(chat.Settings.SystemPrompt))
+			c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprint(chat.Settings.SystemPrompt))
 		}
 	} else {
 		chat.Settings.SystemPrompt = update.Message.CommandArguments()
 		if len(chat.Settings.SystemPrompt) > 1024 {
 			chat.Settings.SystemPrompt = chat.Settings.SystemPrompt[:1024]
 		}
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Системное сообщение установлено на: %s.", chat.Settings.SystemPrompt))
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Системное сообщение установлено на: %s.", chat.Settings.SystemPrompt))
 	}
 }

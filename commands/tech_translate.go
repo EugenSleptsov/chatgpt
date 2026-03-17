@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
 	"fmt"
@@ -14,8 +13,7 @@ const AdditionalPrompt = `
 `
 
 type CommandTechTranslate struct {
-	TelegramBot *telegram.Bot
-	GptClient   gpt.Client
+	*Deps
 }
 
 func (c *CommandTechTranslate) Name() string {
@@ -34,12 +32,12 @@ func (c *CommandTechTranslate) Execute(update telegram.Update, chat *storage.Cha
 	args := strings.Fields(update.Message.CommandArguments())
 
 	if len(args) == 0 {
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /tech_translate <text>")
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /tech_translate <text>")
 		return
 	}
 
 	translationPrompt := strings.Join(args, " ")
 
 	systemPrompt := fmt.Sprintf("Ты - помощник, который переводит текст на технический английский язык. Техническая область: %s. Ты должен отвечать только переведенным текстом без объяснений и кавычек. Используй следующие соответствия, если сомневаешься в терминологии: %s", TechFiels, AdditionalPrompt)
-	gptText(c.TelegramBot, chat, update.Message.MessageID, c.GptClient, systemPrompt, translationPrompt)
+	c.gptText(chat, update.Message.MessageID, systemPrompt, translationPrompt)
 }

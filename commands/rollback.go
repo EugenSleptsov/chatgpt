@@ -9,7 +9,7 @@ import (
 )
 
 type CommandRollback struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandRollback) Name() string {
@@ -40,8 +40,8 @@ func (c *CommandRollback) Execute(update telegram.Update, chat *storage.Chat) {
 
 	if len(chat.History) > 0 {
 		chat.History = chat.History[:len(chat.History)-number]
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
 	} else {
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров пуста.")
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров пуста.")
 	}
 }

@@ -13,7 +13,7 @@ import (
 const historyPageSize = 5
 
 type CommandHistory struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandHistory) Name() string {
@@ -54,7 +54,7 @@ func (c *CommandHistory) Execute(update telegram.Update, chat *storage.Chat) {
 	pageChunks := chunks[start:end]
 
 	for _, message := range pageChunks {
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, message)
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, message)
 	}
 
 	// navigation hint
@@ -63,7 +63,7 @@ func (c *CommandHistory) Execute(update telegram.Update, chat *storage.Chat) {
 		if page < totalPages {
 			hint += fmt.Sprintf(" Ранние сообщения: /history %d", page+1)
 		}
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, hint)
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, hint)
 	}
 }
 

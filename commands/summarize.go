@@ -1,15 +1,13 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
 	"strconv"
 )
 
 type CommandSummarize struct {
-	TelegramBot *telegram.Bot
-	GptClient   gpt.Client
+	*Deps
 }
 
 const SummarizeDefaultMessageCount = 50
@@ -40,5 +38,5 @@ func (c *CommandSummarize) Execute(update telegram.Update, chat *storage.Chat) {
 		}
 	}
 
-	summarizeText(c.TelegramBot, chat, update.Message.MessageID, c.GptClient, chat.Settings.SummarizePrompt, messageCount)
+	c.summarizeText(chat, update.Message.MessageID, chat.Settings.SummarizePrompt, messageCount)
 }
