@@ -37,7 +37,7 @@ func (cm *TelegramChatManager) GetOrCreateChat(update telegram.Update) *storage.
 			ChatID: chatID,
 			Settings: storage.ChatSettings{
 				Temperature:     0.8,
-				Model:           gpt.ModelGPT4OmniMini,
+				Model:           gpt.DefaultTierID,
 				MaxMessages:     cm.Config.MaxMessages,
 				UseMarkdown:     true,
 				SystemPrompt:    "You are a helpful assistant...",

@@ -126,39 +126,118 @@ func (botInstance *Bot) GetUpdateChannel(timeout int) UpdatesChannel {
 }
 
 func (botInstance *Bot) ReplyMarkdown(chatID int64, replyTo int, text string, isMarkdown bool) {
-	botInstance.message(chatID, replyTo, text, isMarkdown)
+	botInstance.send(chatID, replyTo, text, isMarkdown)
 }
 
 func (botInstance *Bot) Reply(chatID int64, replyTo int, text string) {
-	botInstance.message(chatID, replyTo, text, false)
+	botInstance.send(chatID, replyTo, text, false)
 }
 
 func (botInstance *Bot) Message(message string, chatID int64, isMarkdown bool) {
-	botInstance.message(chatID, 0, message, isMarkdown)
+	botInstance.send(chatID, 0, message, isMarkdown)
 }
 
-func (botInstance *Bot) message(chatID int64, replyTo int, text string, isMarkdown bool) {
-	// split long messages
-	for len(text) > 4096 {
-		botInstance._message(chatID, replyTo, text[:4096], isMarkdown)
-		text = text[4096:]
+// send splits a message into chunks and delivers each one.
+func (botInstance *Bot) send(chatID int64, replyTo int, text string, isMarkdown bool) {
+	chunks := splitMessage(text)
+	for _, chunk := range chunks {
+		botInstance.sendChunk(chatID, replyTo, chunk, isMarkdown)
 	}
-	botInstance._message(chatID, replyTo, text, isMarkdown)
 }
 
-func (botInstance *Bot) _message(chatID int64, replyTo int, text string, isMarkdown bool) {
-	msg := tgbotapi.NewMessage(chatID, text)
+// sendChunk tries to send a single chunk. If markdown fails, falls back to plain text.
+func (botInstance *Bot) sendChunk(chatID int64, replyTo int, text string, isMarkdown bool) {
 	if isMarkdown {
+		msg := tgbotapi.NewMessage(chatID, formatMarkdownV2(text))
 		msg.ParseMode = "MarkdownV2"
-		msg.Text = util.FixMarkdown(escapeMarkdownV2(msg.Text))
+		if replyTo != 0 {
+			msg.ReplyToMessageID = replyTo
+		}
+		if _, err := botInstance.api.Send(msg); err == nil {
+			return
+		}
+		botInstance.LogClient.Logf("Markdown failed, falling back to plain text")
 	}
+
+	msg := tgbotapi.NewMessage(chatID, text)
 	if replyTo != 0 {
 		msg.ReplyToMessageID = replyTo
 	}
-	_, err := botInstance.api.Send(msg)
-	if err != nil {
+	if _, err := botInstance.api.Send(msg); err != nil {
 		botInstance.LogClient.Logf("Error sending message: %v", err)
 	}
+}
+
+// formatMarkdownV2 escapes text for Telegram MarkdownV2 and ensures code blocks are closed.
+func formatMarkdownV2(text string) string {
+	return util.FixMarkdown(escapeMarkdownV2(text))
+}
+
+const maxMessageLen = 4096
+const maxChunks = 10
+
+// splitMessage splits text into chunks of at most maxMessageLen runes,
+// preferring newline boundaries. Open code blocks (```) are properly
+// closed/reopened across chunk boundaries. At most maxChunks are returned;
+// excess text is truncated with an indicator.
+func splitMessage(text string) []string {
+	runes := []rune(text)
+	if len(runes) <= maxMessageLen {
+		return []string{text}
+	}
+
+	var chunks []string
+	codeBlockOpen := false
+
+	for len(runes) > 0 {
+		end := maxMessageLen
+		if end > len(runes) {
+			end = len(runes)
+		}
+
+		// try to split at last newline within the limit
+		if end < len(runes) {
+			if idx := lastNewline(runes[:end]); idx > 0 {
+				end = idx + 1
+			}
+		}
+
+		chunk := string(runes[:end])
+		runes = runes[end:]
+
+		// count triple backticks in this chunk to track code block state
+		fences := strings.Count(chunk, "```")
+
+		if codeBlockOpen {
+			chunk = "```\n" + chunk // reopen block from previous chunk
+			fences++                // account for the added fence
+		}
+
+		// after this chunk, is a code block still open?
+		codeBlockOpen = (fences % 2) == 1
+		if codeBlockOpen {
+			chunk += "\n```" // close dangling block for this chunk
+		}
+
+		chunks = append(chunks, chunk)
+
+		// stop if we've reached the chunk limit
+		if len(chunks) >= maxChunks && len(runes) > 0 {
+			chunks[len(chunks)-1] += "\n\n... (сообщение обрезано)"
+			break
+		}
+	}
+
+	return chunks
+}
+
+func lastNewline(runes []rune) int {
+	for i := len(runes) - 1; i >= 0; i-- {
+		if runes[i] == '\n' {
+			return i
+		}
+	}
+	return -1
 }
 
 func (botInstance *Bot) SendImage(chatID int64, imageUrl string, caption string) error {

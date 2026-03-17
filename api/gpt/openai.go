@@ -9,48 +9,80 @@ import (
 	"time"
 )
 
-// model names
+// Tier represents a user-facing model option in /model command.
+// Users pick a stable tier name; the underlying API model can be swapped at any time.
+type Tier struct {
+	ID       string // stored in chat settings (e.g. "basic")
+	Label    string // display name shown to users (e.g. "gpt-basic")
+	Desc     string // human-readable description
+	APIModel string // actual OpenAI API model name (e.g. "gpt-5.4-nano")
+}
+
+// Tiers lists available user-facing tiers.
+// To upgrade models — change APIModel here, nothing else.
+var Tiers = []Tier{
+	{ID: "basic", Label: "gpt-basic", Desc: "Экономичная, для простых задач", APIModel: "gpt-5.4-nano"},
+	{ID: "fast", Label: "gpt-fast", Desc: "Быстрая, для кодинга и агентов", APIModel: "gpt-5.4-mini"},
+	{ID: "premium", Label: "gpt-premium", Desc: "Максимальное качество рассуждений", APIModel: "gpt-5.4"},
+}
+
 const (
-	ModelGPT3         = "gpt-3"
-	ModelGPT3Turbo    = "gpt-3.5-turbo"
-	ModelGPT3TurboX   = "gpt-3.5-turbo-1106"
-	ModelGPT316k      = "gpt-3.5-turbo-16k"
-	ModelGPT316k2     = "gpt-316"
-	ModelGPT4         = "gpt-4"
-	ModelGPT4Turbo    = "gpt-4-turbo"
-	ModelGPT4Preview  = "gpt-4-turbo-preview"
-	ModelGPT4Vision   = "gpt-4-vision-preview"
-	ModelGPT4Omni     = "gpt-4o"
-	ModelGPT4OmniMini = "gpt-4o-mini"
-	ModelGPT5         = "gpt-5"
-	ModelGPT5Mini     = "gpt-5-mini"
-	ModelGPT5Nano     = "gpt-5-nano"
+	DefaultTierID      = "basic"   // default tier for new chats
+	VisionTierID       = "premium" // tier used for image analysis
+	ImageEnhanceTierID = "basic"   // tier used for image prompt enhancement
 )
 
-// outer model names
-const (
-	OuterModelGPT3     = "gpt-3.5-turbo"
-	OuterModelGPT4mini = "gpt-4o-mini"
-	OuterModelGPT4     = "gpt-4o"
-	OuterModelGPT5     = "gpt-5"
-	OuterModelGPT5mini = "gpt-5-mini"
-	OuterModelGPT5nano = "gpt-5-nano"
-)
+// legacyTierMap maps old model IDs (stored in existing chats) to current tier IDs.
+var legacyTierMap = map[string]string{
+	// GPT-3.x
+	"gpt-3": "basic", "gpt-3.5-turbo": "basic", "gpt-3.5-turbo-1106": "basic",
+	"gpt-3.5-turbo-16k": "basic", "gpt-316": "basic",
+	// GPT-4.x
+	"gpt-4": "basic", "gpt-4-turbo": "fast", "gpt-4-turbo-preview": "fast",
+	"gpt-4-vision-preview": "premium", "gpt-4o": "fast", "gpt-4o-mini": "basic",
+	// GPT-4.1
+	"4.1-nano": "basic", "4.1-mini": "fast", "4.1": "premium",
+	// GPT-5.x
+	"gpt-5": "premium", "gpt-5-mini": "fast", "gpt-5-nano": "basic",
+	"5.4-nano": "basic", "5.4-mini": "fast", "5.4": "premium", "5.4-pro": "premium",
+	// o-series
+	"o3-mini": "fast", "o3": "premium", "o4-mini": "fast",
+}
 
-var ModelMap = map[string]string{
-	ModelGPT3:         OuterModelGPT5nano,
-	ModelGPT3Turbo:    OuterModelGPT5nano,
-	ModelGPT3TurboX:   OuterModelGPT5nano,
-	ModelGPT316k:      OuterModelGPT5nano,
-	ModelGPT316k2:     OuterModelGPT5nano,
-	ModelGPT4:         OuterModelGPT5nano,
-	ModelGPT4Turbo:    OuterModelGPT5nano,
-	ModelGPT4Preview:  OuterModelGPT5nano,
-	ModelGPT4Vision:   OuterModelGPT5nano,
-	ModelGPT4Omni:     OuterModelGPT5nano,
-	ModelGPT4OmniMini: OuterModelGPT5nano,
-	ModelGPT5:         OuterModelGPT5,
-	ModelGPT5Mini:     OuterModelGPT5nano,
+// FindTier looks up a tier by ID or Label (handles legacy model IDs).
+// Returns nil if not found.
+func FindTier(id string) *Tier {
+	if newID, ok := legacyTierMap[id]; ok {
+		id = newID
+	}
+	for i := range Tiers {
+		if Tiers[i].ID == id || Tiers[i].Label == id {
+			return &Tiers[i]
+		}
+	}
+	return nil
+}
+
+// DefaultTier returns the default tier.
+func DefaultTier() Tier {
+	return *FindTier(DefaultTierID)
+}
+
+// ResolveAPIName maps any tier/model ID (including legacy) to the actual OpenAI API name.
+func ResolveAPIName(id string) string {
+	if t := FindTier(id); t != nil {
+		return t.APIModel
+	}
+	return DefaultTier().APIModel
+}
+
+// TierList returns a formatted string listing all available tiers.
+func TierList() string {
+	var result string
+	for _, t := range Tiers {
+		result += t.Label + " — " + t.Desc + "\n"
+	}
+	return result
 }
 
 type RequestCompletionsPayload struct {
@@ -85,7 +117,7 @@ func NewGPTClient(apiKey string) *OpenAiGPTClient {
 }
 
 func (gptClient *OpenAiGPTClient) CallGPT(chatConversation []Message, aimodel string, temperature float32) (*ResponseCompletionsPayload, error) {
-	outerAiModel := MapModelName(aimodel)
+	outerAiModel := ResolveAPIName(aimodel)
 
 	requestPayload := RequestCompletionsPayload{
 		Model:    outerAiModel,
@@ -93,9 +125,6 @@ func (gptClient *OpenAiGPTClient) CallGPT(chatConversation []Message, aimodel st
 		// Temperature: temperature,
 	}
 
-	if aimodel == ModelGPT4Vision {
-		requestPayload.MaxTokens = 4096
-	}
 
 	jsonPayload, err := json.Marshal(requestPayload)
 	if err != nil {
@@ -155,9 +184,3 @@ func (gptClient *OpenAiGPTClient) httpRequest(url, contentType string, payload [
 	return resp, err
 }
 
-func MapModelName(modelName string) string {
-	if mappedModel, exists := ModelMap[modelName]; exists {
-		return mappedModel
-	}
-	return OuterModelGPT5nano // default model if not found
-}

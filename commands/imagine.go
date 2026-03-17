@@ -40,9 +40,9 @@ func (c *CommandImagine) Execute(update telegram.Update, chat *storage.Chat) {
 		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
 	} else {
 		chat.ImageGenNextTime = now.Add(time.Second * 900)
-		aiModel := gpt.OuterModelGPT4
+		aiModel := gpt.ImageEnhanceTierID
 
-		c.TelegramBot.Log(fmt.Sprintf("[%s | %s] Image prompt: \"%s\"", chat.Title, aiModel, update.Message.CommandArguments()))
+		c.TelegramBot.Log(fmt.Sprintf("[%s | %s (%s)] Image prompt: \"%s\"", chat.Title, aiModel, gpt.ResolveAPIName(aiModel), update.Message.CommandArguments()))
 		err := gptImage(c.TelegramBot, aiModel, chat.ChatID, c.GptClient, update.Message.CommandArguments())
 		if err != nil {
 			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")

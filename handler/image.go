@@ -39,7 +39,7 @@ func (i *ImageHandler) Handle(update telegram.Update, chat *storage.Chat) error 
 	}
 
 	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
-	responsePayload, err := i.GptClient.CallGPT(messages, gpt.ModelGPT4Vision, 0.8)
+	responsePayload, err := i.GptClient.CallGPT(messages, gpt.VisionTierID, 0.8)
 	i.ErrorLogClient.LogError(err)
 
 	if err == nil && responsePayload != nil && len(responsePayload.Choices) > 0 {
