@@ -19,7 +19,7 @@ const (
 func main() {
 	logSystem := log.NewSystem()
 
-	config, err := conf.ReadConfig("bot.conf")
+	config, err := conf.ReadConfig("bot.yaml")
 	logSystem.LogFatal(err)
 	gptClient := gpt.NewGPTClient(config.GPTToken)
 

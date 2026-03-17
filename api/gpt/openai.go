@@ -135,7 +135,8 @@ func (gptClient *OpenAiGPTClient) httpRequest(url, contentType string, payload [
 	var err error
 
 	for i := 0; i < retries; i++ {
-		req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+		var req *http.Request
+		req, err = http.NewRequest("POST", url, bytes.NewBuffer(payload))
 		if err != nil {
 			return nil, err
 		}

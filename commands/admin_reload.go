@@ -27,7 +27,7 @@ func (c *CommandAdminReload) IsAdmin() bool {
 func (c *CommandAdminReload) Execute(update telegram.Update, chat *storage.Chat) {
 	chatID := chat.ChatID
 
-	config, err := conf.ReadConfig("bot.conf")
+	config, err := conf.ReadConfig("bot.yaml")
 	if err != nil {
 		log.Fatalf("Error reading bot.conf: %v", err)
 	}

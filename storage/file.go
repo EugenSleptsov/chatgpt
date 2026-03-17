@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 type FileStorage struct {
+	mu      sync.RWMutex
 	dirPath string
 	chats   map[int64]*Chat
 }
@@ -33,6 +35,9 @@ func NewFileStorage(dirPath string) (*FileStorage, error) {
 // implementation
 
 func (s *FileStorage) Get(chatID int64) (*Chat, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	chat, ok := s.chats[chatID]
 	if !ok {
 		var err error
@@ -48,11 +53,17 @@ func (s *FileStorage) Get(chatID int64) (*Chat, bool) {
 }
 
 func (s *FileStorage) Set(chatID int64, chat *Chat) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.chats[chatID] = chat
 	return nil
 }
 
 func (s *FileStorage) Save() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	success := true
 	for chatID, chat := range s.chats {
 		if err := s.saveChatToFile(chatID, chat); err != nil {

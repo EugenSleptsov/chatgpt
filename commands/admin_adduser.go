@@ -44,7 +44,7 @@ func (c *CommandAdminAddUser) Execute(update telegram.Update, chat *storage.Chat
 		}
 
 		c.TelegramBot.Config.AuthorizedUserIds = append(c.TelegramBot.Config.AuthorizedUserIds, userId)
-		err = conf.UpdateConfig("bot.conf", c.TelegramBot.Config)
+		err = conf.UpdateConfig("bot.yaml", c.TelegramBot.Config)
 		if err != nil {
 			log.Fatalf("Error updating bot.conf: %v", err)
 		}

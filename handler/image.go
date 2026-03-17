@@ -42,7 +42,7 @@ func (i *ImageHandler) Handle(update telegram.Update, chat *storage.Chat) error 
 	responsePayload, err := i.GptClient.CallGPT(messages, gpt.ModelGPT4Vision, 0.8)
 	i.ErrorLogClient.LogError(err)
 
-	if len(responsePayload.Choices) > 0 {
+	if err == nil && responsePayload != nil && len(responsePayload.Choices) > 0 {
 		i.LogClient.Log(fmt.Sprint(responsePayload))
 		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}

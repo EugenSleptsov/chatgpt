@@ -62,7 +62,7 @@ func gptImage(bot *telegram.Bot, aiModel string, chatID int64, gptClient gpt.Cli
 		{Role: "system", Content: "You are an assistant that generates natural language description (prompt) for an artificial intelligence (AI) that generates images"},
 		{Role: "user", Content: fmt.Sprintf("Please improve this prompt: \"%s\". Answer with improved prompt only. Keep prompt at most 200 characters long. Your prompt must be in one sentence.", prompt)},
 	}, aiModel, 0.7)
-	if err == nil {
+	if err == nil && responsePayload != nil && len(responsePayload.Choices) > 0 {
 		enhancedCaption = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 

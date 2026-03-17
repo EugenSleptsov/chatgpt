@@ -53,7 +53,7 @@ func (m *MessageHandler) Handle(update telegram.Update, chat *storage.Chat) erro
 	responsePayload, err := m.GptClient.CallGPT(messages, chat.Settings.Model, chat.Settings.Temperature)
 	m.ErrorLogClient.LogError(err)
 
-	if len(responsePayload.Choices) > 0 {
+	if err == nil && responsePayload != nil && len(responsePayload.Choices) > 0 {
 		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 

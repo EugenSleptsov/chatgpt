@@ -46,7 +46,7 @@ func (c *CommandAdminRemoveUser) Execute(update telegram.Update, chat *storage.C
 		}
 
 		c.TelegramBot.Config.AuthorizedUserIds = newList
-		err = conf.UpdateConfig("bot.conf", c.TelegramBot.Config)
+		err = conf.UpdateConfig("bot.yaml", c.TelegramBot.Config)
 		if err != nil {
 			log.Fatalf("Error updating bot.conf: %v", err)
 		}
