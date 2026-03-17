@@ -2,3 +2,4 @@ bot.yaml
 data/
 log/*.log
 GPTBot
+.idea/
