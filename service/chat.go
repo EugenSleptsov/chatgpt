@@ -22,21 +22,23 @@ type ChatService struct {
 // conversation context to GPT, stores the assistant response in history
 // and returns it. On GPT failure a fallback message is returned.
 func (s *ChatService) ChatCompletion(chat *storage.Chat, userText string) string {
+	session := chat.ActiveSession()
+
 	entry := &storage.ConversationEntry{
 		Prompt: storage.Message{Role: "user", Content: userText},
 	}
 
-	chat.History = append(chat.History, entry)
-	if len(chat.History) > chat.Settings.MaxMessages {
-		chat.History = chat.History[len(chat.History)-chat.Settings.MaxMessages:]
+	session.History = append(session.History, entry)
+	if len(session.History) > chat.Settings.MaxMessages {
+		session.History = session.History[len(session.History)-chat.Settings.MaxMessages:]
 	}
 
 	// Build message list from history
 	var messages []gpt.Message
-	if chat.Settings.SystemPrompt != "" {
-		messages = append(messages, gpt.Message{Role: "system", Content: chat.Settings.SystemPrompt})
+	if session.SystemPrompt != "" {
+		messages = append(messages, gpt.Message{Role: "system", Content: session.SystemPrompt})
 	}
-	for _, e := range chat.History {
+	for _, e := range session.History {
 		messages = append(messages, gpt.Message{Role: e.Prompt.Role, Content: e.Prompt.Content})
 		if e.Response != (storage.Message{}) {
 			messages = append(messages, gpt.Message{Role: e.Response.Role, Content: e.Response.Content})
@@ -44,7 +46,7 @@ func (s *ChatService) ChatCompletion(chat *storage.Chat, userText string) string
 	}
 
 	response := fallbackResponse
-	payload, err := s.GptClient.CallGPT(messages, chat.Settings.Model, chat.Settings.Temperature)
+	payload, err := s.GptClient.CallGPT(messages, session.Model, session.Temperature)
 	s.ErrorLog.LogError(err)
 
 	if err == nil && payload != nil && len(payload.Choices) > 0 {

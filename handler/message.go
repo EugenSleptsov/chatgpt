@@ -39,6 +39,6 @@ func (m *MessageHandler) Handle(update telegram.Update, chat *storage.Chat) erro
 		m.Deps.ErrorLog.LogError(err)
 	}
 
-	m.Deps.Bot.ReportAdmin(update.Message.From.ID, fmt.Sprintf("[%s | %s]\nMessage: %s\nResponse: %s", chat.Title, chat.Settings.Model, update.Message.Text, response))
+	m.Deps.Bot.ReportAdmin(update.Message.From.ID, fmt.Sprintf("[%s | %s]\nMessage: %s\nResponse: %s", chat.Title, chat.ActiveSession().Model, update.Message.Text, response))
 	return nil
 }

@@ -115,6 +115,7 @@ func (s *FileStorage) loadChatFromFile(chatID int64) (*Chat, error) {
 		return nil, err
 	}
 
+	chat.Migrate()
 	return &chat, nil
 }
 

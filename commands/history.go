@@ -29,7 +29,7 @@ func (c *CommandHistory) IsAdmin() bool {
 }
 
 func (c *CommandHistory) Execute(update telegram.Update, chat *storage.Chat) {
-	chunks := formatHistory(messagesFromHistory(chat.History))
+	chunks := formatHistory(messagesFromHistory(chat.ActiveSession().History))
 	totalPages := (len(chunks) + historyPageSize - 1) / historyPageSize
 
 	// parse page number (default = 1 = latest)

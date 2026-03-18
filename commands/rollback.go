@@ -25,6 +25,7 @@ func (c *CommandRollback) IsAdmin() bool {
 }
 
 func (c *CommandRollback) Execute(update telegram.Update, chat *storage.Chat) {
+	session := chat.ActiveSession()
 	number := 1
 	if len(update.Message.CommandArguments()) > 0 {
 		var err error
@@ -34,12 +35,12 @@ func (c *CommandRollback) Execute(update telegram.Update, chat *storage.Chat) {
 		}
 	}
 
-	if number > len(chat.History) {
-		number = len(chat.History)
+	if number > len(session.History) {
+		number = len(session.History)
 	}
 
-	if len(chat.History) > 0 {
-		chat.History = chat.History[:len(chat.History)-number]
+	if len(session.History) > 0 {
+		session.History = session.History[:len(session.History)-number]
 		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
 	} else {
 		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров пуста.")

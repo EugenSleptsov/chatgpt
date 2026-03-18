@@ -23,17 +23,18 @@ func (c *CommandSystem) IsAdmin() bool {
 }
 
 func (c *CommandSystem) Execute(update telegram.Update, chat *storage.Chat) {
+	session := chat.ActiveSession()
 	if len(update.Message.CommandArguments()) == 0 {
-		if chat.Settings.SystemPrompt == "" {
+		if session.SystemPrompt == "" {
 			c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Системное сообщение не установлено.")
 		} else {
-			c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprint(chat.Settings.SystemPrompt))
+			c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprint(session.SystemPrompt))
 		}
 	} else {
-		chat.Settings.SystemPrompt = update.Message.CommandArguments()
-		if len(chat.Settings.SystemPrompt) > 1024 {
-			chat.Settings.SystemPrompt = chat.Settings.SystemPrompt[:1024]
+		session.SystemPrompt = update.Message.CommandArguments()
+		if len(session.SystemPrompt) > 1024 {
+			session.SystemPrompt = session.SystemPrompt[:1024]
 		}
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Системное сообщение установлено на: %s.", chat.Settings.SystemPrompt))
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Системное сообщение установлено на: %s.", session.SystemPrompt))
 	}
 }

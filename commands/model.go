@@ -24,11 +24,12 @@ func (c *CommandModel) IsAdmin() bool {
 }
 
 func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
+	session := chat.ActiveSession()
 	args := update.Message.CommandArguments()
 
 	if len(args) == 0 {
-		current := gpt.FindTier(chat.Settings.Model)
-		name := chat.Settings.Model
+		current := gpt.FindTier(session.Model)
+		name := session.Model
 		if current != nil {
 			name = current.Label + " (" + current.APIModel + ")"
 		}
@@ -50,7 +51,7 @@ func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
 		return
 	}
 
-	chat.Settings.Model = tier.ID
+	session.Model = tier.ID
 	c.Bot.Reply(
 		chat.ChatID,
 		update.Message.MessageID,

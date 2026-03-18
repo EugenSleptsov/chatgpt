@@ -36,15 +36,21 @@ func (cm *TelegramChatManager) GetOrCreateChat(update telegram.Update) *storage.
 		chat = &storage.Chat{
 			ChatID: chatID,
 			Settings: storage.ChatSettings{
-				Temperature:     0.8,
-				Model:           gpt.DefaultTierID,
 				MaxMessages:     cm.Config.MaxMessages,
 				UseMarkdown:     true,
-				SystemPrompt:    "You are a helpful assistant...",
 				SummarizePrompt: cm.Config.SummarizePrompt,
 				Token:           cm.Config.GPTToken,
 			},
-			History:          make([]*storage.ConversationEntry, 0),
+			Sessions: []*storage.Session{{
+				ID:           storage.DefaultSessionID,
+				Topic:        storage.DefaultSessionTopic,
+				History:      make([]*storage.ConversationEntry, 0),
+				SystemPrompt: "You are a helpful assistant...",
+				Model:        gpt.DefaultTierID,
+				Temperature:  storage.DefaultSessionTemperature,
+			}},
+			ActiveSessionID:  storage.DefaultSessionID,
+			NextSessionID:    storage.DefaultNextSessionID,
 			ImageGenNextTime: time.Now(),
 			Title:            telegram.GetChatTitle(update),
 		}

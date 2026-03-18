@@ -1,7 +1,7 @@
 package main
 
 import (
-	"GPTBot/api/gpt"
+	"GPTBot/api/gpt/openai"
 	"GPTBot/api/logger"
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
@@ -26,7 +26,7 @@ func main() {
 	telegramBot, err := telegram.NewInstance(config, logSystem)
 	logSystem.LogFatal(err)
 
-	gptClient := gpt.NewGPTClient(config.GPTToken)
+	gptClient := openai.NewClient(config.GPTToken)
 	chatService := &service.ChatService{
 		GptClient: gptClient,
 		Log:       logSystem,
@@ -88,4 +88,10 @@ func registerCommands(d *commands.Deps) {
 	d.Registry.Register("reload", func() commands.Command { return &commands.CommandAdminReload{Deps: d} })
 	d.Registry.Register("adduser", func() commands.Command { return &commands.CommandAdminAddUser{Deps: d} })
 	d.Registry.Register("removeuser", func() commands.Command { return &commands.CommandAdminRemoveUser{Deps: d} })
+	d.Registry.Register("list", func() commands.Command { return &commands.CommandSessionList{Deps: d} })
+	d.Registry.Register("current", func() commands.Command { return &commands.CommandSessionCurrent{Deps: d} })
+	d.Registry.Register("use", func() commands.Command { return &commands.CommandSessionUse{Deps: d} })
+	d.Registry.Register("new", func() commands.Command { return &commands.CommandSessionNew{Deps: d} })
+	d.Registry.Register("remove", func() commands.Command { return &commands.CommandSessionRemove{Deps: d} })
+	d.Registry.Register("update", func() commands.Command { return &commands.CommandSessionUpdate{Deps: d} })
 }

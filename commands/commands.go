@@ -29,13 +29,14 @@ type Command interface {
 
 // gptText is a convenience wrapper: calls ChatService.GPTCommand, logs and replies.
 func (d *Deps) gptText(chat *storage.Chat, messageID int, systemPrompt, userPrompt string) {
-	response, err := d.ChatService.GPTCommand(chat.Settings.Model, systemPrompt, userPrompt)
+	session := chat.ActiveSession()
+	response, err := d.ChatService.GPTCommand(session.Model, systemPrompt, userPrompt)
 	if err != nil {
 		d.Log.Logf("Error: %v", err)
 		return
 	}
 
-	d.Bot.Log(fmt.Sprintf("[%s | %s]\nSystemPrompt: %s\n\nUserPrompt: %s\n\nResponse: %s", chat.Title, chat.Settings.Model, systemPrompt, userPrompt, response))
+	d.Bot.Log(fmt.Sprintf("[%s | %s]\nSystemPrompt: %s\n\nUserPrompt: %s\n\nResponse: %s", chat.Title, session.Model, systemPrompt, userPrompt, response))
 	d.Bot.Reply(chat.ChatID, messageID, response)
 }
 
