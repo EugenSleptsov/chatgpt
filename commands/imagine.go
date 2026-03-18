@@ -6,7 +6,6 @@ import (
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -37,39 +36,24 @@ func (c *CommandImagine) Execute(update telegram.Update, chat *storage.Chat) {
 
 	if len(update.Message.CommandArguments()) == 0 {
 		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
-	} else {
-		chat.ImageGenNextTime = now.Add(time.Second * 900)
-		aiModel := gpt.ImageEnhanceTierID
-
-		c.Bot.Log(fmt.Sprintf("[%s | %s (%s)] Image prompt: \"%s\"", chat.Title, aiModel, gpt.ResolveAPIName(aiModel), update.Message.CommandArguments()))
-		err := c.gptImage(aiModel, chat.ChatID, update.Message.CommandArguments())
-		if err != nil {
-			c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
-		}
+		return
 	}
-}
 
-func (d *Deps) gptImage(aiModel string, chatID int64, prompt string) error {
-	imageUrl, err := d.GptClient.GenerateImage(prompt, gpt.ImageSize1024)
+	chat.ImageGenNextTime = now.Add(time.Second * 900)
+	aiModel := gpt.ImageEnhanceTierID
+	prompt := update.Message.CommandArguments()
+
+	c.Bot.Log(fmt.Sprintf("[%s | %s (%s)] Image prompt: \"%s\"", chat.Title, aiModel, gpt.ResolveAPIName(aiModel), prompt))
+
+	imageURL, caption, err := c.ChatService.GenerateImage(aiModel, prompt)
 	if err != nil {
-		d.Bot.Log(fmt.Sprintf("[%d] Error generating image: %v", chatID, err))
-		return err
+		c.Bot.Log(fmt.Sprintf("[%d] Error generating image: %v", chat.ChatID, err))
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
+		return
 	}
 
-	enhancedCaption := prompt
-	responsePayload, err := d.GptClient.CallGPT([]gpt.Message{
-		{Role: "system", Content: "You are an assistant that generates natural language description (prompt) for an artificial intelligence (AI) that generates images"},
-		{Role: "user", Content: fmt.Sprintf("Please improve this prompt: \"%s\". Answer with improved prompt only. Keep prompt at most 200 characters long. Your prompt must be in one sentence.", prompt)},
-	}, aiModel, 0.7)
-	if err == nil && responsePayload != nil && len(responsePayload.Choices) > 0 {
-		enhancedCaption = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
+	if err := c.Bot.SendImage(chat.ChatID, imageURL, caption); err != nil {
+		c.Bot.Log(fmt.Sprintf("[%d] Error sending image: %v", chat.ChatID, err))
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
 	}
-
-	err = d.Bot.SendImage(chatID, imageUrl, enhancedCaption)
-	if err != nil {
-		d.Bot.Log(fmt.Sprintf("[%d] Error sending image: %v", chatID, err))
-		return err
-	}
-
-	return nil
 }

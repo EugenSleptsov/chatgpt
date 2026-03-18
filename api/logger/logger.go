@@ -1,4 +1,4 @@
-package log
+package logger
 
 type Log interface {
 	Log(message string)

@@ -7,6 +7,7 @@ import (
 type Storage interface {
 	Get(chatID int64) (*Chat, bool)
 	Set(chatID int64, chat *Chat) error
+	MarkDirty(chatID int64)
 	Save() bool
 }
 

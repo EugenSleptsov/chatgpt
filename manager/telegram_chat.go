@@ -2,7 +2,7 @@ package manager
 
 import (
 	"GPTBot/api/gpt"
-	"GPTBot/api/log"
+	"GPTBot/api/logger"
 	"GPTBot/api/telegram"
 	conf "GPTBot/config"
 	"GPTBot/storage"
@@ -14,10 +14,10 @@ import (
 type TelegramChatManager struct {
 	StorageClient storage.Storage
 	Config        *conf.Config
-	FileLogClient log.FileLog
+	FileLogClient logger.FileLog
 }
 
-func NewTelegramChatManager(storageClient storage.Storage, config *conf.Config, fileLogClient log.FileLog) *TelegramChatManager {
+func NewTelegramChatManager(storageClient storage.Storage, config *conf.Config, fileLogClient logger.FileLog) *TelegramChatManager {
 	return &TelegramChatManager{
 		StorageClient: storageClient,
 		Config:        config,

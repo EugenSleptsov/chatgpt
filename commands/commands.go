@@ -2,19 +2,22 @@ package commands
 
 import (
 	"GPTBot/api/gpt"
+	"GPTBot/api/logger"
 	"GPTBot/api/telegram"
+	"GPTBot/service"
 	"GPTBot/storage"
-	"GPTBot/util"
 	"fmt"
-	"log"
 	"strings"
 )
 
-// Deps holds shared dependencies for all commands.
+// Deps holds shared dependencies for all commands and handlers.
 type Deps struct {
-	Bot       *telegram.Bot
-	GptClient gpt.Client
-	Registry  CommandRegistry
+	Bot         *telegram.Bot
+	GptClient   gpt.Client
+	Registry    CommandRegistry
+	Log         logger.Log
+	ErrorLog    logger.ErrorLog
+	ChatService *service.ChatService
 }
 
 type Command interface {
@@ -24,28 +27,21 @@ type Command interface {
 	Execute(update telegram.Update, chat *storage.Chat)
 }
 
+// gptText is a convenience wrapper: calls ChatService.GPTCommand, logs and replies.
 func (d *Deps) gptText(chat *storage.Chat, messageID int, systemPrompt, userPrompt string) {
-	responsePayload, err := d.GptClient.CallGPT([]gpt.Message{
-		{Role: "system", Content: []gpt.Content{{Type: gpt.TypeText, Text: systemPrompt}}},
-		{Role: "user", Content: []gpt.Content{{Type: gpt.TypeText, Text: userPrompt}}},
-	}, chat.Settings.Model, 0.6)
-
+	response, err := d.ChatService.GPTCommand(chat.Settings.Model, systemPrompt, userPrompt)
 	if err != nil {
-		log.Printf("Error: %v", err)
+		d.Log.Logf("Error: %v", err)
 		return
-	}
-
-	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
-	if len(responsePayload.Choices) > 0 {
-		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
 	}
 
 	d.Bot.Log(fmt.Sprintf("[%s | %s]\nSystemPrompt: %s\n\nUserPrompt: %s\n\nResponse: %s", chat.Title, chat.Settings.Model, systemPrompt, userPrompt, response))
 	d.Bot.Reply(chat.ChatID, messageID, response)
 }
 
+// summarizeText reads chat log, then delegates to gptText.
 func (d *Deps) summarizeText(chat *storage.Chat, messageID int, systemPrompt string, messageCount int) {
-	lines, err := util.ReadLastLines(fmt.Sprintf("log/%d.log", chat.ChatID), messageCount)
+	lines, err := d.ChatService.ReadChatLog(chat.ChatID, messageCount)
 	if err != nil {
 		d.Bot.Reply(chat.ChatID, messageID, "Произошла ошибка")
 		return

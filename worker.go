@@ -10,17 +10,15 @@ import (
 )
 
 type Worker struct {
-	TelegramClient *telegram.Bot
+	Deps           *commands.Deps
 	ChatManager    manager.ChatManager
-	CommandFactory commands.CommandFactory
 	HandlerFactory handler.UpdateHandlerFactory
 }
 
-func NewWorker(telegramClient *telegram.Bot, chatManager manager.ChatManager, commandFactory commands.CommandFactory, handlerFactory handler.UpdateHandlerFactory) *Worker {
+func NewWorker(deps *commands.Deps, chatManager manager.ChatManager, handlerFactory handler.UpdateHandlerFactory) *Worker {
 	return &Worker{
-		TelegramClient: telegramClient,
+		Deps:           deps,
 		ChatManager:    chatManager,
-		CommandFactory: commandFactory,
 		HandlerFactory: handlerFactory,
 	}
 }
@@ -46,6 +44,7 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 	}
 
 	w.handleUpdate(update, chat)
+	w.ChatManager.GetStorageClient().MarkDirty(chat.ChatID)
 }
 
 func (w *Worker) isMessage(update telegram.Update) bool {
@@ -59,7 +58,7 @@ func (w *Worker) logIfNonCommandMessage(update telegram.Update, chat *storage.Ch
 }
 
 func (w *Worker) isAuthorized(update telegram.Update) bool {
-	return w.TelegramClient.IsAuthorizedUser(update.Message.From.ID)
+	return w.Deps.Bot.IsAuthorizedUser(update.Message.From.ID)
 }
 
 func (w *Worker) handleUnauthorizedAccess(update telegram.Update, chat *storage.Chat) {
@@ -67,12 +66,12 @@ func (w *Worker) handleUnauthorizedAccess(update telegram.Update, chat *storage.
 		return
 	}
 
-	w.TelegramClient.Reply(chat.ChatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
-	w.TelegramClient.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
+	w.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+	w.Deps.Bot.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
 }
 
 func (w *Worker) handleUpdate(update telegram.Update, chat *storage.Chat) {
 	if err := w.HandlerFactory.GetHandler(update).Handle(update, chat); err != nil {
-		w.TelegramClient.Log(fmt.Sprintf("Error handling input: %v", err))
+		w.Deps.Bot.Log(fmt.Sprintf("Error handling input: %v", err))
 	}
 }

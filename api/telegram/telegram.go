@@ -1,7 +1,7 @@
 package telegram
 
 import (
-	"GPTBot/api/log"
+	"GPTBot/api/logger"
 	"GPTBot/api/telegram/adminlog"
 	conf "GPTBot/config"
 	"GPTBot/util"
@@ -18,7 +18,7 @@ type Bot struct {
 	Username       string
 	Token          string
 	AdminId        int64
-	LogClient      log.Log
+	LogClient      logger.Log
 	AdminLogClient adminlog.AdminLogger
 }
 
@@ -51,7 +51,7 @@ var DefaultCommandList = []Command{
 	CommandSummarize,
 }
 
-func NewInstance(config *conf.Config, logClient log.Log) (*Bot, error) {
+func NewInstance(config *conf.Config, logClient logger.Log) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(config.TelegramToken)
 	if err != nil {
 		return nil, err

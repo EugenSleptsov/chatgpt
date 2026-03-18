@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"GPTBot/api/gpt"
-	"GPTBot/api/log"
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
 )
@@ -12,52 +10,25 @@ type UpdateHandlerFactory interface {
 }
 
 type ConcreteUpdateHandlerFactory struct {
-	TelegramBot    *telegram.Bot
-	CommandFactory commands.CommandFactory
-	GptClient      gpt.Client
-	LogClient      log.Log
-	ErrorLogClient log.ErrorLog
+	Deps *commands.Deps
 }
 
-func NewUpdateHandlerFactory(telegramBot *telegram.Bot, commandFactory commands.CommandFactory, gptClient gpt.Client, logClient log.Log, errorLogClient log.ErrorLog) *ConcreteUpdateHandlerFactory {
-	return &ConcreteUpdateHandlerFactory{
-		TelegramBot:    telegramBot,
-		CommandFactory: commandFactory,
-		GptClient:      gptClient,
-		LogClient:      logClient,
-		ErrorLogClient: errorLogClient,
-	}
+func NewUpdateHandlerFactory(deps *commands.Deps) *ConcreteUpdateHandlerFactory {
+	return &ConcreteUpdateHandlerFactory{Deps: deps}
 }
 
 func (c *ConcreteUpdateHandlerFactory) GetHandler(update telegram.Update) UpdateHandler {
 	if update.Message.IsCommand() {
-		return &CommandHandler{
-			TelegramClient: c.TelegramBot,
-			CommandFactory: c.CommandFactory,
-		}
+		return &CommandHandler{Deps: c.Deps}
 	}
 
 	if update.Message.Voice != nil {
-		return &VoiceHandler{
-			TelegramClient: c.TelegramBot,
-			GptClient:      c.GptClient,
-			ErrorLogClient: c.ErrorLogClient,
-		}
+		return &VoiceHandler{Deps: c.Deps}
 	}
 
 	if len(update.Message.Photo) > 0 {
-		return &ImageHandler{
-			TelegramClient: c.TelegramBot,
-			GptClient:      c.GptClient,
-			ErrorLogClient: c.ErrorLogClient,
-			LogClient:      c.LogClient,
-		}
+		return &ImageHandler{Deps: c.Deps}
 	}
 
-	return &MessageHandler{
-		TelegramClient: c.TelegramBot,
-		GptClient:      c.GptClient,
-		LogClient:      c.LogClient,
-		ErrorLogClient: c.ErrorLogClient,
-	}
+	return &MessageHandler{Deps: c.Deps}
 }

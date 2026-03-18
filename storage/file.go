@@ -12,6 +12,7 @@ type FileStorage struct {
 	mu      sync.RWMutex
 	dirPath string
 	chats   map[int64]*Chat
+	dirty   map[int64]bool
 }
 
 // constructor
@@ -20,6 +21,7 @@ func NewFileStorage(dirPath string) (*FileStorage, error) {
 	storage := &FileStorage{
 		dirPath: dirPath,
 		chats:   make(map[int64]*Chat),
+		dirty:   make(map[int64]bool),
 	}
 
 	// check that dirPath exists
@@ -57,19 +59,35 @@ func (s *FileStorage) Set(chatID int64, chat *Chat) error {
 	defer s.mu.Unlock()
 
 	s.chats[chatID] = chat
+	s.dirty[chatID] = true
 	return nil
 }
 
+func (s *FileStorage) MarkDirty(chatID int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.dirty[chatID] = true
+}
+
 func (s *FileStorage) Save() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.dirty) == 0 {
+		return true
+	}
 
 	success := true
-	for chatID, chat := range s.chats {
-		if err := s.saveChatToFile(chatID, chat); err != nil {
-			success = false
+	for chatID := range s.dirty {
+		if chat, ok := s.chats[chatID]; ok {
+			if err := s.saveChatToFile(chatID, chat); err != nil {
+				success = false
+			}
 		}
 	}
+
+	s.dirty = make(map[int64]bool)
 	return success
 }
 
