@@ -38,6 +38,20 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 	chat := w.ChatManager.GetOrCreateChat(update)
 	w.logIfNonCommandMessage(update, chat)
 
+	isGroup := chat.ChatID < 0
+
+	// Group chats: let ALL messages through so handlers can log context.
+	// Commands in groups still require authorization.
+	if isGroup {
+		if update.Message.IsCommand() && !w.isAuthorized(update) {
+			return
+		}
+		w.handleUpdate(update, chat)
+		w.ChatManager.MarkDirty(chat.ChatID)
+		return
+	}
+
+	// Private chats: strict authorization.
 	if !w.isAuthorized(update) {
 		w.handleUnauthorizedAccess(update, chat)
 		return

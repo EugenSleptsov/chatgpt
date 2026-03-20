@@ -121,5 +121,133 @@ func (s *GPTService) TranscribeAudio(audioContent []byte) (string, error) {
 
 // GenerateVoice delegates text-to-speech to the GPT provider.
 func (s *GPTService) GenerateVoice(text string) ([]byte, error) {
-	return s.GptClient.GenerateVoice(text, gpt.VoiceModel, gpt.VoiceOnyx)
+	return s.GptClient.GenerateVoice(text, gpt.VoiceModelHD, gpt.VoiceOnyx)
+}
+
+// --- Group chat methods ---
+
+// LogGroupMessage stores a group participant's message in history without triggering a GPT reply.
+// Content is attributed: "Author: text".
+func (s *GPTService) LogGroupMessage(chat *storage.Chat, author, text string) {
+	session := chat.ActiveSession()
+	session.History = append(session.History, &storage.ConversationEntry{
+		Prompt: storage.Message{Role: "user", Content: fmt.Sprintf("%s: %s", author, text)},
+	})
+	if len(session.History) > chat.Settings.MaxMessages {
+		session.History = session.History[len(session.History)-chat.Settings.MaxMessages:]
+	}
+}
+
+// LogGroupPhoto stores a photo placeholder in history — no analysis, no GPT call.
+func (s *GPTService) LogGroupPhoto(chat *storage.Chat, author string, description string) {
+	s.LogGroupMessage(chat, author, fmt.Sprintf("[Фото] %s", description))
+}
+
+// LogGroupSticker stores a sticker placeholder in history.
+func (s *GPTService) LogGroupSticker(chat *storage.Chat, author, emoji string) {
+	text := "[Стикер]"
+	if emoji != "" {
+		text = fmt.Sprintf("[Стикер: %s]", emoji)
+	}
+	s.LogGroupMessage(chat, author, text)
+}
+
+// LogBotResponse attaches the bot's reply to the last history entry.
+// Call after LogGroupMessage when the bot answers a specific message out-of-band
+// (e.g. image analysis that doesn't go through ReplyFromGroupHistory).
+func (s *GPTService) LogBotResponse(chat *storage.Chat, text string) {
+	session := chat.ActiveSession()
+	if len(session.History) == 0 {
+		return
+	}
+	last := session.History[len(session.History)-1]
+	if last.Response == (storage.Message{}) {
+		last.Response = storage.Message{Role: "assistant", Content: text}
+	}
+}
+
+// ReplyFromGroupHistory sends the full group history to GPT and attaches the
+// assistant response to the last history entry. Call after LogGroupMessage.
+func (s *GPTService) ReplyFromGroupHistory(chat *storage.Chat) (string, error) {
+	session := chat.ActiveSession()
+	if len(session.History) == 0 {
+		return fallbackResponse, nil
+	}
+
+	messages := storage.ToGPTMessages(session.History)
+	response := fallbackResponse
+	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt)
+	if err == nil {
+		if t := strings.TrimSpace(payload.OutputText()); t != "" {
+			response = t
+		}
+	}
+
+	session.History[len(session.History)-1].Response = storage.Message{
+		Role: "assistant", Content: response,
+	}
+	return response, err
+}
+
+// autoReplyCheckInstructions is the system prompt for the YES/NO auto-reply decision.
+const autoReplyCheckInstructions = `You are an active participant in a group chat. Your name is the bot mentioned in the conversation.
+Look at the recent messages and decide if you should respond.
+Reply YES if:
+- someone is talking to you or about you (even without @mention — e.g. "бот, ответь")
+- there is a factual question no one answered
+- you can add something genuinely useful or funny
+- someone shared news/link and no one commented
+Reply NO only if:
+- the conversation is purely between other people and doesn't need your input
+- your last message already addressed the topic and nothing new was added
+Respond with exactly one word: YES or NO.`
+
+// silenceThreshold is the number of consecutive messages without a bot response
+// after which the bot forcibly joins the conversation.
+const silenceThreshold = 20
+
+// messagesSinceLastReply counts how many entries at the tail of history
+// have no bot response. Used to force auto-reply after prolonged silence.
+func messagesSinceLastReply(history []*storage.ConversationEntry) int {
+	count := 0
+	for i := len(history) - 1; i >= 0; i-- {
+		if history[i].Response != (storage.Message{}) {
+			break
+		}
+		count++
+	}
+	return count
+}
+
+// ShouldAutoReply asks GPT (using the last few messages) whether the bot should
+// proactively join the group conversation.
+// Forces YES if the bot has been silent for silenceThreshold messages.
+// Returns (decision, reason, error).
+func (s *GPTService) ShouldAutoReply(chat *storage.Chat) (bool, string, error) {
+	session := chat.ActiveSession()
+
+	// Forced reply after prolonged silence
+	silent := messagesSinceLastReply(session.History)
+	if silent >= silenceThreshold {
+		return true, fmt.Sprintf("молчал %d сообщений, принудительный ответ", silent), nil
+	}
+
+	const lookback = 10
+	history := session.History
+	if len(history) > lookback {
+		history = history[len(history)-lookback:]
+	}
+
+	messages := storage.ToGPTMessages(history)
+	if len(messages) == 0 {
+		return false, "история пуста", nil
+	}
+
+	payload, err := s.GptClient.CallGPT(messages, session.Model, autoReplyCheckInstructions)
+	if err != nil {
+		return false, "ошибка GPT", err
+	}
+	answer := strings.TrimSpace(payload.OutputText())
+	yes := strings.HasPrefix(strings.ToUpper(answer), "YES")
+	return yes, answer, nil
 }

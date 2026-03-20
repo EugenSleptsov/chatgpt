@@ -24,6 +24,7 @@ func Constructors() []func(d *Deps) Command {
 		func(d *Deps) Command { return &CommandAdminReload{Deps: d} },
 		func(d *Deps) Command { return &CommandAdminAddUser{Deps: d} },
 		func(d *Deps) Command { return &CommandAdminRemoveUser{Deps: d} },
+		func(d *Deps) Command { return &CommandAutoReply{Deps: d} },
 		func(d *Deps) Command { return &CommandSessionList{Deps: d} },
 		func(d *Deps) Command { return &CommandSessionCurrent{Deps: d} },
 		func(d *Deps) Command { return &CommandSessionUse{Deps: d} },

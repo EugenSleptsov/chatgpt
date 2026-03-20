@@ -89,18 +89,18 @@ func (botInstance *Bot) send(chatID int64, replyTo int, text string, isMarkdown 
 	}
 }
 
-// sendChunk tries to send a single chunk. If markdown fails, falls back to plain text.
+// sendChunk tries to send a single chunk. If HTML formatting fails, falls back to plain text.
 func (botInstance *Bot) sendChunk(chatID int64, replyTo int, text string, isMarkdown bool) {
 	if isMarkdown {
-		msg := tgbotapi.NewMessage(chatID, formatMarkdownV2(text))
-		msg.ParseMode = "MarkdownV2"
+		msg := tgbotapi.NewMessage(chatID, markdownToHTML(text))
+		msg.ParseMode = "HTML"
 		if replyTo != 0 {
 			msg.ReplyToMessageID = replyTo
 		}
 		if _, err := botInstance.api.Send(msg); err == nil {
 			return
 		}
-		botInstance.LogClient.Logf("Markdown failed, falling back to plain text")
+		botInstance.LogClient.Logf("HTML formatting failed, falling back to plain text")
 	}
 
 	msg := tgbotapi.NewMessage(chatID, text)

@@ -25,7 +25,7 @@ type RequestResponsesPayload struct {
 
 // defaultTools lists tools enabled on every CallGPT request.
 var defaultTools = []tool{
-	{Type: "web_search_preview"},
+	{Type: "web_search"},
 }
 
 // Client implements gpt.Client using the OpenAI Responses API.

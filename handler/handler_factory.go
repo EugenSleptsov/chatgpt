@@ -30,5 +30,9 @@ func (c *ConcreteUpdateHandlerFactory) GetHandler(update telegram.Update) Update
 		return &ImageHandler{Deps: c.Deps}
 	}
 
+	if update.Message.Sticker != nil {
+		return &StickerHandler{Deps: c.Deps}
+	}
+
 	return &MessageHandler{Deps: c.Deps}
 }

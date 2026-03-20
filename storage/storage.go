@@ -45,6 +45,7 @@ type ChatSettings struct {
 	MaxMessages     int
 	UseMarkdown     bool
 	SummarizePrompt string
+	GroupAutoReply  bool // bot proactively joins group conversations
 
 	// Legacy fields — kept for JSON backward compat during migration.
 	Model        string `json:",omitempty"`
