@@ -14,22 +14,24 @@ func NewClient() *Client {
 	return &Client{}
 }
 
-func (m *Client) CallGPT(chatConversation []gpt.Message, aimodel string, temperature float32) (*gpt.CompletionResponse, error) {
-	return &gpt.CompletionResponse{
-		ID:      "mock-id",
-		Object:  "chat.completion",
-		Created: 0,
-		Choices: []gpt.CompletionChoice{
+func (m *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instructions string) (*gpt.Response, error) {
+	return &gpt.Response{
+		ID:     "mock-id",
+		Object: "response",
+		Output: []gpt.ResponseOutputItem{
 			{
-				Index:        0,
-				Message:      gpt.Message{Role: "assistant", Content: fmt.Sprintf("[mock] echo: model=%s", aimodel)},
-				FinishReason: "stop",
+				Type: "message",
+				ID:   "mock-msg-id",
+				Role: "assistant",
+				Content: []gpt.ResponseOutputContent{
+					{Type: "output_text", Text: fmt.Sprintf("[mock] echo: model=%s", aimodel)},
+				},
 			},
 		},
-		Usage: gpt.CompletionUsage{
-			PromptTokens:     10,
-			CompletionTokens: 5,
-			TotalTokens:      15,
+		Usage: gpt.ResponseUsage{
+			InputTokens:  10,
+			OutputTokens: 5,
+			TotalTokens:  15,
 		},
 	}, nil
 }

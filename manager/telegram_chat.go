@@ -50,7 +50,6 @@ func (cm *TelegramChatManager) GetOrCreateChat(update telegram.Update) *storage.
 				History:      make([]*storage.ConversationEntry, 0),
 				SystemPrompt: cm.Config.DefaultSystemPrompt,
 				Model:        gpt.DefaultTierID,
-				Temperature:  storage.DefaultSessionTemperature,
 			}},
 			ActiveSessionID:  storage.DefaultSessionID,
 			NextSessionID:    storage.DefaultNextSessionID,

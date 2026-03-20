@@ -39,8 +39,8 @@ func (c *CommandSessionCurrent) Execute(update telegram.Update, chat *storage.Ch
 	}
 
 	msg := fmt.Sprintf(
-		"▶ Сессия #%d — %s\n\nМодель: %s\nТемпература: %.1f\nСистемный промпт: %s\nСообщений: %d",
-		s.ID, s.Topic, modelLabel, s.Temperature, prompt, len(s.History),
+		"▶ Сессия #%d — %s\n\nМодель: %s\nСистемный промпт: %s\nСообщений: %d",
+		s.ID, s.Topic, modelLabel, prompt, len(s.History),
 	)
 	c.Bot.Reply(chat.ChatID, update.Message.MessageID, msg)
 }

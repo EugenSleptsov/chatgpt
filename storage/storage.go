@@ -6,11 +6,10 @@ import (
 
 // Session defaults
 const (
-	DefaultSessionTopic       = "default"
-	DefaultSessionModel       = "basic"
-	DefaultSessionTemperature = 0.8
-	DefaultSessionID          = 1
-	DefaultNextSessionID      = 2
+	DefaultSessionTopic  = "default"
+	DefaultSessionModel  = "basic"
+	DefaultSessionID     = 1
+	DefaultNextSessionID = 2
 )
 
 type Storage interface {
@@ -27,7 +26,6 @@ type Session struct {
 	History      []*ConversationEntry
 	SystemPrompt string
 	Model        string
-	Temperature  float32
 }
 
 type Chat struct {
@@ -49,9 +47,8 @@ type ChatSettings struct {
 	SummarizePrompt string
 
 	// Legacy fields — kept for JSON backward compat during migration.
-	Temperature  float32 `json:",omitempty"`
-	Model        string  `json:",omitempty"`
-	SystemPrompt string  `json:",omitempty"`
+	Model        string `json:",omitempty"`
+	SystemPrompt string `json:",omitempty"`
 }
 
 type ConversationEntry struct {
@@ -80,11 +77,10 @@ func (c *Chat) ActiveSession() *Session {
 
 	// Should never happen, but guarantee non-nil.
 	s := &Session{
-		ID:          DefaultSessionID,
-		Topic:       DefaultSessionTopic,
-		History:     make([]*ConversationEntry, 0),
-		Model:       DefaultSessionModel,
-		Temperature: DefaultSessionTemperature,
+		ID:      DefaultSessionID,
+		Topic:   DefaultSessionTopic,
+		History: make([]*ConversationEntry, 0),
+		Model:   DefaultSessionModel,
 	}
 	c.Sessions = []*Session{s}
 	c.ActiveSessionID = DefaultSessionID
@@ -121,22 +117,19 @@ func (c *Chat) RemoveSession(id int) bool {
 }
 
 // AddSession creates a new session with the given topic, inheriting
-// Model and Temperature from the currently active session.
+// Model from the currently active session.
 func (c *Chat) AddSession(topic string) *Session {
 	active := c.ActiveSession()
 	model := DefaultSessionModel
-	temp := float32(DefaultSessionTemperature)
 	if active != nil {
 		model = active.Model
-		temp = active.Temperature
 	}
 
 	s := &Session{
-		ID:          c.NextSessionID,
-		Topic:       topic,
-		History:     make([]*ConversationEntry, 0),
-		Model:       model,
-		Temperature: temp,
+		ID:      c.NextSessionID,
+		Topic:   topic,
+		History: make([]*ConversationEntry, 0),
+		Model:   model,
 	}
 	c.NextSessionID++
 	c.Sessions = append(c.Sessions, s)
@@ -158,7 +151,6 @@ func (c *Chat) Migrate() {
 		History:      c.History,
 		SystemPrompt: c.Settings.SystemPrompt,
 		Model:        c.Settings.Model,
-		Temperature:  c.Settings.Temperature,
 	}}
 
 	if c.Sessions[0].History == nil {
@@ -167,13 +159,9 @@ func (c *Chat) Migrate() {
 	if c.Sessions[0].Model == "" {
 		c.Sessions[0].Model = DefaultSessionModel
 	}
-	if c.Sessions[0].Temperature == 0 {
-		c.Sessions[0].Temperature = DefaultSessionTemperature
-	}
 
 	// Clear legacy fields
 	c.History = nil
 	c.Settings.SystemPrompt = ""
 	c.Settings.Model = ""
-	c.Settings.Temperature = 0
 }

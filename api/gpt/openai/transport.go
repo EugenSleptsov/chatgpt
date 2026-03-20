@@ -24,7 +24,7 @@ func NewHTTPTransport(apiKey string) *HTTPTransport {
 	return &HTTPTransport{
 		ApiKey:  apiKey,
 		Retries: 3,
-		client:  &http.Client{},
+		client:  &http.Client{Timeout: 120 * time.Second},
 	}
 }
 

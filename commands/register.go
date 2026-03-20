@@ -17,7 +17,6 @@ func Constructors() []func(d *Deps) Command {
 		func(d *Deps) Command { return &CommandSummarize{Deps: d} },
 		func(d *Deps) Command { return &CommandSummarizePrompt{Deps: d} },
 		func(d *Deps) Command { return &CommandAnalyze{Deps: d} },
-		func(d *Deps) Command { return &CommandTemperature{Deps: d} },
 		func(d *Deps) Command { return &CommandModel{Deps: d} },
 		func(d *Deps) Command { return &CommandImagine{Deps: d} },
 		func(d *Deps) Command { return &CommandSystem{Deps: d} },

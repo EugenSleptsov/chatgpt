@@ -1,5 +1,5 @@
 // Package service contains transport-agnostic business logic.
-// GPTService wraps GPT API calls (completions, images, logs)
+// GPTService wraps GPT API calls (responses, images, logs)
 // and knows nothing about Telegram or any other transport.
 package service
 
@@ -13,7 +13,7 @@ import (
 
 const fallbackResponse = "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
 
-// GPTService encapsulates GPT business logic (completions, image generation, logs),
+// GPTService encapsulates GPT business logic (responses, image generation, logs),
 // independent of any transport layer (Telegram, etc.).
 type GPTService struct {
 	GptClient gpt.Client
@@ -35,18 +35,16 @@ func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (string
 		session.History = session.History[len(session.History)-chat.Settings.MaxMessages:]
 	}
 
-	// Build message list from history
-	var messages []gpt.Message
-	if session.SystemPrompt != "" {
-		messages = append(messages, gpt.Message{Role: "system", Content: session.SystemPrompt})
-	}
-	messages = append(messages, storage.ToGPTMessages(session.History)...)
+	// Build message list from history — system prompt goes as instructions, not as a message.
+	messages := storage.ToGPTMessages(session.History)
 
 	response := fallbackResponse
-	payload, err := s.GptClient.CallGPT(messages, session.Model, session.Temperature)
+	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt)
 
-	if err == nil && payload != nil && len(payload.Choices) > 0 {
-		response = strings.TrimSpace(fmt.Sprintf("%v", payload.Choices[0].Message.Content))
+	if err == nil {
+		if text := strings.TrimSpace(payload.OutputText()); text != "" {
+			response = text
+		}
 	}
 
 	entry.Response = storage.Message{Role: "assistant", Content: response}
@@ -57,19 +55,17 @@ func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (string
 // the response text. Unlike ChatCompletion, it does not touch chat history.
 func (s *GPTService) GPTCommand(model string, systemPrompt, userPrompt string) (string, error) {
 	payload, err := s.GptClient.CallGPT([]gpt.Message{
-		{Role: "system", Content: []gpt.Content{{Type: gpt.TypeText, Text: systemPrompt}}},
-		{Role: "user", Content: []gpt.Content{{Type: gpt.TypeText, Text: userPrompt}}},
-	}, model, 0.6)
+		{Role: "user", Content: []gpt.Content{{Type: gpt.TypeInputText, Text: userPrompt}}},
+	}, model, systemPrompt)
 
 	if err != nil {
 		return "", err
 	}
 
-	response := fallbackResponse
-	if payload != nil && len(payload.Choices) > 0 {
-		response = strings.TrimSpace(fmt.Sprintf("%v", payload.Choices[0].Message.Content))
+	if text := strings.TrimSpace(payload.OutputText()); text != "" {
+		return text, nil
 	}
-	return response, nil
+	return fallbackResponse, nil
 }
 
 // ReadChatLog returns the last N lines from a chat's log file.
@@ -87,11 +83,12 @@ func (s *GPTService) GenerateImage(model string, prompt string) (imageURL, capti
 
 	caption = prompt
 	payload, err := s.GptClient.CallGPT([]gpt.Message{
-		{Role: "system", Content: "You are an assistant that generates natural language description (prompt) for an artificial intelligence (AI) that generates images"},
 		{Role: "user", Content: fmt.Sprintf("Please improve this prompt: \"%s\". Answer with improved prompt only. Keep prompt at most 200 characters long. Your prompt must be in one sentence.", prompt)},
-	}, model, 0.7)
-	if err == nil && payload != nil && len(payload.Choices) > 0 {
-		caption = strings.TrimSpace(fmt.Sprintf("%v", payload.Choices[0].Message.Content))
+	}, model, "You are an assistant that generates natural language description (prompt) for an artificial intelligence (AI) that generates images")
+	if err == nil {
+		if text := strings.TrimSpace(payload.OutputText()); text != "" {
+			caption = text
+		}
 	}
 
 	return imageURL, caption, nil
@@ -101,18 +98,18 @@ func (s *GPTService) GenerateImage(model string, prompt string) (imageURL, capti
 func (s *GPTService) AnalyzeImage(imageURL, prompt string) (string, error) {
 	messages := []gpt.Message{
 		{Role: "user", Content: []gpt.Content{
-			{Type: gpt.TypeText, Text: prompt},
-			{Type: gpt.TypeImageUrl, ImageUrl: gpt.ImageUrl{Url: imageURL}},
+			{Type: gpt.TypeInputText, Text: prompt},
+			{Type: gpt.TypeInputImage, ImageUrl: imageURL},
 		}},
 	}
 
-	payload, err := s.GptClient.CallGPT(messages, gpt.VisionTierID, gpt.DefaultTemperature)
+	payload, err := s.GptClient.CallGPT(messages, gpt.VisionTierID, "")
 	if err != nil {
 		return "", err
 	}
 
-	if payload != nil && len(payload.Choices) > 0 {
-		return strings.TrimSpace(fmt.Sprintf("%v", payload.Choices[0].Message.Content)), nil
+	if text := strings.TrimSpace(payload.OutputText()); text != "" {
+		return text, nil
 	}
 	return fallbackResponse, nil
 }

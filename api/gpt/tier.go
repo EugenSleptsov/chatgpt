@@ -21,8 +21,6 @@ const (
 	DefaultTierID      = "basic"   // default tier for new chats
 	VisionTierID       = "premium" // tier used for image analysis
 	ImageEnhanceTierID = "basic"   // tier used for image prompt enhancement
-
-	DefaultTemperature = 0.8 // default temperature for GPT calls
 )
 
 // legacyTierMap maps old model IDs (stored in existing chats) to current tier IDs.

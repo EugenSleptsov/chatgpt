@@ -9,15 +9,26 @@ import (
 	"net/http"
 )
 
-// RequestCompletionsPayload is the OpenAI-specific request body.
-type RequestCompletionsPayload struct {
-	Model       string        `json:"model"`
-	Messages    []gpt.Message `json:"messages"`
-	Temperature float32       `json:"temperature,omitempty"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
+// tool represents a built-in OpenAI tool enabled for every request.
+type tool struct {
+	Type string `json:"type"`
 }
 
-// Client implements gpt.Client using the OpenAI API.
+// RequestResponsesPayload is the OpenAI Responses API request body.
+type RequestResponsesPayload struct {
+	Model        string        `json:"model"`
+	Instructions string        `json:"instructions,omitempty"`
+	Input        []gpt.Message `json:"input"`
+	Tools        []tool        `json:"tools,omitempty"`
+	Store        bool          `json:"store"` // false = do not persist on OpenAI servers
+}
+
+// defaultTools lists tools enabled on every CallGPT request.
+var defaultTools = []tool{
+	{Type: "web_search_preview"},
+}
+
+// Client implements gpt.Client using the OpenAI Responses API.
 type Client struct {
 	Transport Transport
 	Log       logger.Log
@@ -31,13 +42,15 @@ func NewClient(apiKey string, log logger.Log) *Client {
 	return &Client{Transport: NewHTTPTransport(apiKey), Log: log}
 }
 
-func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, temperature float32) (*gpt.CompletionResponse, error) {
+func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instructions string) (*gpt.Response, error) {
 	outerAiModel := gpt.ResolveAPIName(aimodel)
 
-	requestPayload := RequestCompletionsPayload{
-		Model:       outerAiModel,
-		Messages:    chatConversation,
-		Temperature: temperature,
+	requestPayload := RequestResponsesPayload{
+		Model:        outerAiModel,
+		Instructions: instructions,
+		Input:        chatConversation,
+		Tools:        defaultTools,
+		Store:        false,
 	}
 
 	jsonPayload, err := json.Marshal(requestPayload)
@@ -45,12 +58,12 @@ func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, tempera
 		return nil, err
 	}
 
-	resp, err := c.Transport.Post("https://api.openai.com/v1/chat/completions", "application/json", jsonPayload)
+	resp, err := c.Transport.Post("https://api.openai.com/v1/responses", "application/json", jsonPayload)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	c.Log.Logf("Completions / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	c.Log.Logf("Responses / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -62,7 +75,7 @@ func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, tempera
 		return nil, err
 	}
 
-	var responsePayload gpt.CompletionResponse
+	var responsePayload gpt.Response
 	if err = json.Unmarshal(body, &responsePayload); err != nil {
 		return nil, err
 	}
