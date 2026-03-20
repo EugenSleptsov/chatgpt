@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
 	"GPTBot/storage"
@@ -24,19 +23,20 @@ func (m *MessageHandler) Handle(update telegram.Update, chat *storage.Chat) erro
 	}
 
 	// Business logic — single service call
-	response := m.Deps.GPTService.ChatCompletion(chat, update.Message.Text)
+	response, err := m.Deps.GPTService.ChatCompletion(chat, update.Message.Text)
+	m.Deps.Notifier.LogError(err)
 
 	// Presentation
-	m.Deps.Log.Logf("[%s] %s", "ChatGPT", response)
+	m.Deps.Notifier.Logf("[%s] %s", "ChatGPT", response)
 	m.Deps.Bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
 
 	// Voice reply if the original message was voice
 	if update.Message.Voice != nil {
-		m.Deps.Log.Log("Audio response")
-		bytes, err := m.Deps.GptClient.GenerateVoice(response, gpt.VoiceModel, gpt.VoiceOnyx)
-		m.Deps.ErrorLog.LogError(err)
+		m.Deps.Notifier.Logf("Audio response")
+		bytes, err := m.Deps.GPTService.GenerateVoice(response)
+		m.Deps.Notifier.LogError(err)
 		err = m.Deps.Bot.AudioUpload(chat.ChatID, bytes)
-		m.Deps.ErrorLog.LogError(err)
+		m.Deps.Notifier.LogError(err)
 	}
 
 	m.Deps.Notifier.ReportAdmin(update.Message.From.ID, fmt.Sprintf("[%s | %s]\nMessage: %s\nResponse: %s", chat.Title, chat.ActiveSession().Model, update.Message.Text, response))

@@ -36,15 +36,16 @@ func (c *CommandAdminAddUser) Execute(update telegram.Update, chat *storage.Chat
 			return
 		}
 
-		for _, auth := range c.Bot.Config.AuthorizedUserIds {
+		for _, auth := range c.Config.AuthorizedUserIds {
 			if auth == userId {
 				c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User already added: %d", userId))
 				return
 			}
 		}
 
-		c.Bot.Config.AuthorizedUserIds = append(c.Bot.Config.AuthorizedUserIds, userId)
-		err = conf.UpdateConfig("bot.yaml", c.Bot.Config)
+		c.Config.AuthorizedUserIds = append(c.Config.AuthorizedUserIds, userId)
+		c.Auth.AuthorizedUserIDs = c.Config.AuthorizedUserIds
+		err = conf.UpdateConfig("bot.yaml", c.Config)
 		if err != nil {
 			log.Fatalf("Error updating bot.yaml: %v", err)
 		}

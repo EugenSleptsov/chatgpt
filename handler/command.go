@@ -16,7 +16,7 @@ func (c *CommandHandler) Handle(update telegram.Update, chat *storage.Chat) erro
 		return err
 	}
 
-	if !cmd.IsAdmin() || update.Message.From.ID == c.Deps.Bot.AdminId {
+	if !cmd.IsAdmin() || c.Deps.Auth.IsAdmin(update.Message.From.ID) {
 		cmd.Execute(update, chat)
 	}
 

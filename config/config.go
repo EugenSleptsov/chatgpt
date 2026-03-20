@@ -11,6 +11,7 @@ type Config struct {
 	TelegramToken       string   `yaml:"telegram_token"`
 	GPTToken            string   `yaml:"gpt_token"`
 	SummarizePrompt     string   `yaml:"summarize_prompt"`
+	DefaultSystemPrompt string   `yaml:"default_system_prompt"`
 	TimeoutValue        int      `yaml:"timeout_value"`
 	MaxMessages         int      `yaml:"max_messages"`
 	AdminId             int64    `yaml:"admin_id"`

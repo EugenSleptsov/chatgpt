@@ -14,7 +14,7 @@ type VoiceHandler struct {
 
 func (v *VoiceHandler) Handle(update telegram.Update, chat *storage.Chat) error {
 	response, err := v.processAudio(update.Message.Voice.FileID)
-	v.Deps.ErrorLog.LogError(err)
+	v.Deps.Notifier.LogError(err)
 	v.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, response)
 
 	// check if message is forwarded, then we finish here
@@ -28,18 +28,15 @@ func (v *VoiceHandler) Handle(update telegram.Update, chat *storage.Chat) error 
 }
 
 func (v *VoiceHandler) processAudio(fileID string) (string, error) {
-	// Download the voice message file
 	file, err := v.Deps.Bot.GetFile(fileID)
 	if err != nil {
 		return "", fmt.Errorf("error getting file: %w", err)
 	}
 
-	// Download the audio file content
-	audioURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", v.Deps.Bot.Token, file.FilePath)
-	audioContent, err := util.DownloadFile(audioURL)
+	audioContent, err := util.DownloadFile(v.Deps.Bot.FileURL(file.FilePath))
 	if err != nil {
 		return "", fmt.Errorf("error downloading audio file: %w", err)
 	}
 
-	return v.Deps.GptClient.TranscribeAudio(audioContent)
+	return v.Deps.GPTService.TranscribeAudio(audioContent)
 }

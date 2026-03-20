@@ -15,11 +15,15 @@ import (
 // Authorization, admin notifications and business logic live elsewhere.
 type Bot struct {
 	api       *tgbotapi.BotAPI
-	Config    *conf.Config
+	config    *conf.Config
 	Username  string
-	Token     string
-	AdminId   int64
+	token     string
 	LogClient logger.Log
+}
+
+// FileURL returns the full download URL for a Telegram file path.
+func (botInstance *Bot) FileURL(filePath string) string {
+	return fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", botInstance.token, filePath)
 }
 
 type UpdatesChannel <-chan Update
@@ -33,10 +37,9 @@ func NewInstance(config *conf.Config, logClient logger.Log) (*Bot, error) {
 
 	bot := &Bot{
 		api:       api,
-		Config:    config,
+		config:    config,
 		Username:  api.Self.UserName,
-		Token:     config.TelegramToken,
-		AdminId:   config.AdminId,
+		token:     config.TelegramToken,
 		LogClient: logClient,
 	}
 

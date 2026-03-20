@@ -47,7 +47,6 @@ type ChatSettings struct {
 	MaxMessages     int
 	UseMarkdown     bool
 	SummarizePrompt string
-	Token           string
 
 	// Legacy fields — kept for JSON backward compat during migration.
 	Temperature  float32 `json:",omitempty"`

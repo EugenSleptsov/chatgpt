@@ -33,3 +33,5 @@ summarize_prompt: >-
 # Optional: separate Telegram bot token for admin logging
 telegram_token_log_bot: ""
 
+# Default system prompt for new sessions
+default_system_prompt: "You are a helpful assistant."

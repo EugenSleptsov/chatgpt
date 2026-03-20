@@ -2,10 +2,10 @@ package openai
 
 import (
 	"GPTBot/api/gpt"
+	"GPTBot/api/logger"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -20,14 +20,15 @@ type RequestCompletionsPayload struct {
 // Client implements gpt.Client using the OpenAI API.
 type Client struct {
 	Transport Transport
+	Log       logger.Log
 }
 
 // compile-time check: Client implements gpt.Client
 var _ gpt.Client = (*Client)(nil)
 
 // NewClient creates a production OpenAI client.
-func NewClient(apiKey string) *Client {
-	return &Client{Transport: NewHTTPTransport(apiKey)}
+func NewClient(apiKey string, log logger.Log) *Client {
+	return &Client{Transport: NewHTTPTransport(apiKey), Log: log}
 }
 
 func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, temperature float32) (*gpt.CompletionResponse, error) {
@@ -48,7 +49,7 @@ func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, tempera
 		return nil, err
 	}
 	defer resp.Body.Close()
-	log.Printf("Completions / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	c.Log.Logf("Completions / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

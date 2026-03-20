@@ -36,7 +36,7 @@ func (c *CommandHelp) Execute(update telegram.Update, chat *storage.Chat) {
 		message += fmt.Sprintf("/%s - %s\n", command.Name(), command.Description())
 	}
 
-	if c.Bot.AdminId == update.Message.From.ID {
+	if c.Auth.IsAdmin(update.Message.From.ID) {
 		message += "\nКоманды администратора:\n"
 		for _, command := range adminCommands {
 			message += fmt.Sprintf("/%s - %s\n", command.Name(), command.Description())

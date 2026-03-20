@@ -5,7 +5,6 @@ import (
 	conf "GPTBot/config"
 	"GPTBot/storage"
 	"fmt"
-	"log"
 )
 
 type CommandAdminReload struct {
@@ -27,10 +26,14 @@ func (c *CommandAdminReload) IsAdmin() bool {
 func (c *CommandAdminReload) Execute(update telegram.Update, chat *storage.Chat) {
 	chatID := chat.ChatID
 
-	config, err := conf.ReadConfig("bot.yaml")
+	newConfig, err := conf.ReadConfig("bot.yaml")
 	if err != nil {
-		log.Fatalf("Error reading bot.yaml: %v", err)
+		c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Error reading config: %v", err))
+		return
 	}
 
-	c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
+	*c.Config = *newConfig
+	c.Auth.AuthorizedUserIDs = c.Config.AuthorizedUserIds
+
+	c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(c.Config)))
 }

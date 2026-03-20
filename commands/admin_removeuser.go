@@ -37,7 +37,7 @@ func (c *CommandAdminRemoveUser) Execute(update telegram.Update, chat *storage.C
 		}
 
 		newList := make([]int64, 0)
-		for _, auth := range c.Bot.Config.AuthorizedUserIds {
+		for _, auth := range c.Config.AuthorizedUserIds {
 			if auth == userId {
 				c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
 			} else {
@@ -45,8 +45,9 @@ func (c *CommandAdminRemoveUser) Execute(update telegram.Update, chat *storage.C
 			}
 		}
 
-		c.Bot.Config.AuthorizedUserIds = newList
-		err = conf.UpdateConfig("bot.yaml", c.Bot.Config)
+		c.Config.AuthorizedUserIds = newList
+		c.Auth.AuthorizedUserIDs = newList
+		err = conf.UpdateConfig("bot.yaml", c.Config)
 		if err != nil {
 			log.Fatalf("Error updating bot.yaml: %v", err)
 		}

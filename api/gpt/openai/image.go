@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -46,7 +45,7 @@ func (c *Client) GenerateImage(prompt string, size string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	log.Printf("Image / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	c.Log.Logf("Image / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -65,7 +64,7 @@ func (c *Client) GenerateImage(prompt string, size string) (string, error) {
 	}
 
 	if len(responseData.Data) == 0 {
-		log.Printf("Empty data array in response: %s", string(body))
+		c.Log.Logf("Empty data array in response: %s", string(body))
 
 		if responseData.Error.Message != "" && responseData.Error.Code == "content_policy_violation" {
 			return "", fmt.Errorf("content policy violation: %s", responseData.Error.Message)

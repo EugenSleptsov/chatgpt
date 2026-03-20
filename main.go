@@ -38,21 +38,19 @@ func main() {
 		notifier.AdminLog = adminLog
 	}
 
-	auth := &service.Auth{AuthorizedUserIDs: config.AuthorizedUserIds}
+	auth := &service.Auth{
+		AdminID:           config.AdminId,
+		AuthorizedUserIDs: config.AuthorizedUserIds,
+	}
 
-	gptClient := openai.NewClient(config.GPTToken)
 	gptService := &service.GPTService{
-		GptClient: gptClient,
-		Log:       logSystem,
-		ErrorLog:  logSystem,
+		GptClient: openai.NewClient(config.GPTToken, logSystem),
 	}
 
 	deps := &commands.Deps{
 		Bot:        telegramBot,
-		GptClient:  gptClient,
+		Config:     config,
 		Registry:   commands.NewCommandFactory(),
-		Log:        logSystem,
-		ErrorLog:   logSystem,
 		GPTService: gptService,
 		Notifier:   notifier,
 		Auth:       auth,
@@ -78,7 +76,7 @@ func startWorkers(
 		worker := NewWorker(deps, chatManager, handlerFactory)
 		go worker.Start(updateChan)
 	}
-	for update := range deps.Bot.GetUpdateChannel(deps.Bot.Config.TimeoutValue) {
+	for update := range deps.Bot.GetUpdateChannel(deps.Config.TimeoutValue) {
 		updateChan <- update
 	}
 }

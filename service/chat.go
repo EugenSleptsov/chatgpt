@@ -5,7 +5,6 @@ package service
 
 import (
 	"GPTBot/api/gpt"
-	"GPTBot/api/logger"
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
@@ -18,14 +17,12 @@ const fallbackResponse = "Произошла ошибка с получение�
 // independent of any transport layer (Telegram, etc.).
 type GPTService struct {
 	GptClient gpt.Client
-	Log       logger.Log
-	ErrorLog  logger.ErrorLog
 }
 
 // ChatCompletion appends a user message to chat history, sends the
 // conversation context to GPT, stores the assistant response in history
-// and returns it. On GPT failure a fallback message is returned.
-func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) string {
+// and returns it. On GPT failure returns a fallback message and the error.
+func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (string, error) {
 	session := chat.ActiveSession()
 
 	entry := &storage.ConversationEntry{
@@ -51,14 +48,13 @@ func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) string 
 
 	response := fallbackResponse
 	payload, err := s.GptClient.CallGPT(messages, session.Model, session.Temperature)
-	s.ErrorLog.LogError(err)
 
 	if err == nil && payload != nil && len(payload.Choices) > 0 {
 		response = strings.TrimSpace(fmt.Sprintf("%v", payload.Choices[0].Message.Content))
 	}
 
 	entry.Response = storage.Message{Role: "assistant", Content: response}
-	return response
+	return response, err
 }
 
 // GPTCommand sends a one-shot system+user prompt pair to GPT and returns
@@ -103,4 +99,34 @@ func (s *GPTService) GenerateImage(model string, prompt string) (imageURL, capti
 	}
 
 	return imageURL, caption, nil
+}
+
+// AnalyzeImage sends an image URL with a prompt to GPT Vision and returns the response.
+func (s *GPTService) AnalyzeImage(imageURL, prompt string) (string, error) {
+	messages := []gpt.Message{
+		{Role: "user", Content: []gpt.Content{
+			{Type: gpt.TypeText, Text: prompt},
+			{Type: gpt.TypeImageUrl, ImageUrl: gpt.ImageUrl{Url: imageURL}},
+		}},
+	}
+
+	payload, err := s.GptClient.CallGPT(messages, gpt.VisionTierID, gpt.DefaultTemperature)
+	if err != nil {
+		return "", err
+	}
+
+	if len(payload.Choices) > 0 {
+		return strings.TrimSpace(fmt.Sprintf("%v", payload.Choices[0].Message.Content)), nil
+	}
+	return fallbackResponse, nil
+}
+
+// TranscribeAudio delegates audio transcription to the GPT provider.
+func (s *GPTService) TranscribeAudio(audioContent []byte) (string, error) {
+	return s.GptClient.TranscribeAudio(audioContent)
+}
+
+// GenerateVoice delegates text-to-speech to the GPT provider.
+func (s *GPTService) GenerateVoice(text string) ([]byte, error) {
+	return s.GptClient.GenerateVoice(text, gpt.VoiceModel, gpt.VoiceOnyx)
 }

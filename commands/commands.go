@@ -1,9 +1,8 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
-	"GPTBot/api/logger"
 	"GPTBot/api/telegram"
+	conf "GPTBot/config"
 	"GPTBot/service"
 	"GPTBot/storage"
 	"fmt"
@@ -13,10 +12,8 @@ import (
 // Deps holds shared dependencies for all commands and handlers.
 type Deps struct {
 	Bot        *telegram.Bot
-	GptClient  gpt.Client
+	Config     *conf.Config
 	Registry   CommandRegistry
-	Log        logger.Log
-	ErrorLog   logger.ErrorLog
 	GPTService *service.GPTService
 	Notifier   *service.Notifier
 	Auth       *service.Auth
@@ -34,7 +31,7 @@ func (d *Deps) gptText(chat *storage.Chat, messageID int, systemPrompt, userProm
 	session := chat.ActiveSession()
 	response, err := d.GPTService.GPTCommand(session.Model, systemPrompt, userPrompt)
 	if err != nil {
-		d.Log.Logf("Error: %v", err)
+		d.Notifier.Logf("Error: %v", err)
 		return
 	}
 

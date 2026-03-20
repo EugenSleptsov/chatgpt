@@ -4,7 +4,6 @@ import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
-	"GPTBot/util"
 	"fmt"
 	"time"
 )
@@ -28,7 +27,7 @@ func (c *CommandImagine) IsAdmin() bool {
 func (c *CommandImagine) Execute(update telegram.Update, chat *storage.Chat) {
 	now := time.Now()
 	nextTime := chat.ImageGenNextTime
-	if nextTime.After(now) && update.Message.From.ID != c.Bot.AdminId && !util.IsIdInList(update.Message.From.ID, c.Bot.Config.IgnoreReportIds) {
+	if nextTime.After(now) && !c.Auth.IsAdmin(update.Message.From.ID) {
 		nextTimeStr := nextTime.Format("15:04:05")
 		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Your next image generation will be available at %s.", nextTimeStr))
 		return
