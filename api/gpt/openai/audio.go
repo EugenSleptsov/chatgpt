@@ -24,9 +24,13 @@ func (c *Client) TranscribeAudio(audioContent []byte) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error creating form file: %w", err)
 	}
-	part.Write(audioContent)
+	if _, err = part.Write(audioContent); err != nil {
+		return "", fmt.Errorf("error writing audio content: %w", err)
+	}
 
-	writer.WriteField("model", audioModel)
+	if err = writer.WriteField("model", audioModel); err != nil {
+		return "", fmt.Errorf("error writing model field: %w", err)
+	}
 
 	if err = writer.Close(); err != nil {
 		return "", fmt.Errorf("error closing writer: %w", err)
@@ -52,9 +56,21 @@ func (c *Client) TranscribeAudio(audioContent []byte) (string, error) {
 }
 
 func (c *Client) GenerateVoice(inputText string, voiceModel, voiceVoice string) ([]byte, error) {
-	payload := fmt.Sprintf(`{"model": "%s", "voice": "%s", "input": "%s"}`, voiceModel, voiceVoice, inputText)
+	type voiceRequest struct {
+		Model string `json:"model"`
+		Voice string `json:"voice"`
+		Input string `json:"input"`
+	}
+	jsonPayload, err := json.Marshal(voiceRequest{
+		Model: voiceModel,
+		Voice: voiceVoice,
+		Input: inputText,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling voice request: %w", err)
+	}
 
-	resp, err := c.Transport.Post(voiceEndpoint, "application/json", []byte(payload))
+	resp, err := c.Transport.Post(voiceEndpoint, "application/json", jsonPayload)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"GPTBot/util"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -25,7 +26,7 @@ func NewFileStorage(dirPath string) (*FileStorage, error) {
 	}
 
 	// check that dirPath exists
-	if !storage.dirExists() {
+	if !util.IsDirExists(storage.dirPath) {
 		if err := os.Mkdir(storage.dirPath, 0755); err != nil {
 			return nil, err
 		}
@@ -93,12 +94,6 @@ func (s *FileStorage) Save() bool {
 
 // helpers
 
-func (s *FileStorage) dirExists() bool {
-	if _, err := os.Stat(s.dirPath); os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
 func (s *FileStorage) chatFilePath(chatID int64) string {
 	return filepath.Join(s.dirPath, fmt.Sprintf("%d.chat", chatID))
 }

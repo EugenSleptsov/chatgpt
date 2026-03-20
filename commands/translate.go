@@ -3,6 +3,7 @@ package commands
 import (
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
+	"GPTBot/util"
 	"fmt"
 	"strings"
 )
@@ -32,7 +33,7 @@ func (c *CommandTranslate) Name() string {
 }
 
 func (c *CommandTranslate) Description() string {
-	return "Переводит <text> на любом языке на <lang> (по умолчанию en). Использование: /translate <lang> <text>. Доступные языки: " + strings.Join(arrayKeys(SupportedLanguages), ", ")
+	return "Переводит <text> на любом языке на <lang> (по умолчанию en). Использование: /translate <lang> <text>. Доступные языки: " + strings.Join(util.MapKeys(SupportedLanguages), ", ")
 }
 
 func (c *CommandTranslate) IsAdmin() bool {
@@ -51,7 +52,7 @@ func (c *CommandTranslate) Execute(update telegram.Update, chat *storage.Chat) {
 	translationPrompt := c.buildTranslationPrompt(language, textToTranslate)
 
 	systemPrompt := "You are a helpful assistant that translates. You should answer only with translated text without explanations and quotation marks."
-	c.gptText(chat, update.Message.MessageID, systemPrompt, translationPrompt)
+	gptText(c.Deps, chat, update.Message.MessageID, systemPrompt, translationPrompt)
 }
 
 func (c *CommandTranslate) extractLanguageAndText(args []string) (string, string) {
@@ -72,12 +73,4 @@ func (c *CommandTranslate) buildTranslationPrompt(language, text string) string 
 func isSupportedLanguage(lang string) bool {
 	_, exists := SupportedLanguages[lang]
 	return exists
-}
-
-func arrayKeys[K comparable, V any](m map[K]V) []K {
-	keys := make([]K, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
 }

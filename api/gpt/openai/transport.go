@@ -2,6 +2,7 @@ package openai
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"time"
 )
@@ -16,10 +17,15 @@ type Transport interface {
 type HTTPTransport struct {
 	ApiKey  string
 	Retries int
+	client  *http.Client
 }
 
 func NewHTTPTransport(apiKey string) *HTTPTransport {
-	return &HTTPTransport{ApiKey: apiKey, Retries: 3}
+	return &HTTPTransport{
+		ApiKey:  apiKey,
+		Retries: 3,
+		client:  &http.Client{},
+	}
 }
 
 func (t *HTTPTransport) Post(url, contentType string, payload []byte) (*http.Response, error) {
@@ -37,13 +43,23 @@ func (t *HTTPTransport) Post(url, contentType string, payload []byte) (*http.Res
 		req.Header.Set("Content-Type", contentType)
 		req.Header.Set("Authorization", "Bearer "+t.ApiKey)
 
-		resp, err = (&http.Client{}).Do(req)
+		resp, err = t.client.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			return resp, nil
+		}
+
+		// Drain and close the body before retrying to avoid connection leak.
+		if err == nil && resp != nil {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
 		}
 
 		time.Sleep(time.Duration(i+1) * time.Second)
 	}
 
-	return resp, err
+	// Last attempt: return whatever we got (caller is responsible for body).
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }

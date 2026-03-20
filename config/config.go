@@ -19,6 +19,18 @@ type Config struct {
 	AuthorizedUserIds   []int64  `yaml:"authorized_user_ids"`
 	CommandMenu         []string `yaml:"command_menu"`
 	TelegramTokenLogBot string   `yaml:"telegram_token_log_bot"`
+	DataDir             string   `yaml:"data_dir"`
+	LogDir              string   `yaml:"log_dir"`
+}
+
+// Defaults fills zero-valued fields with sensible defaults.
+func (c *Config) ApplyDefaults() {
+	if c.DataDir == "" {
+		c.DataDir = "data"
+	}
+	if c.LogDir == "" {
+		c.LogDir = "log"
+	}
 }
 
 // maskToken hides all but the first 4 characters of a token.
@@ -47,6 +59,7 @@ func ReadConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
 
+	config.ApplyDefaults()
 	return &config, nil
 }
 

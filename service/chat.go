@@ -17,6 +17,7 @@ const fallbackResponse = "Произошла ошибка с получение�
 // independent of any transport layer (Telegram, etc.).
 type GPTService struct {
 	GptClient gpt.Client
+	LogDir    string
 }
 
 // ChatCompletion appends a user message to chat history, sends the
@@ -39,12 +40,7 @@ func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (string
 	if session.SystemPrompt != "" {
 		messages = append(messages, gpt.Message{Role: "system", Content: session.SystemPrompt})
 	}
-	for _, e := range session.History {
-		messages = append(messages, gpt.Message{Role: e.Prompt.Role, Content: e.Prompt.Content})
-		if e.Response != (storage.Message{}) {
-			messages = append(messages, gpt.Message{Role: e.Response.Role, Content: e.Response.Content})
-		}
-	}
+	messages = append(messages, storage.ToGPTMessages(session.History)...)
 
 	response := fallbackResponse
 	payload, err := s.GptClient.CallGPT(messages, session.Model, session.Temperature)
@@ -70,7 +66,7 @@ func (s *GPTService) GPTCommand(model string, systemPrompt, userPrompt string) (
 	}
 
 	response := fallbackResponse
-	if len(payload.Choices) > 0 {
+	if payload != nil && len(payload.Choices) > 0 {
 		response = strings.TrimSpace(fmt.Sprintf("%v", payload.Choices[0].Message.Content))
 	}
 	return response, nil
@@ -78,7 +74,7 @@ func (s *GPTService) GPTCommand(model string, systemPrompt, userPrompt string) (
 
 // ReadChatLog returns the last N lines from a chat's log file.
 func (s *GPTService) ReadChatLog(chatID int64, count int) ([]string, error) {
-	return util.ReadLastLines(fmt.Sprintf("log/%d.log", chatID), count)
+	return util.ReadLastLines(fmt.Sprintf("%s/%d.log", s.LogDir, chatID), count)
 }
 
 // GenerateImage creates an image from a prompt and returns the URL along
@@ -115,7 +111,7 @@ func (s *GPTService) AnalyzeImage(imageURL, prompt string) (string, error) {
 		return "", err
 	}
 
-	if len(payload.Choices) > 0 {
+	if payload != nil && len(payload.Choices) > 0 {
 		return strings.TrimSpace(fmt.Sprintf("%v", payload.Choices[0].Message.Content)), nil
 	}
 	return fallbackResponse, nil

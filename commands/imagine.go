@@ -29,7 +29,7 @@ func (c *CommandImagine) Execute(update telegram.Update, chat *storage.Chat) {
 	nextTime := chat.ImageGenNextTime
 	if nextTime.After(now) && !c.Auth.IsAdmin(update.Message.From.ID) {
 		nextTimeStr := nextTime.Format("15:04:05")
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Your next image generation will be available at %s.", nextTimeStr))
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Следующая генерация изображения будет доступна в %s.", nextTimeStr))
 		return
 	}
 

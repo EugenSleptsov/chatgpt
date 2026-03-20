@@ -66,7 +66,7 @@ func (w *Worker) handleUnauthorizedAccess(update telegram.Update, chat *storage.
 		return
 	}
 
-	w.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
+	w.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, "Извините, у вас нет доступа к этому боту.")
 	w.Deps.Notifier.Notify(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
 }
 

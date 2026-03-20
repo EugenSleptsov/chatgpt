@@ -54,5 +54,5 @@ func (c *CommandAnalyze) Execute(update telegram.Update, chat *storage.Chat) {
 		}
 	}
 
-	c.summarizeText(chat, update.Message.MessageID, systemPrompt, messageCount)
+	summarizeText(c.Deps, chat, update.Message.MessageID, systemPrompt, messageCount)
 }

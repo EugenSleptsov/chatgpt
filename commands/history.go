@@ -29,7 +29,7 @@ func (c *CommandHistory) IsAdmin() bool {
 }
 
 func (c *CommandHistory) Execute(update telegram.Update, chat *storage.Chat) {
-	chunks := formatHistory(messagesFromHistory(chat.ActiveSession().History))
+	chunks := formatHistory(storage.ToGPTMessages(chat.ActiveSession().History))
 	totalPages := (len(chunks) + historyPageSize - 1) / historyPageSize
 
 	// parse page number (default = 1 = latest)
@@ -95,15 +95,4 @@ func formatHistory(history []gpt.Message) []string {
 	}
 
 	return chunks
-}
-
-func messagesFromHistory(storageHistory []*storage.ConversationEntry) []gpt.Message {
-	var messages []gpt.Message
-	for _, entry := range storageHistory {
-		messages = append(messages, gpt.Message{Role: entry.Prompt.Role, Content: entry.Prompt.Content})
-		if entry.Response != (storage.Message{}) {
-			messages = append(messages, gpt.Message{Role: entry.Response.Role, Content: entry.Response.Content})
-		}
-	}
-	return messages
 }

@@ -78,5 +78,5 @@ func (cm *TelegramChatManager) LogMessage(update telegram.Update, chat *storage.
 		}
 	}
 
-	cm.FileLogClient.LogToFile(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
+	cm.FileLogClient.LogToFile(fmt.Sprintf("%s/%d.log", cm.Config.LogDir, chat.ChatID), lines)
 }

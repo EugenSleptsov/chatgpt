@@ -15,11 +15,11 @@ type MessageHandler struct {
 func (m *MessageHandler) Handle(update telegram.Update, chat *storage.Chat) error {
 	// Filter group chats: only respond when explicitly mentioned or replied to
 	if chat.ChatID < 0 && update.Message.Voice == nil {
-		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == m.Deps.Bot.Username
-		if !strings.Contains(update.Message.Text, "@"+m.Deps.Bot.Username) && !isReplyToBot {
+		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == m.Deps.Bot.GetUsername()
+		if !strings.Contains(update.Message.Text, "@"+m.Deps.Bot.GetUsername()) && !isReplyToBot {
 			return nil
 		}
-		update.Message.Text = strings.ReplaceAll(update.Message.Text, "@"+m.Deps.Bot.Username, "")
+		update.Message.Text = strings.ReplaceAll(update.Message.Text, "@"+m.Deps.Bot.GetUsername(), "")
 	}
 
 	// Business logic — single service call

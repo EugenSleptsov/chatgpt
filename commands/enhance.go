@@ -29,6 +29,6 @@ func (c *CommandEnhance) Execute(update telegram.Update, chat *storage.Chat) {
 		prompt := update.Message.CommandArguments()
 		enhancePrompt := fmt.Sprintf("Review and improve the following text: \"%s\". Answer with improved text only.", prompt)
 		systemPrompt := "You are a helpful assistant that reviews text for grammar, style and things like that."
-		c.gptText(chat, update.Message.MessageID, systemPrompt, enhancePrompt)
+		gptText(c.Deps, chat, update.Message.MessageID, systemPrompt, enhancePrompt)
 	}
 }

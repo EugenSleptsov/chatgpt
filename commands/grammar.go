@@ -29,6 +29,6 @@ func (c *CommandGrammar) Execute(update telegram.Update, chat *storage.Chat) {
 		prompt := update.Message.CommandArguments()
 		grammarPrompt := fmt.Sprintf("Correct the following text: \"%s\". Answer with corrected text only.", prompt)
 		systemPrompt := "You are a helpful assistant that corrects grammar."
-		c.gptText(chat, update.Message.MessageID, systemPrompt, grammarPrompt)
+		gptText(c.Deps, chat, update.Message.MessageID, systemPrompt, grammarPrompt)
 	}
 }

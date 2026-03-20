@@ -11,17 +11,23 @@ import (
 	"GPTBot/manager"
 	"GPTBot/service"
 	"GPTBot/storage"
+	"log"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 )
 
 const (
 	numWorkers       = 10
 	updateBufferSize = 100
+	configFile       = "bot.yaml"
 )
 
 func main() {
 	logSystem := logger.NewSystem()
 
-	config, err := conf.ReadConfig("bot.yaml")
+	config, err := conf.ReadConfig(configFile)
 	logSystem.LogFatal(err)
 
 	telegramBot, err := telegram.NewInstance(config, logSystem)
@@ -42,67 +48,68 @@ func main() {
 
 	gptService := &service.GPTService{
 		GptClient: openai.NewClient(config.GPTToken, logSystem),
+		LogDir:    config.LogDir,
 	}
 
 	deps := &commands.Deps{
 		Bot:        telegramBot,
 		Config:     config,
+		ConfigPath: configFile,
 		Registry:   commands.NewCommandFactory(),
 		GPTService: gptService,
 		Notifier:   notifier,
 		Auth:       auth,
 	}
-	registerCommands(deps)
+	commands.RegisterAll(deps)
 
-	botStorage, err := storage.NewFileStorage("data")
+	botStorage, err := storage.NewFileStorage(config.DataDir)
 	logSystem.LogFatal(err)
 
 	chatManager := manager.NewTelegramChatManager(botStorage, config, logSystem)
 	handlerFactory := handler.NewUpdateHandlerFactory(deps)
 
-	startWorkers(deps, chatManager, handlerFactory)
+	startWorkers(deps, chatManager, handlerFactory, telegramBot.GetUpdateChannel(config.TimeoutValue))
 }
 
 func startWorkers(
 	deps *commands.Deps,
 	chatManager manager.ChatManager,
 	handlerFactory handler.UpdateHandlerFactory,
+	telegramUpdates telegram.UpdatesChannel,
 ) {
 	updateChan := make(chan telegram.Update, updateBufferSize)
-	for i := 0; i < numWorkers; i++ {
-		worker := NewWorker(deps, chatManager, handlerFactory)
-		go worker.Start(updateChan)
-	}
-	for update := range deps.Bot.GetUpdateChannel(deps.Config.TimeoutValue) {
-		updateChan <- update
-	}
-}
 
-func registerCommands(d *commands.Deps) {
-	d.Registry.Register("help", func() commands.Command { return &commands.CommandHelp{Deps: d} })
-	d.Registry.Register("start", func() commands.Command { return &commands.CommandStart{Deps: d} })
-	d.Registry.Register("clear", func() commands.Command { return &commands.CommandClear{Deps: d} })
-	d.Registry.Register("history", func() commands.Command { return &commands.CommandHistory{Deps: d} })
-	d.Registry.Register("rollback", func() commands.Command { return &commands.CommandRollback{Deps: d} })
-	d.Registry.Register("translate", func() commands.Command { return &commands.CommandTranslate{Deps: d} })
-	d.Registry.Register("tech_translate", func() commands.Command { return &commands.CommandTechTranslate{Deps: d} })
-	d.Registry.Register("enhance", func() commands.Command { return &commands.CommandEnhance{Deps: d} })
-	d.Registry.Register("grammar", func() commands.Command { return &commands.CommandGrammar{Deps: d} })
-	d.Registry.Register("summarize", func() commands.Command { return &commands.CommandSummarize{Deps: d} })
-	d.Registry.Register("summarize_prompt", func() commands.Command { return &commands.CommandSummarizePrompt{Deps: d} })
-	d.Registry.Register("analyze", func() commands.Command { return &commands.CommandAnalyze{Deps: d} })
-	d.Registry.Register("temperature", func() commands.Command { return &commands.CommandTemperature{Deps: d} })
-	d.Registry.Register("model", func() commands.Command { return &commands.CommandModel{Deps: d} })
-	d.Registry.Register("imagine", func() commands.Command { return &commands.CommandImagine{Deps: d} })
-	d.Registry.Register("system", func() commands.Command { return &commands.CommandSystem{Deps: d} })
-	d.Registry.Register("markdown", func() commands.Command { return &commands.CommandMarkdown{Deps: d} })
-	d.Registry.Register("reload", func() commands.Command { return &commands.CommandAdminReload{Deps: d} })
-	d.Registry.Register("adduser", func() commands.Command { return &commands.CommandAdminAddUser{Deps: d} })
-	d.Registry.Register("removeuser", func() commands.Command { return &commands.CommandAdminRemoveUser{Deps: d} })
-	d.Registry.Register("list", func() commands.Command { return &commands.CommandSessionList{Deps: d} })
-	d.Registry.Register("current", func() commands.Command { return &commands.CommandSessionCurrent{Deps: d} })
-	d.Registry.Register("use", func() commands.Command { return &commands.CommandSessionUse{Deps: d} })
-	d.Registry.Register("new", func() commands.Command { return &commands.CommandSessionNew{Deps: d} })
-	d.Registry.Register("remove", func() commands.Command { return &commands.CommandSessionRemove{Deps: d} })
-	d.Registry.Register("update", func() commands.Command { return &commands.CommandSessionUpdate{Deps: d} })
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		worker := NewWorker(deps, chatManager, handlerFactory)
+		go func() {
+			defer wg.Done()
+			worker.Start(updateChan)
+		}()
+	}
+
+	// Listen for OS signals to trigger graceful shutdown.
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	for {
+		select {
+		case update, ok := <-telegramUpdates:
+			if !ok {
+				close(updateChan)
+				wg.Wait()
+				chatManager.Save()
+				return
+			}
+			updateChan <- update
+		case sig := <-sigChan:
+			log.Printf("Получен сигнал %v, завершение...", sig)
+			close(updateChan)
+			wg.Wait()
+			chatManager.Save()
+			log.Println("Данные сохранены. Выход.")
+			return
+		}
+	}
 }

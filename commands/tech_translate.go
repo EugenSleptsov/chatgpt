@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const TechFiels = "Физика твердого тела, Полупроводниковая электроника, Полупроводниковые детекторы излучений"
+const TechFields = "Физика твердого тела, Полупроводниковая электроника, Полупроводниковые детекторы излучений"
 const AdditionalPrompt = `
 - "монокристаллическая пластина синтетического HPHT алмаза" - "single-crystal HPHT diamond plates"
 `
@@ -38,6 +38,6 @@ func (c *CommandTechTranslate) Execute(update telegram.Update, chat *storage.Cha
 
 	translationPrompt := strings.Join(args, " ")
 
-	systemPrompt := fmt.Sprintf("Ты - помощник, который переводит текст на технический английский язык. Техническая область: %s. Ты должен отвечать только переведенным текстом без объяснений и кавычек. Используй следующие соответствия, если сомневаешься в терминологии: %s", TechFiels, AdditionalPrompt)
-	c.gptText(chat, update.Message.MessageID, systemPrompt, translationPrompt)
+	systemPrompt := fmt.Sprintf("Ты - помощник, который переводит текст на технический английский язык. Техническая область: %s. Ты должен отвечать только переведенным текстом без объяснений и кавычек. Используй следующие соответствия, если сомневаешься в терминологии: %s", TechFields, AdditionalPrompt)
+	gptText(c.Deps, chat, update.Message.MessageID, systemPrompt, translationPrompt)
 }

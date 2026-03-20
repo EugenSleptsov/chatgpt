@@ -137,8 +137,12 @@ func (botInstance *Bot) SendImage(chatID int64, imageUrl string, caption string)
 	return err
 }
 
-func (botInstance *Bot) GetFile(fileId string) (tgbotapi.File, error) {
-	return botInstance.api.GetFile(tgbotapi.FileConfig{FileID: fileId})
+func (botInstance *Bot) GetFile(fileId string) (FileInfo, error) {
+	f, err := botInstance.api.GetFile(tgbotapi.FileConfig{FileID: fileId})
+	if err != nil {
+		return FileInfo{}, err
+	}
+	return toFileInfo(f), nil
 }
 
 func (botInstance *Bot) AudioUpload(chatID int64, bytes []byte) error {
