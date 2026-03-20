@@ -72,9 +72,18 @@ func (c *Client) GenerateVoice(inputText string, voiceModel, voiceVoice string) 
 
 	resp, err := c.Transport.Post(voiceEndpoint, "application/json", jsonPayload)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error sending voice request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	return io.ReadAll(resp.Body)
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading voice response body: %w", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("voice generation failed: status %d: %s", resp.StatusCode, string(responseBody))
+	}
+
+	return responseBody, nil
 }
