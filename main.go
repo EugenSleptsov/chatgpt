@@ -38,10 +38,7 @@ func main() {
 		notifier.AdminLog = adminLog
 	}
 
-	auth := &service.Auth{
-		AdminID:           config.AdminId,
-		AuthorizedUserIDs: config.AuthorizedUserIds,
-	}
+	auth := service.NewAuth(config.AdminId, config.AuthorizedUserIds)
 
 	gptService := &service.GPTService{
 		GptClient: openai.NewClient(config.GPTToken, logSystem),

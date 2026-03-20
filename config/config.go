@@ -21,10 +21,18 @@ type Config struct {
 	TelegramTokenLogBot string   `yaml:"telegram_token_log_bot"`
 }
 
+// maskToken hides all but the first 4 characters of a token.
+func maskToken(token string) string {
+	if len(token) <= 4 {
+		return "****"
+	}
+	return token[:4] + "****"
+}
+
 func (c *Config) String() string {
 	return fmt.Sprintf(
 		"Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUserIds: %v,\n  CommandMenu: %v\n  SummarizePrompt: %s\n}",
-		c.TelegramToken, c.GPTToken, c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUserIds, c.CommandMenu, c.SummarizePrompt,
+		maskToken(c.TelegramToken), maskToken(c.GPTToken), c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUserIds, c.CommandMenu, c.SummarizePrompt,
 	)
 }
 

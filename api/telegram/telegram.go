@@ -15,7 +15,6 @@ import (
 // Authorization, admin notifications and business logic live elsewhere.
 type Bot struct {
 	api       *tgbotapi.BotAPI
-	config    *conf.Config
 	Username  string
 	token     string
 	LogClient logger.Log
@@ -37,7 +36,6 @@ func NewInstance(config *conf.Config, logClient logger.Log) (*Bot, error) {
 
 	bot := &Bot{
 		api:       api,
-		config:    config,
 		Username:  api.Self.UserName,
 		token:     config.TelegramToken,
 		LogClient: logClient,

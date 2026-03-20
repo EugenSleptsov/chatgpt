@@ -13,18 +13,36 @@ type VoiceHandler struct {
 }
 
 func (v *VoiceHandler) Handle(update telegram.Update, chat *storage.Chat) error {
-	response, err := v.processAudio(update.Message.Voice.FileID)
-	v.Deps.Notifier.LogError(err)
-	v.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, response)
-
-	// check if message is forwarded, then we finish here
-	if update.Message.ForwardFrom != nil {
-		v.Deps.Notifier.Notify(fmt.Sprintf("[%s] %s", telegram.GetChatTitle(update), "Transcribe was done"))
+	transcription, err := v.processAudio(update.Message.Voice.FileID)
+	if err != nil {
+		v.Deps.Notifier.LogError(err)
+		v.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, "Не удалось обработать голосовое сообщение.")
 		return nil
 	}
-	update.Message.Text = response
 
-	return nil
+	// Echo transcription so user sees what was heard
+	v.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, transcription)
+
+	// Forwarded voice: transcribe only, no GPT
+	if update.Message.ForwardFrom != nil {
+		v.Deps.Notifier.Notify(fmt.Sprintf("[%s] Transcribe was done", telegram.GetChatTitle(update)))
+		return nil
+	}
+
+	// GPT response to the transcribed text
+	response, err := v.Deps.GPTService.ChatCompletion(chat, transcription)
+	v.Deps.Notifier.LogError(err)
+
+	// Text reply
+	v.Deps.Bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
+
+	// Audio reply
+	audioBytes, err := v.Deps.GPTService.GenerateVoice(response)
+	if err != nil {
+		v.Deps.Notifier.LogError(err)
+		return nil
+	}
+	return v.Deps.Bot.AudioUpload(chat.ChatID, audioBytes)
 }
 
 func (v *VoiceHandler) processAudio(fileID string) (string, error) {

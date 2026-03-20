@@ -25,8 +25,12 @@ func NewTelegramChatManager(storageClient storage.Storage, config *conf.Config, 
 	}
 }
 
-func (cm *TelegramChatManager) GetStorageClient() storage.Storage {
-	return cm.StorageClient
+func (cm *TelegramChatManager) Save() {
+	cm.StorageClient.Save()
+}
+
+func (cm *TelegramChatManager) MarkDirty(chatID int64) {
+	cm.StorageClient.MarkDirty(chatID)
 }
 
 func (cm *TelegramChatManager) GetOrCreateChat(update telegram.Update) *storage.Chat {

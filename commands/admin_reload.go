@@ -33,7 +33,7 @@ func (c *CommandAdminReload) Execute(update telegram.Update, chat *storage.Chat)
 	}
 
 	*c.Config = *newConfig
-	c.Auth.AuthorizedUserIDs = c.Config.AuthorizedUserIds
+	c.Auth.SetAuthorizedUsers(c.Config.AuthorizedUserIds)
 
 	c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(c.Config)))
 }

@@ -26,7 +26,7 @@ func NewWorker(deps *commands.Deps, chatManager manager.ChatManager, handlerFact
 func (w *Worker) Start(updateChan <-chan telegram.Update) {
 	for update := range updateChan {
 		w.ProcessUpdate(update)
-		w.ChatManager.GetStorageClient().Save()
+		w.ChatManager.Save()
 	}
 }
 
@@ -44,7 +44,7 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 	}
 
 	w.handleUpdate(update, chat)
-	w.ChatManager.GetStorageClient().MarkDirty(chat.ChatID)
+	w.ChatManager.MarkDirty(chat.ChatID)
 }
 
 func (w *Worker) isMessage(update telegram.Update) bool {

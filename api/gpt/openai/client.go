@@ -35,8 +35,9 @@ func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, tempera
 	outerAiModel := gpt.ResolveAPIName(aimodel)
 
 	requestPayload := RequestCompletionsPayload{
-		Model:    outerAiModel,
-		Messages: chatConversation,
+		Model:       outerAiModel,
+		Messages:    chatConversation,
+		Temperature: temperature,
 	}
 
 	jsonPayload, err := json.Marshal(requestPayload)

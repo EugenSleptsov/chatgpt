@@ -9,7 +9,8 @@ import (
 )
 
 type ChatManager interface {
-	GetStorageClient() storage.Storage
 	GetOrCreateChat(update telegram.Update) *storage.Chat
 	LogMessage(update telegram.Update, chat *storage.Chat)
+	Save()
+	MarkDirty(chatID int64)
 }
