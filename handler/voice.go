@@ -19,7 +19,7 @@ func (v *VoiceHandler) Handle(update telegram.Update, chat *storage.Chat) error 
 
 	// check if message is forwarded, then we finish here
 	if update.Message.ForwardFrom != nil {
-		v.Deps.Bot.Log(fmt.Sprintf("[%s] %s", telegram.GetChatTitle(update), "Transcribe was done"))
+		v.Deps.Notifier.Notify(fmt.Sprintf("[%s] %s", telegram.GetChatTitle(update), "Transcribe was done"))
 		return nil
 	}
 	update.Message.Text = response

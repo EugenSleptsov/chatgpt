@@ -4,6 +4,7 @@ import (
 	"GPTBot/api/gpt/openai"
 	"GPTBot/api/logger"
 	"GPTBot/api/telegram"
+	"GPTBot/api/telegram/adminlog"
 	"GPTBot/commands"
 	conf "GPTBot/config"
 	"GPTBot/handler"
@@ -26,20 +27,35 @@ func main() {
 	telegramBot, err := telegram.NewInstance(config, logSystem)
 	logSystem.LogFatal(err)
 
+	// Admin notification bot (optional)
+	notifier := &service.Notifier{
+		Log:             logSystem,
+		IgnoreReportIDs: config.IgnoreReportIds,
+	}
+	if config.TelegramTokenLogBot != "" {
+		adminLog, err := adminlog.NewTelegramAdminLogger(config.TelegramTokenLogBot, config.AdminId)
+		logSystem.LogFatal(err)
+		notifier.AdminLog = adminLog
+	}
+
+	auth := &service.Auth{AuthorizedUserIDs: config.AuthorizedUserIds}
+
 	gptClient := openai.NewClient(config.GPTToken)
-	chatService := &service.ChatService{
+	gptService := &service.GPTService{
 		GptClient: gptClient,
 		Log:       logSystem,
 		ErrorLog:  logSystem,
 	}
 
 	deps := &commands.Deps{
-		Bot:         telegramBot,
-		GptClient:   gptClient,
-		Registry:    commands.NewCommandFactory(),
-		Log:         logSystem,
-		ErrorLog:    logSystem,
-		ChatService: chatService,
+		Bot:        telegramBot,
+		GptClient:  gptClient,
+		Registry:   commands.NewCommandFactory(),
+		Log:        logSystem,
+		ErrorLog:   logSystem,
+		GPTService: gptService,
+		Notifier:   notifier,
+		Auth:       auth,
 	}
 	registerCommands(deps)
 

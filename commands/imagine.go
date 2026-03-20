@@ -43,17 +43,17 @@ func (c *CommandImagine) Execute(update telegram.Update, chat *storage.Chat) {
 	aiModel := gpt.ImageEnhanceTierID
 	prompt := update.Message.CommandArguments()
 
-	c.Bot.Log(fmt.Sprintf("[%s | %s (%s)] Image prompt: \"%s\"", chat.Title, aiModel, gpt.ResolveAPIName(aiModel), prompt))
+	c.Notifier.Notify(fmt.Sprintf("[%s | %s (%s)] Image prompt: \"%s\"", chat.Title, aiModel, gpt.ResolveAPIName(aiModel), prompt))
 
-	imageURL, caption, err := c.ChatService.GenerateImage(aiModel, prompt)
+	imageURL, caption, err := c.GPTService.GenerateImage(aiModel, prompt)
 	if err != nil {
-		c.Bot.Log(fmt.Sprintf("[%d] Error generating image: %v", chat.ChatID, err))
+		c.Notifier.Notify(fmt.Sprintf("[%d] Error generating image: %v", chat.ChatID, err))
 		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
 		return
 	}
 
 	if err := c.Bot.SendImage(chat.ChatID, imageURL, caption); err != nil {
-		c.Bot.Log(fmt.Sprintf("[%d] Error sending image: %v", chat.ChatID, err))
+		c.Notifier.Notify(fmt.Sprintf("[%d] Error sending image: %v", chat.ChatID, err))
 		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
 	}
 }

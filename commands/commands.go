@@ -12,12 +12,14 @@ import (
 
 // Deps holds shared dependencies for all commands and handlers.
 type Deps struct {
-	Bot         *telegram.Bot
-	GptClient   gpt.Client
-	Registry    CommandRegistry
-	Log         logger.Log
-	ErrorLog    logger.ErrorLog
-	ChatService *service.ChatService
+	Bot        *telegram.Bot
+	GptClient  gpt.Client
+	Registry   CommandRegistry
+	Log        logger.Log
+	ErrorLog   logger.ErrorLog
+	GPTService *service.GPTService
+	Notifier   *service.Notifier
+	Auth       *service.Auth
 }
 
 type Command interface {
@@ -27,22 +29,22 @@ type Command interface {
 	Execute(update telegram.Update, chat *storage.Chat)
 }
 
-// gptText is a convenience wrapper: calls ChatService.GPTCommand, logs and replies.
+// gptText is a convenience wrapper: calls GPTService.GPTCommand, logs and replies.
 func (d *Deps) gptText(chat *storage.Chat, messageID int, systemPrompt, userPrompt string) {
 	session := chat.ActiveSession()
-	response, err := d.ChatService.GPTCommand(session.Model, systemPrompt, userPrompt)
+	response, err := d.GPTService.GPTCommand(session.Model, systemPrompt, userPrompt)
 	if err != nil {
 		d.Log.Logf("Error: %v", err)
 		return
 	}
 
-	d.Bot.Log(fmt.Sprintf("[%s | %s]\nSystemPrompt: %s\n\nUserPrompt: %s\n\nResponse: %s", chat.Title, session.Model, systemPrompt, userPrompt, response))
+	d.Notifier.Notify(fmt.Sprintf("[%s | %s]\nSystemPrompt: %s\n\nUserPrompt: %s\n\nResponse: %s", chat.Title, session.Model, systemPrompt, userPrompt, response))
 	d.Bot.Reply(chat.ChatID, messageID, response)
 }
 
 // summarizeText reads chat log, then delegates to gptText.
 func (d *Deps) summarizeText(chat *storage.Chat, messageID int, systemPrompt string, messageCount int) {
-	lines, err := d.ChatService.ReadChatLog(chat.ChatID, messageCount)
+	lines, err := d.GPTService.ReadChatLog(chat.ChatID, messageCount)
 	if err != nil {
 		d.Bot.Reply(chat.ChatID, messageID, "Произошла ошибка")
 		return

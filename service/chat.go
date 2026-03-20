@@ -1,3 +1,6 @@
+// Package service contains transport-agnostic business logic.
+// GPTService wraps GPT API calls (completions, images, logs)
+// and knows nothing about Telegram or any other transport.
 package service
 
 import (
@@ -11,8 +14,9 @@ import (
 
 const fallbackResponse = "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
 
-// ChatService encapsulates GPT business logic, independent of Telegram.
-type ChatService struct {
+// GPTService encapsulates GPT business logic (completions, image generation, logs),
+// independent of any transport layer (Telegram, etc.).
+type GPTService struct {
 	GptClient gpt.Client
 	Log       logger.Log
 	ErrorLog  logger.ErrorLog
@@ -21,7 +25,7 @@ type ChatService struct {
 // ChatCompletion appends a user message to chat history, sends the
 // conversation context to GPT, stores the assistant response in history
 // and returns it. On GPT failure a fallback message is returned.
-func (s *ChatService) ChatCompletion(chat *storage.Chat, userText string) string {
+func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) string {
 	session := chat.ActiveSession()
 
 	entry := &storage.ConversationEntry{
@@ -59,7 +63,7 @@ func (s *ChatService) ChatCompletion(chat *storage.Chat, userText string) string
 
 // GPTCommand sends a one-shot system+user prompt pair to GPT and returns
 // the response text. Unlike ChatCompletion, it does not touch chat history.
-func (s *ChatService) GPTCommand(model string, systemPrompt, userPrompt string) (string, error) {
+func (s *GPTService) GPTCommand(model string, systemPrompt, userPrompt string) (string, error) {
 	payload, err := s.GptClient.CallGPT([]gpt.Message{
 		{Role: "system", Content: []gpt.Content{{Type: gpt.TypeText, Text: systemPrompt}}},
 		{Role: "user", Content: []gpt.Content{{Type: gpt.TypeText, Text: userPrompt}}},
@@ -77,13 +81,13 @@ func (s *ChatService) GPTCommand(model string, systemPrompt, userPrompt string) 
 }
 
 // ReadChatLog returns the last N lines from a chat's log file.
-func (s *ChatService) ReadChatLog(chatID int64, count int) ([]string, error) {
+func (s *GPTService) ReadChatLog(chatID int64, count int) ([]string, error) {
 	return util.ReadLastLines(fmt.Sprintf("log/%d.log", chatID), count)
 }
 
 // GenerateImage creates an image from a prompt and returns the URL along
 // with an AI-enhanced caption.
-func (s *ChatService) GenerateImage(model string, prompt string) (imageURL, caption string, err error) {
+func (s *GPTService) GenerateImage(model string, prompt string) (imageURL, caption string, err error) {
 	imageURL, err = s.GptClient.GenerateImage(prompt, gpt.ImageSize1024)
 	if err != nil {
 		return "", "", err

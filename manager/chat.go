@@ -1,3 +1,6 @@
+// Package manager handles Telegram-specific chat lifecycle:
+// creating/finding chat objects in storage and writing chat message logs.
+// It depends on Telegram types (Update) by design.
 package manager
 
 import (

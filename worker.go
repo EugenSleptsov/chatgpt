@@ -58,7 +58,7 @@ func (w *Worker) logIfNonCommandMessage(update telegram.Update, chat *storage.Ch
 }
 
 func (w *Worker) isAuthorized(update telegram.Update) bool {
-	return w.Deps.Bot.IsAuthorizedUser(update.Message.From.ID)
+	return w.Deps.Auth.IsAuthorized(update.Message.From.ID)
 }
 
 func (w *Worker) handleUnauthorizedAccess(update telegram.Update, chat *storage.Chat) {
@@ -67,11 +67,11 @@ func (w *Worker) handleUnauthorizedAccess(update telegram.Update, chat *storage.
 	}
 
 	w.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, "Sorry, you do not have access to this bot.")
-	w.Deps.Bot.Log(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
+	w.Deps.Notifier.Notify(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
 }
 
 func (w *Worker) handleUpdate(update telegram.Update, chat *storage.Chat) {
 	if err := w.HandlerFactory.GetHandler(update).Handle(update, chat); err != nil {
-		w.Deps.Bot.Log(fmt.Sprintf("Error handling input: %v", err))
+		w.Deps.Notifier.Notify(fmt.Sprintf("Error handling input: %v", err))
 	}
 }
