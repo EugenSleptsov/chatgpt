@@ -5,12 +5,11 @@ import (
 	conf "GPTBot/config"
 	"GPTBot/storage"
 	"fmt"
-	"log"
 	"strconv"
 )
 
 type CommandAdminRemoveUser struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandAdminRemoveUser) Name() string {
@@ -28,29 +27,32 @@ func (c *CommandAdminRemoveUser) IsAdmin() bool {
 func (c *CommandAdminRemoveUser) Execute(update telegram.Update, chat *storage.Chat) {
 	chatID := chat.ChatID
 	if len(update.Message.CommandArguments()) == 0 {
-		c.TelegramBot.Reply(chatID, update.Message.MessageID, "Please provide a user id to remove")
-	} else {
-		userId, err := strconv.ParseInt(update.Message.CommandArguments(), 10, 64)
-		if err != nil {
-			c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Invalid user id: %s", update.Message.CommandArguments()))
-			return
-		}
-
-		newList := make([]int64, 0)
-		for _, auth := range c.TelegramBot.Config.AuthorizedUserIds {
-			if auth == userId {
-				c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("User will be removed: %d", userId))
-			} else {
-				newList = append(newList, auth)
-			}
-		}
-
-		c.TelegramBot.Config.AuthorizedUserIds = newList
-		err = conf.UpdateConfig("bot.conf", c.TelegramBot.Config)
-		if err != nil {
-			log.Fatalf("Error updating bot.conf: %v", err)
-		}
-
-		c.TelegramBot.Reply(chatID, update.Message.MessageID, "Command successfully ended")
+		c.Bot.Reply(chatID, update.Message.MessageID, "Укажите ID пользователя. Использование: /removeuser <id>")
+		return
 	}
+
+	userId, err := strconv.ParseInt(update.Message.CommandArguments(), 10, 64)
+	if err != nil {
+		c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Некорректный ID: %s", update.Message.CommandArguments()))
+		return
+	}
+
+	newList := make([]int64, 0)
+	for _, id := range c.Auth.GetAuthorizedUsers() {
+		if id == userId {
+			c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Пользователь будет удалён: %d", userId))
+		} else {
+			newList = append(newList, id)
+		}
+	}
+
+	c.Auth.SetAuthorizedUsers(newList)
+	c.Config.AuthorizedUserIds = c.Auth.GetAuthorizedUsers()
+	if err = conf.UpdateConfig(c.ConfigPath, c.Config); err != nil {
+		c.Notifier.LogError(err)
+		c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Ошибка сохранения конфига: %v", err))
+		return
+	}
+
+	c.Bot.Reply(chatID, update.Message.MessageID, "Пользователь удалён.")
 }

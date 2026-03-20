@@ -1,14 +1,24 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	conf "GPTBot/config"
+	"GPTBot/service"
 	"GPTBot/storage"
-	"GPTBot/util"
 	"fmt"
-	"log"
 	"strings"
 )
+
+// Deps holds shared dependencies for all commands and handlers.
+type Deps struct {
+	Bot        telegram.BotAPI
+	Config     *conf.Config
+	ConfigPath string
+	Registry   CommandRegistry
+	GPTService *service.GPTService
+	Notifier   *service.Notifier
+	Auth       *service.Auth
+}
 
 type Command interface {
 	Name() string
@@ -17,40 +27,33 @@ type Command interface {
 	Execute(update telegram.Update, chat *storage.Chat)
 }
 
-func gptText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient gpt.Client, systemPrompt, userPrompt string) {
-	responsePayload, err := gptClient.CallGPT([]gpt.Message{
-		{Role: "system", Content: []gpt.Content{{Type: gpt.TypeText, Text: systemPrompt}}},
-		{Role: "user", Content: []gpt.Content{{Type: gpt.TypeText, Text: userPrompt}}},
-	}, chat.Settings.Model, 0.6)
-
+// gptText is a convenience wrapper: calls GPTService.GPTCommand, logs and replies.
+func gptText(d *Deps, chat *storage.Chat, messageID int, systemPrompt, userPrompt string) {
+	session := chat.ActiveSession()
+	response, err := d.GPTService.GPTCommand(session.Model, systemPrompt, userPrompt)
 	if err != nil {
-		log.Printf("Error: %v", err)
+		d.Notifier.Logf("Error: %v", err)
 		return
 	}
 
-	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
-	if len(responsePayload.Choices) > 0 {
-		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
-	}
-
-	bot.Log(fmt.Sprintf("[%s | %s]\nSystemPrompt: %s\n\nUserPrompt: %s\n\nResponse: %s", chat.Title, chat.Settings.Model, systemPrompt, userPrompt, response))
-	bot.Reply(chat.ChatID, messageID, response)
+	d.Notifier.Notify(fmt.Sprintf("[%s | %s]\nSystemPrompt: %s\n\nUserPrompt: %s\n\nResponse: %s", chat.Title, session.Model, systemPrompt, userPrompt, response))
+	d.Bot.Reply(chat.ChatID, messageID, response)
 }
 
-func summarizeText(bot *telegram.Bot, chat *storage.Chat, messageID int, gptClient gpt.Client, systemPrompt string, messageCount int) {
-	// open log file
-	lines, err := util.ReadLastLines(fmt.Sprintf("log/%d.log", chat.ChatID), messageCount)
+// summarizeText reads chat log, then delegates to gptText.
+func summarizeText(d *Deps, chat *storage.Chat, messageID int, systemPrompt string, messageCount int) {
+	lines, err := d.GPTService.ReadChatLog(chat.ChatID, messageCount)
 	if err != nil {
-		bot.Reply(chat.ChatID, messageID, "Произошла ошибка")
+		d.Bot.Reply(chat.ChatID, messageID, "Произошла ошибка")
 		return
 	}
 
 	if len(lines) == 0 {
-		bot.Reply(chat.ChatID, messageID, "История чата пуста")
+		d.Bot.Reply(chat.ChatID, messageID, "История чата пуста")
 		return
 	}
 
-	bot.Reply(chat.ChatID, messageID, fmt.Sprintf("Обработка %d сообщений...", len(lines)))
+	d.Bot.Reply(chat.ChatID, messageID, fmt.Sprintf("Обработка %d сообщений...", len(lines)))
 	chatLog := strings.Join(lines, "\n")
-	gptText(bot, chat, messageID, gptClient, systemPrompt, "Вот сообщения чата, которые ты должен обработать:\n\n"+chatLog)
+	gptText(d, chat, messageID, systemPrompt, "Вот сообщения чата, которые ты должен обработать:\n\n"+chatLog)
 }

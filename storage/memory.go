@@ -20,6 +20,8 @@ func (m *MemoryStorage) Set(chatID int64, chat *Chat) error {
 	return nil
 }
 
+func (m *MemoryStorage) MarkDirty(_ int64) {}
+
 func (m *MemoryStorage) Save() bool {
 	return true
 }

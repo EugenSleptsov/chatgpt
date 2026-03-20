@@ -1,10 +1,10 @@
-package gpt
+package openai
 
 import (
+	"GPTBot/api/gpt"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -26,14 +26,11 @@ type ResponseImagePayload struct {
 }
 
 const (
-	ImageSize256  = "256x256"
-	ImageSize512  = "512x512"
-	ImageSize1024 = "1024x1024"
-	ModelDalle2   = "dall-e-2"
-	ModelDalle3   = "dall-e-3"
+	ModelDalle2 = "dall-e-2"
+	ModelDalle3 = "dall-e-3"
 )
 
-func (gptClient *OpenAiGPTClient) GenerateImage(prompt string, size string) (string, error) {
+func (c *Client) GenerateImage(prompt string, size string) (string, error) {
 	jsonPayload, err := json.Marshal(RequestImagePayload{
 		Prompt: prompt,
 		Size:   getImageSize(size),
@@ -43,12 +40,17 @@ func (gptClient *OpenAiGPTClient) GenerateImage(prompt string, size string) (str
 		return "", err
 	}
 
-	resp, err := gptClient.jsonRequest("https://api.openai.com/v1/images/generations", jsonPayload, 1)
+	resp, err := c.Transport.Post("https://api.openai.com/v1/images/generations", "application/json", jsonPayload)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
-	log.Printf("Image / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	c.Log.Logf("Image / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -62,7 +64,7 @@ func (gptClient *OpenAiGPTClient) GenerateImage(prompt string, size string) (str
 	}
 
 	if len(responseData.Data) == 0 {
-		log.Printf("Empty data array in response: %s", string(body))
+		c.Log.Logf("Empty data array in response: %s", string(body))
 
 		if responseData.Error.Message != "" && responseData.Error.Code == "content_policy_violation" {
 			return "", fmt.Errorf("content policy violation: %s", responseData.Error.Message)
@@ -76,9 +78,9 @@ func (gptClient *OpenAiGPTClient) GenerateImage(prompt string, size string) (str
 
 func getImageSize(size string) string {
 	switch size {
-	case ImageSize256, ImageSize512, ImageSize1024:
+	case gpt.ImageSize256, gpt.ImageSize512, gpt.ImageSize1024:
 		return size
 	default:
-		return ImageSize1024 // Default to 1024x1024 if size is invalid
+		return gpt.ImageSize1024
 	}
 }

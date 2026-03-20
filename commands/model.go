@@ -8,7 +8,7 @@ import (
 )
 
 type CommandModel struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandModel) Name() string {
@@ -16,7 +16,7 @@ func (c *CommandModel) Name() string {
 }
 
 func (c *CommandModel) Description() string {
-	return "Устанавливает модель для GPT."
+	return "Показывает или устанавливает модель. Использование: /model [ID]"
 }
 
 func (c *CommandModel) IsAdmin() bool {
@@ -24,37 +24,37 @@ func (c *CommandModel) IsAdmin() bool {
 }
 
 func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
-	if len(update.Message.CommandArguments()) == 0 {
-		// Показываем outer-модель
-		c.TelegramBot.Reply(
+	session := chat.ActiveSession()
+	args := update.Message.CommandArguments()
+
+	if len(args) == 0 {
+		current := gpt.FindTier(session.Model)
+		name := session.Model
+		if current != nil {
+			name = current.Label + " (" + current.APIModel + ")"
+		}
+		c.Bot.Reply(
 			chat.ChatID,
 			update.Message.MessageID,
-			fmt.Sprintf("Текущая модель: %s", gpt.MapModelName(chat.Settings.Model)),
+			fmt.Sprintf("Текущая модель: %s\n\nДоступные модели:\n%s", name, gpt.TierList()),
 		)
 		return
 	}
 
-	model := update.Message.CommandArguments()
-	switch model {
-	case gpt.ModelGPT3:
-		chat.Settings.Model = gpt.ModelGPT3
-	case gpt.ModelGPT4OmniMini:
-		chat.Settings.Model = gpt.ModelGPT4OmniMini
-	case gpt.ModelGPT4:
-		chat.Settings.Model = gpt.ModelGPT4Omni
-	case gpt.ModelGPT5:
-		chat.Settings.Model = gpt.ModelGPT5
-	case gpt.ModelGPT5Nano:
-		chat.Settings.Model = gpt.ModelGPT5Nano
-	default:
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Неверное название модели.")
+	tier := gpt.FindTier(args)
+	if tier == nil {
+		c.Bot.Reply(
+			chat.ChatID,
+			update.Message.MessageID,
+			fmt.Sprintf("Модель не найдена: %s\n\nДоступные модели:\n%s", args, gpt.TierList()),
+		)
 		return
 	}
 
-	// Сообщаем outer-модель, чтобы было понятно, что реально используется
-	c.TelegramBot.Reply(
+	session.Model = tier.ID
+	c.Bot.Reply(
 		chat.ChatID,
 		update.Message.MessageID,
-		fmt.Sprintf("Модель установлена на %s", gpt.MapModelName(chat.Settings.Model)),
+		fmt.Sprintf("Модель установлена: %s (%s)", tier.Label, tier.Desc),
 	)
 }

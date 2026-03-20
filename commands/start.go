@@ -6,7 +6,7 @@ import (
 )
 
 type CommandStart struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandStart) Name() string {
@@ -22,5 +22,5 @@ func (c *CommandStart) IsAdmin() bool {
 }
 
 func (c *CommandStart) Execute(update telegram.Update, chat *storage.Chat) {
-	c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Здравствуйте! Я чатбот-помощник, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help.")
+	c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Здравствуйте! Я чатбот-помощник, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help.")
 }

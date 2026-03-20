@@ -1,77 +1,86 @@
 package handler
 
 import (
-	"GPTBot/api/gpt"
-	"GPTBot/api/log"
 	"GPTBot/api/telegram"
+	"GPTBot/commands"
 	"GPTBot/storage"
 	"fmt"
 	"strings"
 )
 
 type MessageHandler struct {
-	TelegramClient *telegram.Bot
-	GptClient      gpt.Client
-	LogClient      log.Log
-	ErrorLogClient log.ErrorLog
+	Deps *commands.Deps
 }
 
 func (m *MessageHandler) Handle(update telegram.Update, chat *storage.Chat) error {
-	if chat.ChatID < 0 && update.Message.Voice == nil { // group chat
-		isReplyToBot := update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == m.TelegramClient.Username
-		if !strings.Contains(update.Message.Text, "@"+m.TelegramClient.Username) && !isReplyToBot {
-			return nil
+	if chat.ChatID < 0 {
+		return m.handleGroup(update, chat)
+	}
+	return m.handlePrivate(update, chat)
+}
+
+// handlePrivate handles messages in 1:1 private chats — full GPT response every time.
+func (m *MessageHandler) handlePrivate(update telegram.Update, chat *storage.Chat) error {
+	response, err := m.Deps.GPTService.ChatCompletion(chat, update.Message.Text)
+	m.Deps.Notifier.LogError(err)
+	m.Deps.Notifier.Logf("[%s] %s", "ChatGPT", response)
+	m.Deps.Bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
+	m.Deps.Notifier.ReportAdmin(update.Message.From.ID, fmt.Sprintf("[%s | %s]\nMessage: %s\nResponse: %s", chat.Title, chat.ActiveSession().Model, update.Message.Text, response))
+	return nil
+}
+
+// handleGroup handles messages in group/supergroup chats.
+// Every message is logged for context. Bot replies only when mentioned/replied-to,
+// or when auto-reply decides to join in.
+func (m *MessageHandler) handleGroup(update telegram.Update, chat *storage.Chat) error {
+	text := update.Message.Text
+	if text == "" {
+		return nil
+	}
+
+	author := authorName(update)
+	botUsername := m.Deps.Bot.GetUsername()
+	botMentioned := strings.Contains(text, "@"+botUsername)
+	botCalledByName := strings.Contains(strings.ToLower(text), "бот")
+	isReplyToBot := update.Message.ReplyToMessage != nil &&
+		update.Message.ReplyToMessage.From != nil &&
+		update.Message.ReplyToMessage.From.UserName == botUsername
+
+	// Clean mention from text before storing
+	cleanText := text
+	if botMentioned {
+		cleanText = strings.TrimSpace(strings.ReplaceAll(text, "@"+botUsername, ""))
+	}
+
+	// Always log message for context, regardless of who sent it
+	m.Deps.GPTService.LogGroupMessage(chat, author, cleanText)
+
+	// Bot explicitly addressed → respond
+	if botMentioned || isReplyToBot || botCalledByName {
+		m.Deps.Notifier.Logf("[Group] %s → бот упомянут, отвечаю", author)
+		return m.replyToGroup(update, chat)
+	}
+
+	// Auto-reply: check only on authorized users' messages to avoid
+	// burning GPT calls for every message in a busy group.
+	if chat.Settings.GroupAutoReply && m.Deps.Auth.IsAuthorized(update.Message.From.ID) {
+		should, reason, err := m.Deps.GPTService.ShouldAutoReply(chat)
+		m.Deps.Notifier.LogError(err)
+		if should {
+			m.Deps.Notifier.Logf("[Group] Авто-ответ: ДА (%s)", reason)
+			return m.replyToGroup(update, chat)
 		}
-
-		if strings.Contains(update.Message.Text, "@"+m.TelegramClient.Username) {
-			update.Message.Text = strings.Replace(update.Message.Text, "@"+m.TelegramClient.Username, "", -1)
-		}
+		m.Deps.Notifier.Logf("[Group] Авто-ответ: НЕТ (%s)", reason)
 	}
 
-	// Maintain conversation history
-	userMessage := storage.Message{Role: "user", Content: update.Message.Text}
-	historyEntry := &storage.ConversationEntry{Prompt: userMessage, Response: storage.Message{}}
+	return nil
+}
 
-	chat.History = append(chat.History, historyEntry)
-	if len(chat.History) > chat.Settings.MaxMessages {
-		excessMessages := len(chat.History) - chat.Settings.MaxMessages
-		chat.History = chat.History[excessMessages:]
-	}
-
-	var messages []gpt.Message
-	if chat.Settings.SystemPrompt != "" {
-		messages = append(messages, gpt.Message{Role: "system", Content: chat.Settings.SystemPrompt})
-	}
-	for _, entry := range chat.History {
-		messages = append(messages, gpt.Message{Role: entry.Prompt.Role, Content: entry.Prompt.Content})
-		if entry.Response != (storage.Message{}) {
-			messages = append(messages, gpt.Message{Role: entry.Response.Role, Content: entry.Response.Content})
-		}
-	}
-
-	response := "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
-	responsePayload, err := m.GptClient.CallGPT(messages, chat.Settings.Model, chat.Settings.Temperature)
-	m.ErrorLogClient.LogError(err)
-
-	if len(responsePayload.Choices) > 0 {
-		response = strings.TrimSpace(fmt.Sprintf("%v", responsePayload.Choices[0].Message.Content))
-	}
-
-	// Add the assistant's response to the conversation history
-	historyEntry.Response = storage.Message{Role: "assistant", Content: response}
-	m.LogClient.Logf("[%s] %s", "ChatGPT", response)
-	m.TelegramClient.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
-
-	// initial message was Voice
-	if update.Message.Voice != nil {
-		m.LogClient.Log("Audio response")
-
-		bytes, err := m.GptClient.GenerateVoice(response, gpt.VoiceModel, gpt.VoiceOnyx)
-		m.ErrorLogClient.LogError(err)
-		err = m.TelegramClient.AudioUpload(chat.ChatID, bytes)
-		m.ErrorLogClient.LogError(err)
-	}
-
-	m.TelegramClient.ReportAdmin(update.Message.From.ID, fmt.Sprintf("[%s | %s]\nMessage: %s\nResponse: %s", chat.Title, chat.Settings.Model, update.Message.Text, response))
+// replyToGroup calls GPT with full group history and sends the response.
+func (m *MessageHandler) replyToGroup(update telegram.Update, chat *storage.Chat) error {
+	response, err := m.Deps.GPTService.ReplyFromGroupHistory(chat)
+	m.Deps.Notifier.LogError(err)
+	m.Deps.Notifier.Logf("[GroupGPT] %s", response)
+	m.Deps.Bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
 	return nil
 }

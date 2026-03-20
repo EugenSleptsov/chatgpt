@@ -22,17 +22,18 @@ func NewTelegramAdminLogger(token string, adminId int64) (*TelegramAdminLogger, 
 }
 
 func (bot *TelegramAdminLogger) Log(message string) error {
-	// split long messages
-	for len(message) > 4096 {
-		err := bot.message(message[:4096])
+	const maxLen = 4096
+	runes := []rune(message)
+
+	for len(runes) > maxLen {
+		err := bot.message(string(runes[:maxLen]))
 		if err != nil {
 			return err
 		}
-
-		message = message[4096:]
+		runes = runes[maxLen:]
 	}
 
-	return bot.message(message)
+	return bot.message(string(runes))
 }
 
 func (bot *TelegramAdminLogger) message(text string) error {

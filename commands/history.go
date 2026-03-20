@@ -6,10 +6,14 @@ import (
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
+const historyPageSize = 5
+
 type CommandHistory struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandHistory) Name() string {
@@ -17,7 +21,7 @@ func (c *CommandHistory) Name() string {
 }
 
 func (c *CommandHistory) Description() string {
-	return "Показывает всю сохраненную на данный момент историю разговоров в красивом форматировании."
+	return "Показывает историю разговоров. /history [страница]"
 }
 
 func (c *CommandHistory) IsAdmin() bool {
@@ -25,9 +29,41 @@ func (c *CommandHistory) IsAdmin() bool {
 }
 
 func (c *CommandHistory) Execute(update telegram.Update, chat *storage.Chat) {
-	historyMessages := formatHistory(messagesFromHistory(chat.History))
-	for _, message := range historyMessages {
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, message)
+	chunks := formatHistory(storage.ToGPTMessages(chat.ActiveSession().History))
+	totalPages := (len(chunks) + historyPageSize - 1) / historyPageSize
+
+	// parse page number (default = 1 = latest)
+	page := 1
+	if arg := strings.TrimSpace(update.Message.CommandArguments()); arg != "" {
+		if p, err := strconv.Atoi(arg); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	if page > totalPages {
+		page = totalPages
+	}
+
+	// page 1 = last N chunks, page 2 = previous N, etc.
+	end := len(chunks) - (page-1)*historyPageSize
+	start := end - historyPageSize
+	if start < 0 {
+		start = 0
+	}
+
+	pageChunks := chunks[start:end]
+
+	for _, message := range pageChunks {
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, message)
+	}
+
+	// navigation hint
+	if totalPages > 1 {
+		hint := fmt.Sprintf("📄 Страница %d из %d.", page, totalPages)
+		if page < totalPages {
+			hint += fmt.Sprintf(" Ранние сообщения: /history %d", page+1)
+		}
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, hint)
 	}
 }
 
@@ -36,42 +72,27 @@ func formatHistory(history []gpt.Message) []string {
 		return []string{"История разговоров пуста."}
 	}
 
-	var historyMessage string
-	var historyMessages []string
-	characterCount := 0
+	var current string
+	var chunks []string
+	currentLen := 0
 
 	for i, message := range history {
-		formattedLine := fmt.Sprintf("%d. %s: %s\n", i+1, util.Title(message.Role), message.Content)
-		lineLength := len(formattedLine)
+		line := fmt.Sprintf("%d. %s: %s\n", i+1, util.Title(message.Role), message.Content)
+		lineRunes := len([]rune(line))
 
-		if characterCount+lineLength > 4096 {
-			historyMessages = append(historyMessages, historyMessage)
-			historyMessage = ""
-			characterCount = 0
+		if currentLen+lineRunes > 4096 {
+			chunks = append(chunks, current)
+			current = ""
+			currentLen = 0
 		}
 
-		historyMessage += formattedLine
-		characterCount += lineLength
+		current += line
+		currentLen += lineRunes
 	}
 
-	if len(historyMessage) > 0 {
-		historyMessages = append(historyMessages, historyMessage)
+	if len(current) > 0 {
+		chunks = append(chunks, current)
 	}
 
-	return historyMessages
-}
-
-func messagesFromHistory(storageHistory []*storage.ConversationEntry) []gpt.Message {
-	var messages []gpt.Message
-	for _, entry := range storageHistory {
-		prompt := entry.Prompt
-		response := entry.Response
-
-		messages = append(messages, gpt.Message{Role: prompt.Role, Content: prompt.Content})
-		if response != (storage.Message{}) {
-			messages = append(messages, gpt.Message{Role: response.Role, Content: response.Content})
-		}
-	}
-
-	return messages
+	return chunks
 }

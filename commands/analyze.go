@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
 	"strconv"
@@ -9,8 +8,7 @@ import (
 )
 
 type CommandAnalyze struct {
-	TelegramBot *telegram.Bot
-	GptClient   gpt.Client
+	*Deps
 }
 
 const AnalyzeDefaultMessageCount = 50
@@ -30,7 +28,7 @@ func (c *CommandAnalyze) IsAdmin() bool {
 
 func (c *CommandAnalyze) Execute(update telegram.Update, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите количество сообщений (опционально) и промпт для обработки. Использование: /analyze <count> <prompt>")
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите количество сообщений (опционально) и промпт для обработки. Использование: /analyze <count> <prompt>")
 		return
 	}
 
@@ -42,7 +40,7 @@ func (c *CommandAnalyze) Execute(update telegram.Update, chat *storage.Chat) {
 		systemPrompt = update.Message.CommandArguments()
 	} else {
 		if len(arguments) < 2 {
-			c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите промпт для обработки. Использование: /analyze <count> <prompt>")
+			c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите промпт для обработки. Использование: /analyze <count> <prompt>")
 			return
 		}
 
@@ -56,5 +54,5 @@ func (c *CommandAnalyze) Execute(update telegram.Update, chat *storage.Chat) {
 		}
 	}
 
-	summarizeText(c.TelegramBot, chat, update.Message.MessageID, c.GptClient, systemPrompt, messageCount)
+	summarizeText(c.Deps, chat, update.Message.MessageID, systemPrompt, messageCount)
 }

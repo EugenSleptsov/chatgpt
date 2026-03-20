@@ -1,97 +1,115 @@
 package main
 
 import (
-	"GPTBot/api/gpt"
-	"GPTBot/api/log"
+	"GPTBot/api/gpt/openai"
+	"GPTBot/api/logger"
 	"GPTBot/api/telegram"
+	"GPTBot/api/telegram/adminlog"
 	"GPTBot/commands"
 	conf "GPTBot/config"
 	"GPTBot/handler"
 	"GPTBot/manager"
+	"GPTBot/service"
 	"GPTBot/storage"
+	"log"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 )
 
 const (
 	numWorkers       = 10
 	updateBufferSize = 100
+	configFile       = "bot.yaml"
 )
 
 func main() {
-	logSystem := log.NewSystem()
+	logSystem := logger.NewSystem()
 
-	config, err := conf.ReadConfig("bot.conf")
+	config, err := conf.ReadConfig(configFile)
 	logSystem.LogFatal(err)
-	gptClient := gpt.NewGPTClient(config.GPTToken)
 
 	telegramBot, err := telegram.NewInstance(config, logSystem)
 	logSystem.LogFatal(err)
 
-	commandFactory := commands.NewCommandFactory()
-	registerCommands(commandFactory, telegramBot, commandFactory, gptClient)
+	// Admin notification bot (optional)
+	notifier := &service.Notifier{
+		Log:             logSystem,
+		IgnoreReportIDs: config.IgnoreReportIds,
+	}
+	if config.TelegramTokenLogBot != "" {
+		adminLog, err := adminlog.NewTelegramAdminLogger(config.TelegramTokenLogBot, config.AdminId)
+		logSystem.LogFatal(err)
+		notifier.AdminLog = adminLog
+	}
 
-	botStorage, err := storage.NewFileStorage("data")
+	auth := service.NewAuth(config.AdminId, config.AuthorizedUserIds)
+
+	gptService := &service.GPTService{
+		GptClient: openai.NewClient(config.GPTToken, logSystem),
+		LogDir:    config.LogDir,
+	}
+
+	deps := &commands.Deps{
+		Bot:        telegramBot,
+		Config:     config,
+		ConfigPath: configFile,
+		Registry:   commands.NewCommandFactory(),
+		GPTService: gptService,
+		Notifier:   notifier,
+		Auth:       auth,
+	}
+	commands.RegisterAll(deps)
+
+	botStorage, err := storage.NewFileStorage(config.DataDir)
 	logSystem.LogFatal(err)
 
-	startWorkers(
-		telegramBot,
-		manager.NewTelegramChatManager(botStorage, telegramBot.Config, logSystem),
-		commandFactory,
-		handler.NewUpdateHandlerFactory(telegramBot, commandFactory, gptClient, logSystem, logSystem),
-	)
+	chatManager := manager.NewTelegramChatManager(botStorage, config, logSystem)
+	handlerFactory := handler.NewUpdateHandlerFactory(deps)
+
+	startWorkers(deps, chatManager, handlerFactory, telegramBot.GetUpdateChannel(config.TimeoutValue))
 }
 
 func startWorkers(
-	telegramBot *telegram.Bot,
+	deps *commands.Deps,
 	chatManager manager.ChatManager,
-	commandFactory commands.CommandFactory,
 	handlerFactory handler.UpdateHandlerFactory,
+	telegramUpdates telegram.UpdatesChannel,
 ) {
 	updateChan := make(chan telegram.Update, updateBufferSize)
+
+	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
-		worker := NewWorker(telegramBot, chatManager, commandFactory, handlerFactory)
-		go worker.Start(updateChan)
+		wg.Add(1)
+		worker := NewWorker(deps, chatManager, handlerFactory)
+		go func() {
+			defer wg.Done()
+			worker.Start(updateChan)
+		}()
 	}
-	for update := range telegramBot.GetUpdateChannel(telegramBot.Config.TimeoutValue) {
-		updateChan <- update
+
+	// Listen for OS signals to trigger graceful shutdown.
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	for {
+		select {
+		case update, ok := <-telegramUpdates:
+			if !ok {
+				close(updateChan)
+				wg.Wait()
+				chatManager.Save()
+				return
+			}
+			updateChan <- update
+		case sig := <-sigChan:
+			log.Printf("Получен сигнал %v, завершение...", sig)
+			close(updateChan)
+			wg.Wait()
+			chatManager.Save()
+			log.Println("Данные сохранены. Выход.")
+			return
+		}
 	}
-}
-
-func registerCommands(commandFactory commands.CommandFactory, telegramBot *telegram.Bot, commandRegistry commands.CommandRegistry, gptClient gpt.Client) {
-	commandFactory.Register("help", func() commands.Command {
-		return &commands.CommandHelp{TelegramBot: telegramBot, CommandRegistry: commandRegistry}
-	})
-	commandFactory.Register("start", func() commands.Command { return &commands.CommandStart{TelegramBot: telegramBot} })
-	commandFactory.Register("clear", func() commands.Command { return &commands.CommandClear{TelegramBot: telegramBot} })
-	commandFactory.Register("history", func() commands.Command { return &commands.CommandHistory{TelegramBot: telegramBot} })
-	commandFactory.Register("rollback", func() commands.Command { return &commands.CommandRollback{TelegramBot: telegramBot} })
-	commandFactory.Register("translate", func() commands.Command {
-		return &commands.CommandTranslate{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("tech_translate", func() commands.Command {
-		return &commands.CommandTechTranslate{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("enhance", func() commands.Command {
-		return &commands.CommandEnhance{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("grammar", func() commands.Command {
-		return &commands.CommandGrammar{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("summarize", func() commands.Command {
-		return &commands.CommandSummarize{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("summarize_prompt", func() commands.Command { return &commands.CommandSummarizePrompt{TelegramBot: telegramBot} })
-	commandFactory.Register("analyze", func() commands.Command {
-		return &commands.CommandAnalyze{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("temperature", func() commands.Command { return &commands.CommandTemperature{TelegramBot: telegramBot} })
-	commandFactory.Register("model", func() commands.Command { return &commands.CommandModel{TelegramBot: telegramBot} })
-	commandFactory.Register("imagine", func() commands.Command {
-		return &commands.CommandImagine{TelegramBot: telegramBot, GptClient: gptClient}
-	})
-	commandFactory.Register("system", func() commands.Command { return &commands.CommandSystem{TelegramBot: telegramBot} })
-	commandFactory.Register("markdown", func() commands.Command { return &commands.CommandMarkdown{TelegramBot: telegramBot} })
-
-	commandFactory.Register("reload", func() commands.Command { return &commands.CommandAdminReload{TelegramBot: telegramBot} })
-	commandFactory.Register("adduser", func() commands.Command { return &commands.CommandAdminAddUser{TelegramBot: telegramBot} })
-	commandFactory.Register("removeuser", func() commands.Command { return &commands.CommandAdminRemoveUser{TelegramBot: telegramBot} })
 }

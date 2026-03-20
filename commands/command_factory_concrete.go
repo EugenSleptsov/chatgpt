@@ -28,5 +28,5 @@ func (f *ConcreteCommandFactory) GetCommand(name string) (Command, error) {
 	if constructor, ok := f.registry[name]; ok {
 		return constructor(), nil
 	}
-	return nil, fmt.Errorf("command " + name + " not found")
+	return nil, fmt.Errorf("command %s not found", name)
 }

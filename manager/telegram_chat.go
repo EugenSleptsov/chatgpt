@@ -2,7 +2,7 @@ package manager
 
 import (
 	"GPTBot/api/gpt"
-	"GPTBot/api/log"
+	"GPTBot/api/logger"
 	"GPTBot/api/telegram"
 	conf "GPTBot/config"
 	"GPTBot/storage"
@@ -14,10 +14,10 @@ import (
 type TelegramChatManager struct {
 	StorageClient storage.Storage
 	Config        *conf.Config
-	FileLogClient log.FileLog
+	FileLogClient logger.FileLog
 }
 
-func NewTelegramChatManager(storageClient storage.Storage, config *conf.Config, fileLogClient log.FileLog) *TelegramChatManager {
+func NewTelegramChatManager(storageClient storage.Storage, config *conf.Config, fileLogClient logger.FileLog) *TelegramChatManager {
 	return &TelegramChatManager{
 		StorageClient: storageClient,
 		Config:        config,
@@ -25,8 +25,12 @@ func NewTelegramChatManager(storageClient storage.Storage, config *conf.Config, 
 	}
 }
 
-func (cm *TelegramChatManager) GetStorageClient() storage.Storage {
-	return cm.StorageClient
+func (cm *TelegramChatManager) Save() {
+	cm.StorageClient.Save()
+}
+
+func (cm *TelegramChatManager) MarkDirty(chatID int64) {
+	cm.StorageClient.MarkDirty(chatID)
 }
 
 func (cm *TelegramChatManager) GetOrCreateChat(update telegram.Update) *storage.Chat {
@@ -36,15 +40,19 @@ func (cm *TelegramChatManager) GetOrCreateChat(update telegram.Update) *storage.
 		chat = &storage.Chat{
 			ChatID: chatID,
 			Settings: storage.ChatSettings{
-				Temperature:     0.8,
-				Model:           gpt.ModelGPT4OmniMini,
 				MaxMessages:     cm.Config.MaxMessages,
 				UseMarkdown:     true,
-				SystemPrompt:    "You are a helpful assistant...",
 				SummarizePrompt: cm.Config.SummarizePrompt,
-				Token:           cm.Config.GPTToken,
 			},
-			History:          make([]*storage.ConversationEntry, 0),
+			Sessions: []*storage.Session{{
+				ID:           storage.DefaultSessionID,
+				Topic:        storage.DefaultSessionTopic,
+				History:      make([]*storage.ConversationEntry, 0),
+				SystemPrompt: cm.Config.DefaultSystemPrompt,
+				Model:        gpt.DefaultTierID,
+			}},
+			ActiveSessionID:  storage.DefaultSessionID,
+			NextSessionID:    storage.DefaultNextSessionID,
 			ImageGenNextTime: time.Now(),
 			Title:            telegram.GetChatTitle(update),
 		}
@@ -69,5 +77,5 @@ func (cm *TelegramChatManager) LogMessage(update telegram.Update, chat *storage.
 		}
 	}
 
-	cm.FileLogClient.LogToFile(fmt.Sprintf("log/%d.log", chat.ChatID), lines)
+	cm.FileLogClient.LogToFile(fmt.Sprintf("%s/%d.log", cm.Config.LogDir, chat.ChatID), lines)
 }

@@ -1,16 +1,15 @@
 package commands
 
 import (
-	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
 	"GPTBot/storage"
+	"GPTBot/util"
 	"fmt"
 	"strings"
 )
 
 type CommandTranslate struct {
-	TelegramBot *telegram.Bot
-	GptClient   gpt.Client
+	*Deps
 }
 
 const (
@@ -34,7 +33,7 @@ func (c *CommandTranslate) Name() string {
 }
 
 func (c *CommandTranslate) Description() string {
-	return "Переводит <text> на любом языке на <lang> (по умолчанию en). Использование: /translate <lang> <text>. Доступные языки: " + strings.Join(arrayKeys(SupportedLanguages), ", ")
+	return "Переводит <text> на любом языке на <lang> (по умолчанию en). Использование: /translate <lang> <text>. Доступные языки: " + strings.Join(util.MapKeys(SupportedLanguages), ", ")
 }
 
 func (c *CommandTranslate) IsAdmin() bool {
@@ -45,7 +44,7 @@ func (c *CommandTranslate) Execute(update telegram.Update, chat *storage.Chat) {
 	args := strings.Fields(update.Message.CommandArguments())
 
 	if len(args) == 0 {
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
 		return
 	}
 
@@ -53,7 +52,7 @@ func (c *CommandTranslate) Execute(update telegram.Update, chat *storage.Chat) {
 	translationPrompt := c.buildTranslationPrompt(language, textToTranslate)
 
 	systemPrompt := "You are a helpful assistant that translates. You should answer only with translated text without explanations and quotation marks."
-	gptText(c.TelegramBot, chat, update.Message.MessageID, c.GptClient, systemPrompt, translationPrompt)
+	gptText(c.Deps, chat, update.Message.MessageID, systemPrompt, translationPrompt)
 }
 
 func (c *CommandTranslate) extractLanguageAndText(args []string) (string, string) {
@@ -74,12 +73,4 @@ func (c *CommandTranslate) buildTranslationPrompt(language, text string) string 
 func isSupportedLanguage(lang string) bool {
 	_, exists := SupportedLanguages[lang]
 	return exists
-}
-
-func arrayKeys[K comparable, V any](m map[K]V) []K {
-	keys := make([]K, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
 }

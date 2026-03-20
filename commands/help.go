@@ -7,8 +7,7 @@ import (
 )
 
 type CommandHelp struct {
-	TelegramBot     *telegram.Bot
-	CommandRegistry CommandRegistry
+	*Deps
 }
 
 func (c *CommandHelp) Name() string {
@@ -24,7 +23,7 @@ func (c *CommandHelp) IsAdmin() bool {
 }
 
 func (c *CommandHelp) Execute(update telegram.Update, chat *storage.Chat) {
-	CommandList := c.CommandRegistry.GetCommands()
+	CommandList := c.Registry.GetCommands()
 
 	message := "Список доступных команд и их описание:\n"
 	var adminCommands []Command
@@ -37,12 +36,12 @@ func (c *CommandHelp) Execute(update telegram.Update, chat *storage.Chat) {
 		message += fmt.Sprintf("/%s - %s\n", command.Name(), command.Description())
 	}
 
-	if c.TelegramBot.AdminId == update.Message.From.ID {
+	if c.Auth.IsAdmin(update.Message.From.ID) {
 		message += "\nКоманды администратора:\n"
 		for _, command := range adminCommands {
 			message += fmt.Sprintf("/%s - %s\n", command.Name(), command.Description())
 		}
 	}
 
-	c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, message)
+	c.Bot.Reply(chat.ChatID, update.Message.MessageID, message)
 }

@@ -6,7 +6,7 @@ import (
 )
 
 type CommandClear struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandClear) Name() string {
@@ -22,6 +22,6 @@ func (c *CommandClear) IsAdmin() bool {
 }
 
 func (c *CommandClear) Execute(update telegram.Update, chat *storage.Chat) {
-	chat.History = nil
-	c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров была очищена.")
+	chat.ActiveSession().History = nil
+	c.Bot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров была очищена.")
 }

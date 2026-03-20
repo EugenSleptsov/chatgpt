@@ -5,11 +5,10 @@ import (
 	conf "GPTBot/config"
 	"GPTBot/storage"
 	"fmt"
-	"log"
 )
 
 type CommandAdminReload struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandAdminReload) Name() string {
@@ -27,10 +26,14 @@ func (c *CommandAdminReload) IsAdmin() bool {
 func (c *CommandAdminReload) Execute(update telegram.Update, chat *storage.Chat) {
 	chatID := chat.ChatID
 
-	config, err := conf.ReadConfig("bot.conf")
+	newConfig, err := conf.ReadConfig(c.ConfigPath)
 	if err != nil {
-		log.Fatalf("Error reading bot.conf: %v", err)
+		c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Ошибка чтения конфига: %v", err))
+		return
 	}
 
-	c.TelegramBot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(config)))
+	*c.Config = *newConfig
+	c.Auth.SetAuthorizedUsers(c.Config.AuthorizedUserIds)
+
+	c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(c.Config)))
 }

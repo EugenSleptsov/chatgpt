@@ -7,6 +7,8 @@ import (
 	"os"
 )
 
+const maxDownloadBytes = 20 * 1024 * 1024 // 20 MB
+
 // ReadLines Read file to get lines from it
 func ReadLines(filename string) (lines []string, err error) {
 	file, err := os.Open(filename)

@@ -7,7 +7,7 @@ import (
 )
 
 type CommandSummarizePrompt struct {
-	TelegramBot *telegram.Bot
+	*Deps
 }
 
 func (c *CommandSummarizePrompt) Name() string {
@@ -24,9 +24,9 @@ func (c *CommandSummarizePrompt) IsAdmin() bool {
 
 func (c *CommandSummarizePrompt) Execute(update telegram.Update, chat *storage.Chat) {
 	if len(update.Message.CommandArguments()) == 0 {
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprint("Текущий промпт для команды /summarize: ", chat.Settings.SummarizePrompt))
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprint("Текущий промпт для команды /summarize: ", chat.Settings.SummarizePrompt))
 	} else {
 		chat.Settings.SummarizePrompt = update.Message.CommandArguments()
-		c.TelegramBot.Reply(chat.ChatID, update.Message.MessageID, "Промпт для команды /summarize установлен")
+		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Промпт для команды /summarize установлен")
 	}
 }
