@@ -28,16 +28,16 @@ func (c *CommandTechTranslate) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandTechTranslate) Execute(update telegram.Update, chat *storage.Chat) {
-	args := strings.Fields(update.Message.CommandArguments())
+func (c *CommandTechTranslate) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+	args := strings.Fields(ctx.Msg.CommandArguments())
 
 	if len(args) == 0 {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /tech_translate <text>")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /tech_translate <text>")
 		return
 	}
 
 	translationPrompt := strings.Join(args, " ")
 
 	systemPrompt := fmt.Sprintf("Ты - помощник, который переводит текст на технический английский язык. Техническая область: %s. Ты должен отвечать только переведенным текстом без объяснений и кавычек. Используй следующие соответствия, если сомневаешься в терминологии: %s", TechFields, AdditionalPrompt)
-	gptText(c.Deps, chat, update.Message.MessageID, systemPrompt, translationPrompt)
+	gptText(c.Deps, chat, ctx.MessageID, systemPrompt, translationPrompt)
 }

@@ -40,11 +40,11 @@ func (c *CommandTranslate) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandTranslate) Execute(update telegram.Update, chat *storage.Chat) {
-	args := strings.Fields(update.Message.CommandArguments())
+func (c *CommandTranslate) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+	args := strings.Fields(ctx.Msg.CommandArguments())
 
 	if len(args) == 0 {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
 		return
 	}
 
@@ -52,7 +52,7 @@ func (c *CommandTranslate) Execute(update telegram.Update, chat *storage.Chat) {
 	translationPrompt := c.buildTranslationPrompt(language, textToTranslate)
 
 	systemPrompt := "You are a helpful assistant that translates. You should answer only with translated text without explanations and quotation marks."
-	gptText(c.Deps, chat, update.Message.MessageID, systemPrompt, translationPrompt)
+	gptText(c.Deps, chat, ctx.MessageID, systemPrompt, translationPrompt)
 }
 
 func (c *CommandTranslate) extractLanguageAndText(args []string) (string, string) {

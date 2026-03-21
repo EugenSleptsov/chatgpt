@@ -12,20 +12,24 @@ type VoiceHandler struct {
 	Deps *commands.Deps
 }
 
-func (v *VoiceHandler) Handle(update telegram.Update, chat *storage.Chat) error {
-	transcription, err := v.processAudio(update.Message.Voice.FileID)
+func (v *VoiceHandler) Match(ctx *telegram.UpdateContext) bool {
+	return ctx.IsVoice && !ctx.IsEdited
+}
+
+func (v *VoiceHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) error {
+	transcription, err := v.processAudio(ctx.Msg.Voice.FileID)
 	if err != nil {
 		v.Deps.Notifier.LogError(err)
-		v.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, "Не удалось обработать голосовое сообщение.")
+		v.Deps.Bot.Reply(chat.ChatID, ctx.MessageID, "Не удалось обработать голосовое сообщение.")
 		return nil
 	}
 
 	// Echo transcription so user sees what was heard
-	v.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, transcription)
+	v.Deps.Bot.Reply(chat.ChatID, ctx.MessageID, transcription)
 
 	// Forwarded voice: transcribe only, no GPT
-	if update.Message.ForwardFrom != nil {
-		v.Deps.Notifier.Notify(fmt.Sprintf("[%s] Transcribe was done", telegram.GetChatTitle(update)))
+	if ctx.Msg.ForwardFrom != nil {
+		v.Deps.Notifier.Notify(fmt.Sprintf("[%s] Transcribe was done", ctx.ChatTitle()))
 		return nil
 	}
 
@@ -34,7 +38,7 @@ func (v *VoiceHandler) Handle(update telegram.Update, chat *storage.Chat) error 
 	v.Deps.Notifier.LogError(err)
 
 	// Text reply
-	v.Deps.Bot.ReplyMarkdown(chat.ChatID, update.Message.MessageID, response, chat.Settings.UseMarkdown)
+	v.Deps.Bot.ReplyMarkdown(chat.ChatID, ctx.MessageID, response, chat.Settings.UseMarkdown)
 
 	// Audio reply
 	audioBytes, err := v.Deps.GPTService.GenerateVoice(response)

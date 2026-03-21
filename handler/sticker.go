@@ -10,19 +10,22 @@ type StickerHandler struct {
 	Deps *commands.Deps
 }
 
+func (s *StickerHandler) Match(ctx *telegram.UpdateContext) bool {
+	return ctx.IsSticker
+}
+
 // Handle logs stickers as text placeholders in group chats for conversation context.
 // In private chats, stickers are silently ignored.
-func (s *StickerHandler) Handle(update telegram.Update, chat *storage.Chat) error {
-	if chat.ChatID >= 0 {
+func (s *StickerHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) error {
+	if !ctx.IsGroup {
 		return nil
 	}
 
-	author := authorName(update)
 	emoji := ""
-	if update.Message.Sticker != nil {
-		emoji = update.Message.Sticker.Emoji
+	if ctx.Msg.Sticker != nil {
+		emoji = ctx.Msg.Sticker.Emoji
 	}
-	s.Deps.GPTService.LogGroupSticker(chat, author, emoji)
-	s.Deps.Notifier.Logf("[Group] %s → стикер %s, логирую", author, emoji)
+	s.Deps.GPTService.LogGroupSticker(chat, ctx.SenderName, emoji)
+	s.Deps.Notifier.Logf("[Group] %s → стикер %s, логирую", ctx.SenderName, emoji)
 	return nil
 }

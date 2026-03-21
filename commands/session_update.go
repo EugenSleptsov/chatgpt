@@ -24,22 +24,22 @@ func (c *CommandSessionUpdate) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSessionUpdate) Execute(update telegram.Update, chat *storage.Chat) {
-	args := strings.SplitN(strings.TrimSpace(update.Message.CommandArguments()), " ", 2)
+func (c *CommandSessionUpdate) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+	args := strings.SplitN(strings.TrimSpace(ctx.Msg.CommandArguments()), " ", 2)
 	if len(args) < 2 || args[1] == "" {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Использование: /update <id> <topic>")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Использование: /update <id> <topic>")
 		return
 	}
 
 	id, err := strconv.Atoi(args[0])
 	if err != nil {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "ID должен быть числом.")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "ID должен быть числом.")
 		return
 	}
 
 	s := chat.FindSession(id)
 	if s == nil {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Сессия #%d не найдена.", id))
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Сессия #%d не найдена.", id))
 		return
 	}
 
@@ -50,5 +50,5 @@ func (c *CommandSessionUpdate) Execute(update telegram.Update, chat *storage.Cha
 
 	old := s.Topic
 	s.Topic = topic
-	c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Сессия #%d переименована: %s → %s.", s.ID, old, s.Topic))
+	c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Сессия #%d переименована: %s → %s.", s.ID, old, s.Topic))
 }

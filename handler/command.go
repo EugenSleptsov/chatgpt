@@ -10,14 +10,18 @@ type CommandHandler struct {
 	Deps *commands.Deps
 }
 
-func (c *CommandHandler) Handle(update telegram.Update, chat *storage.Chat) error {
-	cmd, err := c.Deps.Registry.GetCommand(update.Message.Command())
+func (c *CommandHandler) Match(ctx *telegram.UpdateContext) bool {
+	return ctx.IsCommand
+}
+
+func (c *CommandHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) error {
+	cmd, err := c.Deps.Registry.GetCommand(ctx.Msg.Command())
 	if err != nil {
 		return err
 	}
 
-	if !cmd.IsAdmin() || c.Deps.Auth.IsAdmin(update.Message.From.ID) {
-		cmd.Execute(update, chat)
+	if !cmd.IsAdmin() || c.Deps.Auth.IsAdmin(ctx.SenderID) {
+		cmd.Execute(ctx, chat)
 	}
 
 	return nil

@@ -23,9 +23,9 @@ func (c *CommandModel) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
+func (c *CommandModel) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
 	session := chat.ActiveSession()
-	args := update.Message.CommandArguments()
+	args := ctx.Msg.CommandArguments()
 
 	if len(args) == 0 {
 		current := gpt.FindTier(session.Model)
@@ -35,7 +35,7 @@ func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
 		}
 		c.Bot.Reply(
 			chat.ChatID,
-			update.Message.MessageID,
+			ctx.MessageID,
 			fmt.Sprintf("Текущая модель: %s\n\nДоступные модели:\n%s", name, gpt.TierList()),
 		)
 		return
@@ -45,7 +45,7 @@ func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
 	if tier == nil {
 		c.Bot.Reply(
 			chat.ChatID,
-			update.Message.MessageID,
+			ctx.MessageID,
 			fmt.Sprintf("Модель не найдена: %s\n\nДоступные модели:\n%s", args, gpt.TierList()),
 		)
 		return
@@ -54,7 +54,7 @@ func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
 	session.Model = tier.ID
 	c.Bot.Reply(
 		chat.ChatID,
-		update.Message.MessageID,
+		ctx.MessageID,
 		fmt.Sprintf("Модель установлена: %s (%s)", tier.Label, tier.Desc),
 	)
 }

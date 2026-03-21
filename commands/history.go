@@ -28,13 +28,13 @@ func (c *CommandHistory) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandHistory) Execute(update telegram.Update, chat *storage.Chat) {
+func (c *CommandHistory) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
 	chunks := formatHistory(storage.ToGPTMessages(chat.ActiveSession().History))
 	totalPages := (len(chunks) + historyPageSize - 1) / historyPageSize
 
 	// parse page number (default = 1 = latest)
 	page := 1
-	if arg := strings.TrimSpace(update.Message.CommandArguments()); arg != "" {
+	if arg := strings.TrimSpace(ctx.Msg.CommandArguments()); arg != "" {
 		if p, err := strconv.Atoi(arg); err == nil && p > 0 {
 			page = p
 		}
@@ -54,7 +54,7 @@ func (c *CommandHistory) Execute(update telegram.Update, chat *storage.Chat) {
 	pageChunks := chunks[start:end]
 
 	for _, message := range pageChunks {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, message)
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, message)
 	}
 
 	// navigation hint
@@ -63,7 +63,7 @@ func (c *CommandHistory) Execute(update telegram.Update, chat *storage.Chat) {
 		if page < totalPages {
 			hint += fmt.Sprintf(" Ранние сообщения: /history %d", page+1)
 		}
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, hint)
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, hint)
 	}
 }
 

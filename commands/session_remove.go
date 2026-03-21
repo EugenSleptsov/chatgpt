@@ -24,29 +24,29 @@ func (c *CommandSessionRemove) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSessionRemove) Execute(update telegram.Update, chat *storage.Chat) {
-	arg := strings.TrimSpace(update.Message.CommandArguments())
+func (c *CommandSessionRemove) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+	arg := strings.TrimSpace(ctx.Msg.CommandArguments())
 	if arg == "" {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Укажите ID сессии. Использование: /remove <id>")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Укажите ID сессии. Использование: /remove <id>")
 		return
 	}
 
 	id, err := strconv.Atoi(arg)
 	if err != nil {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "ID должен быть числом.")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "ID должен быть числом.")
 		return
 	}
 
 	s := chat.FindSession(id)
 	if s == nil {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Сессия #%d не найдена.", id))
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Сессия #%d не найдена.", id))
 		return
 	}
 
 	if !chat.RemoveSession(id) {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Нельзя удалить единственную сессию.")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Нельзя удалить единственную сессию.")
 		return
 	}
 
-	c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Сессия #%d (%s) удалена. Активная: #%d.", id, s.Topic, chat.ActiveSessionID))
+	c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Сессия #%d (%s) удалена. Активная: #%d.", id, s.Topic, chat.ActiveSessionID))
 }

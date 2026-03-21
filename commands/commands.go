@@ -24,7 +24,7 @@ type Command interface {
 	Name() string
 	Description() string
 	IsAdmin() bool
-	Execute(update telegram.Update, chat *storage.Chat)
+	Execute(ctx *telegram.UpdateContext, chat *storage.Chat)
 }
 
 // gptText is a convenience wrapper: calls GPTService.GPTCommand, logs and replies.

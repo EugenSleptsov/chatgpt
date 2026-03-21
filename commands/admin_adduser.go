@@ -24,22 +24,22 @@ func (c *CommandAdminAddUser) IsAdmin() bool {
 	return true
 }
 
-func (c *CommandAdminAddUser) Execute(update telegram.Update, chat *storage.Chat) {
+func (c *CommandAdminAddUser) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
 	chatID := chat.ChatID
-	if len(update.Message.CommandArguments()) == 0 {
-		c.Bot.Reply(chatID, update.Message.MessageID, "Укажите ID пользователя. Использование: /adduser <id>")
+	if len(ctx.Msg.CommandArguments()) == 0 {
+		c.Bot.Reply(chatID, ctx.MessageID, "Укажите ID пользователя. Использование: /adduser <id>")
 		return
 	}
 
-	userId, err := strconv.ParseInt(update.Message.CommandArguments(), 10, 64)
+	userId, err := strconv.ParseInt(ctx.Msg.CommandArguments(), 10, 64)
 	if err != nil {
-		c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Некорректный ID: %s", update.Message.CommandArguments()))
+		c.Bot.Reply(chatID, ctx.MessageID, fmt.Sprintf("Некорректный ID: %s", ctx.Msg.CommandArguments()))
 		return
 	}
 
 	for _, id := range c.Auth.GetAuthorizedUsers() {
 		if id == userId {
-			c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Пользователь уже добавлен: %d", userId))
+			c.Bot.Reply(chatID, ctx.MessageID, fmt.Sprintf("Пользователь уже добавлен: %d", userId))
 			return
 		}
 	}
@@ -50,9 +50,9 @@ func (c *CommandAdminAddUser) Execute(update telegram.Update, chat *storage.Chat
 	c.Config.AuthorizedUserIds = c.Auth.GetAuthorizedUsers()
 	if err = conf.UpdateConfig(c.ConfigPath, c.Config); err != nil {
 		c.Notifier.LogError(err)
-		c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Ошибка сохранения конфига: %v", err))
+		c.Bot.Reply(chatID, ctx.MessageID, fmt.Sprintf("Ошибка сохранения конфига: %v", err))
 		return
 	}
 
-	c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Пользователь добавлен: %d", userId))
+	c.Bot.Reply(chatID, ctx.MessageID, fmt.Sprintf("Пользователь добавлен: %d", userId))
 }

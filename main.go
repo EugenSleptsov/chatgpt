@@ -66,15 +66,15 @@ func main() {
 	logSystem.LogFatal(err)
 
 	chatManager := manager.NewTelegramChatManager(botStorage, config, logSystem)
-	handlerFactory := handler.NewUpdateHandlerFactory(deps)
+	router := handler.NewRouter(deps)
 
-	startWorkers(deps, chatManager, handlerFactory, telegramBot.GetUpdateChannel(config.TimeoutValue))
+	startWorkers(deps, chatManager, router, telegramBot.GetUpdateChannel(config.TimeoutValue))
 }
 
 func startWorkers(
 	deps *commands.Deps,
 	chatManager manager.ChatManager,
-	handlerFactory handler.UpdateHandlerFactory,
+	router *handler.Router,
 	telegramUpdates telegram.UpdatesChannel,
 ) {
 	updateChan := make(chan telegram.Update, updateBufferSize)
@@ -82,7 +82,7 @@ func startWorkers(
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		worker := NewWorker(deps, chatManager, handlerFactory)
+		worker := NewWorker(deps, chatManager, router)
 		go func() {
 			defer wg.Done()
 			worker.Start(updateChan)

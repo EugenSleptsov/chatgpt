@@ -21,11 +21,11 @@ func (c *CommandAutoReply) IsAdmin() bool {
 	return true
 }
 
-func (c *CommandAutoReply) Execute(update telegram.Update, chat *storage.Chat) {
+func (c *CommandAutoReply) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
 	chat.Settings.GroupAutoReply = !chat.Settings.GroupAutoReply
 	if chat.Settings.GroupAutoReply {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "✅ Авто-ответ включён. Бот будет самостоятельно вступать в разговор.")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "✅ Авто-ответ включён. Бот будет самостоятельно вступать в разговор.")
 	} else {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "❌ Авто-ответ выключен. Бот отвечает только при упоминании.")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "❌ Авто-ответ выключен. Бот отвечает только при упоминании.")
 	}
 }

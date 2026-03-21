@@ -22,13 +22,13 @@ func (c *CommandGrammar) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandGrammar) Execute(update telegram.Update, chat *storage.Chat) {
-	if len(update.Message.CommandArguments()) == 0 {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, который необходимо скорректировать. Использование: /grammar <text>")
+func (c *CommandGrammar) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+	if len(ctx.Msg.CommandArguments()) == 0 {
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Пожалуйста укажите текст, который необходимо скорректировать. Использование: /grammar <text>")
 	} else {
-		prompt := update.Message.CommandArguments()
+		prompt := ctx.Msg.CommandArguments()
 		grammarPrompt := fmt.Sprintf("Correct the following text: \"%s\". Answer with corrected text only.", prompt)
 		systemPrompt := "You are a helpful assistant that corrects grammar."
-		gptText(c.Deps, chat, update.Message.MessageID, systemPrompt, grammarPrompt)
+		gptText(c.Deps, chat, ctx.MessageID, systemPrompt, grammarPrompt)
 	}
 }

@@ -21,7 +21,7 @@ func (c *CommandClear) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandClear) Execute(update telegram.Update, chat *storage.Chat) {
+func (c *CommandClear) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
 	chat.ActiveSession().History = nil
-	c.Bot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров была очищена.")
+	c.Bot.Reply(chat.ChatID, ctx.MessageID, "История разговоров была очищена.")
 }

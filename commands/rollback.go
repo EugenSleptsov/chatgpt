@@ -24,12 +24,12 @@ func (c *CommandRollback) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandRollback) Execute(update telegram.Update, chat *storage.Chat) {
+func (c *CommandRollback) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
 	session := chat.ActiveSession()
 	number := 1
-	if len(update.Message.CommandArguments()) > 0 {
+	if len(ctx.Msg.CommandArguments()) > 0 {
 		var err error
-		number, err = strconv.Atoi(update.Message.CommandArguments())
+		number, err = strconv.Atoi(ctx.Msg.CommandArguments())
 		if err != nil || number < 1 {
 			number = 1
 		}
@@ -41,8 +41,8 @@ func (c *CommandRollback) Execute(update telegram.Update, chat *storage.Chat) {
 
 	if len(session.History) > 0 {
 		session.History = session.History[:len(session.History)-number]
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
 	} else {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "История разговоров пуста.")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "История разговоров пуста.")
 	}
 }

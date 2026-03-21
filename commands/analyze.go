@@ -26,21 +26,21 @@ func (c *CommandAnalyze) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandAnalyze) Execute(update telegram.Update, chat *storage.Chat) {
-	if len(update.Message.CommandArguments()) == 0 {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите количество сообщений (опционально) и промпт для обработки. Использование: /analyze <count> <prompt>")
+func (c *CommandAnalyze) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+	if len(ctx.Msg.CommandArguments()) == 0 {
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Пожалуйста укажите количество сообщений (опционально) и промпт для обработки. Использование: /analyze <count> <prompt>")
 		return
 	}
 
 	var systemPrompt string
-	arguments := strings.Split(update.Message.CommandArguments(), " ")
+	arguments := strings.Split(ctx.Msg.CommandArguments(), " ")
 	messageCount, err := strconv.Atoi(arguments[0])
 	if err != nil {
 		messageCount = AnalyzeDefaultMessageCount
-		systemPrompt = update.Message.CommandArguments()
+		systemPrompt = ctx.Msg.CommandArguments()
 	} else {
 		if len(arguments) < 2 {
-			c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите промпт для обработки. Использование: /analyze <count> <prompt>")
+			c.Bot.Reply(chat.ChatID, ctx.MessageID, "Пожалуйста укажите промпт для обработки. Использование: /analyze <count> <prompt>")
 			return
 		}
 
@@ -54,5 +54,5 @@ func (c *CommandAnalyze) Execute(update telegram.Update, chat *storage.Chat) {
 		}
 	}
 
-	summarizeText(c.Deps, chat, update.Message.MessageID, systemPrompt, messageCount)
+	summarizeText(c.Deps, chat, ctx.MessageID, systemPrompt, messageCount)
 }

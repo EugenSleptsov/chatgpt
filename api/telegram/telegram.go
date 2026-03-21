@@ -28,6 +28,29 @@ func (botInstance *Bot) FileURL(filePath string) string {
 type UpdatesChannel <-chan Update
 type Update tgbotapi.Update
 
+// Msg returns the effective message from an update.
+// It looks through Message, EditedMessage, ChannelPost, EditedChannelPost
+// and returns the first non-nil one. Returns nil if none is present.
+func (u Update) Msg() *tgbotapi.Message {
+	switch {
+	case u.Message != nil:
+		return u.Message
+	case u.EditedMessage != nil:
+		return u.EditedMessage
+	case u.ChannelPost != nil:
+		return u.ChannelPost
+	case u.EditedChannelPost != nil:
+		return u.EditedChannelPost
+	default:
+		return nil
+	}
+}
+
+// IsEdited returns true when the update is an edit of an existing message.
+func (u Update) IsEdited() bool {
+	return u.EditedMessage != nil || u.EditedChannelPost != nil
+}
+
 func NewInstance(config *conf.Config, logClient logger.Log) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(config.TelegramToken)
 	if err != nil {
@@ -158,11 +181,3 @@ func (botInstance *Bot) GetUserCount(chatID int64) (int, error) {
 }
 
 // --- Helpers ---
-
-func GetChatTitle(update Update) string {
-	if update.Message.Chat.ID > 0 {
-		return fmt.Sprintf("%s %s [@%s / %d]", update.Message.Chat.FirstName, update.Message.Chat.LastName, update.Message.Chat.UserName, update.Message.Chat.ID)
-	}
-
-	return fmt.Sprintf("Chat %d [%s]", update.Message.Chat.ID, update.Message.Chat.Title)
-}

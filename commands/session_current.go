@@ -23,7 +23,7 @@ func (c *CommandSessionCurrent) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSessionCurrent) Execute(update telegram.Update, chat *storage.Chat) {
+func (c *CommandSessionCurrent) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
 	s := chat.ActiveSession()
 	tier := gpt.FindTier(s.Model)
 	modelLabel := s.Model
@@ -42,5 +42,5 @@ func (c *CommandSessionCurrent) Execute(update telegram.Update, chat *storage.Ch
 		"▶ Сессия #%d — %s\n\nМодель: %s\nСистемный промпт: %s\nСообщений: %d",
 		s.ID, s.Topic, modelLabel, prompt, len(s.History),
 	)
-	c.Bot.Reply(chat.ChatID, update.Message.MessageID, msg)
+	c.Bot.Reply(chat.ChatID, ctx.MessageID, msg)
 }

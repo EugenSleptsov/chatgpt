@@ -21,15 +21,15 @@ func (c *CommandMarkdown) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandMarkdown) Execute(update telegram.Update, chat *storage.Chat) {
-	if update.Message.CommandArguments() == "on" {
+func (c *CommandMarkdown) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+	if ctx.Msg.CommandArguments() == "on" {
 		chat.Settings.UseMarkdown = true
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Markdown включен")
-	} else if update.Message.CommandArguments() == "off" {
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Markdown включен")
+	} else if ctx.Msg.CommandArguments() == "off" {
 		chat.Settings.UseMarkdown = false
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Markdown выключен")
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Markdown выключен")
 	} else {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Текущее состояние Markdown: "+boolToString(chat.Settings.UseMarkdown))
+		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Текущее состояние Markdown: "+boolToString(chat.Settings.UseMarkdown))
 		return
 	}
 }
