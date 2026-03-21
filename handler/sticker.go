@@ -14,9 +14,8 @@ func (s *StickerHandler) Match(ctx *telegram.UpdateContext) bool {
 	return ctx.IsSticker
 }
 
-// Handle logs stickers as text placeholders in group chats for conversation context.
-// In private chats, stickers are silently ignored.
-func (s *StickerHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) error {
+// Handle logs stickers for group context. Nothing to process further.
+func (s *StickerHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *Request {
 	if !ctx.IsGroup {
 		return nil
 	}

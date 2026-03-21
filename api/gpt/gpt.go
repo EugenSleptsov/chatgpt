@@ -1,5 +1,7 @@
 package gpt
 
+import "encoding/json"
+
 // --- Content type constants ---
 
 const (
@@ -49,6 +51,31 @@ type Message struct {
 	Content interface{} `json:"content"`
 }
 
+// --- Tool types ---
+
+// Tool represents a tool available to the model.
+// Built-in tools (like web_search) only need Type.
+// Function tools also need Name, Description, and Parameters.
+type Tool struct {
+	Type        string              `json:"type"`                  // "web_search", "function"
+	Name        string              `json:"name,omitempty"`        // function name
+	Description string              `json:"description,omitempty"` // what the function does
+	Parameters  *FunctionParameters `json:"parameters,omitempty"`  // JSON Schema
+}
+
+// FunctionParameters is the JSON Schema for a function tool's parameters.
+type FunctionParameters struct {
+	Type       string                       `json:"type"` // "object"
+	Properties map[string]ParameterProperty `json:"properties"`
+	Required   []string                     `json:"required,omitempty"`
+}
+
+// ParameterProperty describes a single parameter in the JSON Schema.
+type ParameterProperty struct {
+	Type        string `json:"type"`
+	Description string `json:"description"`
+}
+
 // --- Response types (Responses API) ---
 
 // ResponseOutputContent is one content block inside an output message item.
@@ -58,12 +85,16 @@ type ResponseOutputContent struct {
 }
 
 // ResponseOutputItem is one element in the output array.
-// Type can be "message", "web_search_call", etc.
+// Type can be "message", "function_call", "web_search_call", etc.
 type ResponseOutputItem struct {
 	Type    string                  `json:"type"`
 	ID      string                  `json:"id"`
-	Role    string                  `json:"role"`
-	Content []ResponseOutputContent `json:"content"`
+	Role    string                  `json:"role,omitempty"`
+	Content []ResponseOutputContent `json:"content,omitempty"`
+	// Function call fields (type == "function_call")
+	Name      string `json:"name,omitempty"`
+	CallID    string `json:"call_id,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
 }
 
 // ResponseUsage tracks token consumption for a Responses API request.
@@ -94,12 +125,35 @@ func (r *Response) OutputText() string {
 	return ""
 }
 
+// ToolCalls returns all function_call items from the response output.
+func (r *Response) ToolCalls() []ToolCall {
+	if r == nil {
+		return nil
+	}
+	var calls []ToolCall
+	for _, item := range r.Output {
+		if item.Type == "function_call" {
+			var args map[string]string
+			_ = json.Unmarshal([]byte(item.Arguments), &args)
+			calls = append(calls, ToolCall{ID: item.CallID, Name: item.Name, Args: args})
+		}
+	}
+	return calls
+}
+
+// ToolCall represents a single function invocation made by the model.
+type ToolCall struct {
+	ID   string
+	Name string
+	Args map[string]string
+}
+
 // --- Client interface ---
 
 // Client is the public API of the gpt package.
 // Implement this interface to add alternative providers (e.g. Anthropic, local LLM).
 type Client interface {
-	CallGPT(chatConversation []Message, aimodel string, instructions string) (*Response, error)
+	CallGPT(chatConversation []Message, aimodel string, instructions string, tools ...Tool) (*Response, error)
 	GenerateImage(prompt string, size string) (string, error)
 	GenerateVoice(inputText string, voiceModel, voiceVoice string) ([]byte, error)
 	TranscribeAudio(audioContent []byte) (string, error)

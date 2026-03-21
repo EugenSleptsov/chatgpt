@@ -14,10 +14,13 @@ func (c *CommandHandler) Match(ctx *telegram.UpdateContext) bool {
 	return ctx.IsCommand
 }
 
-func (c *CommandHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) error {
+// Handle executes the command directly. Commands are imperative —
+// they manage their own responses, so we return nil.
+func (c *CommandHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *Request {
 	cmd, err := c.Deps.Registry.GetCommand(ctx.Msg.Command())
 	if err != nil {
-		return err
+		c.Deps.Notifier.Logf("Command not found: %v", err)
+		return nil
 	}
 
 	if !cmd.IsAdmin() || c.Deps.Auth.IsAdmin(ctx.SenderID) {

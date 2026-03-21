@@ -2,15 +2,15 @@ package handler
 
 import "GPTBot/commands"
 
-// Handlers returns all available handler constructors.
-// To add a new handler, append it here — no changes in main.go needed.
+// Handlers returns all available handler constructors (normalization layer).
+// Order matters: first match wins.
 func Handlers() []func(d *commands.Deps) UpdateHandler {
 	return []func(d *commands.Deps) UpdateHandler{
 		func(d *commands.Deps) UpdateHandler { return &CommandHandler{Deps: d} },
 		func(d *commands.Deps) UpdateHandler { return &VoiceHandler{Deps: d} },
 		func(d *commands.Deps) UpdateHandler { return &ImageHandler{Deps: d} },
 		func(d *commands.Deps) UpdateHandler { return &StickerHandler{Deps: d} },
-		func(d *commands.Deps) UpdateHandler { return &MessageHandler{Deps: d} }, // catch-all, must be last by priority
+		func(d *commands.Deps) UpdateHandler { return &MessageHandler{Deps: d} }, // catch-all
 	}
 }
 
@@ -21,4 +21,20 @@ func NewRouter(deps *commands.Deps) *Router {
 		r.Register(ctor(deps))
 	}
 	return r
+}
+
+// NewPipeline creates a Pipeline with resolver and all intent executors.
+func NewPipeline(deps *commands.Deps) *Pipeline {
+	p := &Pipeline{
+		resolver:  &IntentResolver{},
+		executors: make(map[IntentType]IntentExecutor),
+	}
+
+	p.RegisterExecutor(IntentChat, &ChatExecutor{Deps: deps})
+	p.RegisterExecutor(IntentGroupReply, &GroupReplyExecutor{Deps: deps})
+	p.RegisterExecutor(IntentGroupAutoReply, &GroupAutoReplyExecutor{Deps: deps})
+	p.RegisterExecutor(IntentAnalyzeImage, &ImageAnalysisExecutor{Deps: deps})
+	p.RegisterExecutor(IntentEchoTranscription, &EchoTranscriptionExecutor{Deps: deps})
+
+	return p
 }

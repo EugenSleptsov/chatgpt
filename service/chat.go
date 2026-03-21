@@ -8,6 +8,7 @@ import (
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -20,10 +21,52 @@ type GPTService struct {
 	LogDir    string
 }
 
+// ChatResult holds the full output of a GPT call, including tool-call results.
+type ChatResult struct {
+	Text   string        // assistant text reply
+	Images []ImageResult // generated images (from generate_image tool calls)
+	Audio  []byte        // generated audio  (from generate_voice tool call)
+}
+
+// ImageResult is one image produced by a generate_image tool call.
+type ImageResult struct {
+	URL     string
+	Caption string
+}
+
+// chatTools are the function tools sent with every chat completion request.
+// GPT decides which (if any) to call based on the user's message.
+var chatTools = []gpt.Tool{
+	{
+		Type:        "function",
+		Name:        "generate_image",
+		Description: "Generate an image based on a text description. Call when the user asks to draw, create, or generate a picture/image.",
+		Parameters: &gpt.FunctionParameters{
+			Type: "object",
+			Properties: map[string]gpt.ParameterProperty{
+				"prompt": {Type: "string", Description: "Image description for the image generator (English preferred)"},
+			},
+			Required: []string{"prompt"},
+		},
+	},
+	{
+		Type:        "function",
+		Name:        "generate_voice",
+		Description: "Convert text to a voice/audio message. Call when the user asks to record voice, speak out loud, or create audio.",
+		Parameters: &gpt.FunctionParameters{
+			Type: "object",
+			Properties: map[string]gpt.ParameterProperty{
+				"text": {Type: "string", Description: "The text to convert to speech"},
+			},
+			Required: []string{"text"},
+		},
+	},
+}
+
 // ChatCompletion appends a user message to chat history, sends the
-// conversation context to GPT, stores the assistant response in history
-// and returns it. On GPT failure returns a fallback message and the error.
-func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (string, error) {
+// conversation context to GPT (with function tools), executes any tool
+// calls GPT makes, and returns the full result.
+func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (*ChatResult, error) {
 	session := chat.ActiveSession()
 
 	entry := &storage.ConversationEntry{
@@ -38,17 +81,57 @@ func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (string
 	// Build message list from history — system prompt goes as instructions, not as a message.
 	messages := storage.ToGPTMessages(session.History)
 
-	response := fallbackResponse
-	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt)
+	result := &ChatResult{}
+	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt, chatTools...)
 
-	if err == nil {
-		if text := strings.TrimSpace(payload.OutputText()); text != "" {
-			response = text
-		}
+	if err != nil {
+		log.Printf("[ChatCompletion] GPT error: %v", err)
+		result.Text = fallbackResponse
+	} else {
+		result.Text = strings.TrimSpace(payload.OutputText())
+		s.executeToolCalls(payload.ToolCalls(), result)
 	}
 
-	entry.Response = storage.Message{Role: "assistant", Content: response}
-	return response, err
+	entry.Response = storage.Message{Role: "assistant", Content: result.Text}
+	return result, err
+}
+
+// executeToolCalls processes function calls returned by GPT and fills the ChatResult.
+func (s *GPTService) executeToolCalls(calls []gpt.ToolCall, result *ChatResult) {
+	for _, tc := range calls {
+		log.Printf("[ToolCall] %s(%v)", tc.Name, tc.Args)
+		switch tc.Name {
+		case "generate_image":
+			prompt := tc.Args["prompt"]
+			if prompt == "" {
+				log.Printf("[ToolCall] generate_image: empty prompt, skipping")
+				continue
+			}
+			imageURL, caption, err := s.GenerateImage(gpt.ImageEnhanceTierID, prompt)
+			if err != nil {
+				log.Printf("[ToolCall] generate_image error: %v", err)
+				continue
+			}
+			result.Images = append(result.Images, ImageResult{URL: imageURL, Caption: caption})
+		case "generate_voice":
+			text := tc.Args["text"]
+			if text == "" {
+				text = result.Text
+			}
+			if text == "" {
+				log.Printf("[ToolCall] generate_voice: no text available, skipping")
+				continue
+			}
+			audio, err := s.GenerateVoice(text)
+			if err != nil {
+				log.Printf("[ToolCall] generate_voice error: %v", err)
+				continue
+			}
+			result.Audio = audio
+		default:
+			log.Printf("[ToolCall] unknown tool: %s", tc.Name)
+		}
+	}
 }
 
 // GPTCommand sends a one-shot system+user prompt pair to GPT and returns
@@ -166,27 +249,30 @@ func (s *GPTService) LogBotResponse(chat *storage.Chat, text string) {
 	}
 }
 
-// ReplyFromGroupHistory sends the full group history to GPT and attaches the
-// assistant response to the last history entry. Call after LogGroupMessage.
-func (s *GPTService) ReplyFromGroupHistory(chat *storage.Chat) (string, error) {
+// ReplyFromGroupHistory sends the full group history to GPT (with function
+// tools), executes any tool calls, attaches the assistant response to the
+// last history entry and returns the full ChatResult.
+func (s *GPTService) ReplyFromGroupHistory(chat *storage.Chat) (*ChatResult, error) {
 	session := chat.ActiveSession()
 	if len(session.History) == 0 {
-		return fallbackResponse, nil
+		return &ChatResult{Text: fallbackResponse}, nil
 	}
 
 	messages := storage.ToGPTMessages(session.History)
-	response := fallbackResponse
-	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt)
-	if err == nil {
-		if t := strings.TrimSpace(payload.OutputText()); t != "" {
-			response = t
-		}
+	result := &ChatResult{}
+	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt, chatTools...)
+	if err != nil {
+		log.Printf("[ReplyFromGroupHistory] GPT error: %v", err)
+		result.Text = fallbackResponse
+	} else {
+		result.Text = strings.TrimSpace(payload.OutputText())
+		s.executeToolCalls(payload.ToolCalls(), result)
 	}
 
 	session.History[len(session.History)-1].Response = storage.Message{
-		Role: "assistant", Content: response,
+		Role: "assistant", Content: result.Text,
 	}
-	return response, err
+	return result, err
 }
 
 // autoReplyCheckInstructions is the system prompt for the YES/NO auto-reply decision.

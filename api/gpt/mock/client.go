@@ -14,7 +14,7 @@ func NewClient() *Client {
 	return &Client{}
 }
 
-func (m *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instructions string) (*gpt.Response, error) {
+func (m *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instructions string, tools ...gpt.Tool) (*gpt.Response, error) {
 	return &gpt.Response{
 		ID:     "mock-id",
 		Object: "response",

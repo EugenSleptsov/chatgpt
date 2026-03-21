@@ -13,13 +13,15 @@ type Worker struct {
 	Deps        *commands.Deps
 	ChatManager manager.ChatManager
 	Router      *handler.Router
+	Pipeline    *handler.Pipeline
 }
 
-func NewWorker(deps *commands.Deps, chatManager manager.ChatManager, router *handler.Router) *Worker {
+func NewWorker(deps *commands.Deps, chatManager manager.ChatManager, router *handler.Router, pipeline *handler.Pipeline) *Worker {
 	return &Worker{
 		Deps:        deps,
 		ChatManager: chatManager,
 		Router:      router,
+		Pipeline:    pipeline,
 	}
 }
 
@@ -39,28 +41,51 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 	chat := w.ChatManager.GetOrCreateChat(ctx)
 	w.ChatManager.LogMessage(ctx, chat)
 
-	// Group chats: let ALL messages through so handlers can log context.
-	// Commands in groups still require authorization.
 	if ctx.IsGroup {
 		if ctx.IsCommand && !w.Deps.Auth.IsAuthorized(ctx.SenderID) {
 			return
 		}
 	} else {
-		// Private chats: strict authorization.
 		if !w.Deps.Auth.IsAuthorized(ctx.SenderID) {
 			w.handleUnauthorizedAccess(ctx, chat)
 			return
 		}
 	}
 
+	// 1. Handler normalizes the update into a Request
 	h := w.Router.Route(ctx)
 	if h == nil {
 		return
 	}
-	if err := h.Handle(ctx, chat); err != nil {
-		w.Deps.Notifier.Notify(fmt.Sprintf("Error handling input: %v", err))
+	req := h.Handle(ctx, chat)
+	if req == nil {
+		w.ChatManager.MarkDirty(chat.ChatID)
+		return // handler dealt with it internally (commands, stickers, edits)
 	}
+
+	// 2. Pipeline resolves intents and executes them
+	responses := w.Pipeline.Process(ctx, chat, req)
+
+	// 3. Deliver responses
+	w.sendResponses(ctx, chat, responses)
 	w.ChatManager.MarkDirty(chat.ChatID)
+}
+
+func (w *Worker) sendResponses(ctx *telegram.UpdateContext, chat *storage.Chat, responses []handler.Response) {
+	for _, r := range responses {
+		switch {
+		case len(r.Audio) > 0:
+			if err := w.Deps.Bot.AudioUpload(chat.ChatID, r.Audio); err != nil {
+				w.Deps.Notifier.LogError(err)
+			}
+		case r.ImageURL != "":
+			if err := w.Deps.Bot.SendImage(chat.ChatID, r.ImageURL, r.Caption); err != nil {
+				w.Deps.Notifier.LogError(err)
+			}
+		case r.Text != "":
+			w.Deps.Bot.ReplyMarkdown(chat.ChatID, ctx.MessageID, r.Text, r.Markdown)
+		}
+	}
 }
 
 func (w *Worker) handleUnauthorizedAccess(ctx *telegram.UpdateContext, chat *storage.Chat) {

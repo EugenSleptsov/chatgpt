@@ -5,11 +5,10 @@ import (
 	"GPTBot/storage"
 )
 
-// UpdateHandler handles a specific type of Telegram update.
+// UpdateHandler normalizes a Telegram update into a Request.
+// Returning nil means the handler dealt with it internally (commands, stickers)
+// or there is nothing to process (edited messages, errors).
 type UpdateHandler interface {
-	// Match reports whether this handler can process the given update.
 	Match(ctx *telegram.UpdateContext) bool
-
-	// Handle processes the update. Called only when Match returned true.
-	Handle(ctx *telegram.UpdateContext, chat *storage.Chat) error
+	Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *Request
 }

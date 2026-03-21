@@ -16,7 +16,8 @@ func (v *VoiceHandler) Match(ctx *telegram.UpdateContext) bool {
 	return ctx.IsVoice && !ctx.IsEdited
 }
 
-func (v *VoiceHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) error {
+// Handle transcribes voice into text, producing a normalized Request.
+func (v *VoiceHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *Request {
 	transcription, err := v.processAudio(ctx.Msg.Voice.FileID)
 	if err != nil {
 		v.Deps.Notifier.LogError(err)
@@ -24,29 +25,11 @@ func (v *VoiceHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) e
 		return nil
 	}
 
-	// Echo transcription so user sees what was heard
-	v.Deps.Bot.Reply(chat.ChatID, ctx.MessageID, transcription)
-
-	// Forwarded voice: transcribe only, no GPT
-	if ctx.Msg.ForwardFrom != nil {
-		v.Deps.Notifier.Notify(fmt.Sprintf("[%s] Transcribe was done", ctx.ChatTitle()))
-		return nil
+	return &Request{
+		Text:          transcription,
+		OriginalMedia: MediaVoice,
+		IsForwarded:   ctx.Msg.ForwardFrom != nil,
 	}
-
-	// GPT response to the transcribed text
-	response, err := v.Deps.GPTService.ChatCompletion(chat, transcription)
-	v.Deps.Notifier.LogError(err)
-
-	// Text reply
-	v.Deps.Bot.ReplyMarkdown(chat.ChatID, ctx.MessageID, response, chat.Settings.UseMarkdown)
-
-	// Audio reply
-	audioBytes, err := v.Deps.GPTService.GenerateVoice(response)
-	if err != nil {
-		v.Deps.Notifier.LogError(err)
-		return nil
-	}
-	return v.Deps.Bot.AudioUpload(chat.ChatID, audioBytes)
 }
 
 func (v *VoiceHandler) processAudio(fileID string) (string, error) {
