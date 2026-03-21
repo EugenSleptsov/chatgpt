@@ -3,6 +3,7 @@ package commands
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 )
@@ -23,7 +24,7 @@ func (c *CommandSessionCurrent) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSessionCurrent) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandSessionCurrent) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	s := chat.ActiveSession()
 	tier := gpt.FindTier(s.Model)
 	modelLabel := s.Model
@@ -42,5 +43,5 @@ func (c *CommandSessionCurrent) Execute(ctx *telegram.UpdateContext, chat *stora
 		"▶ Сессия #%d — %s\n\nМодель: %s\nСистемный промпт: %s\nСообщений: %d",
 		s.ID, s.Topic, modelLabel, prompt, len(s.History),
 	)
-	c.Bot.Reply(chat.ChatID, ctx.MessageID, msg)
+	return reply(msg)
 }

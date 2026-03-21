@@ -1,6 +1,9 @@
 package gpt
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"log"
+)
 
 // --- Content type constants ---
 
@@ -134,7 +137,10 @@ func (r *Response) ToolCalls() []ToolCall {
 	for _, item := range r.Output {
 		if item.Type == "function_call" {
 			var args map[string]string
-			_ = json.Unmarshal([]byte(item.Arguments), &args)
+			if err := json.Unmarshal([]byte(item.Arguments), &args); err != nil {
+				log.Printf("[ToolCalls] failed to parse arguments for %s: %v (raw: %s)", item.Name, err, item.Arguments)
+				args = make(map[string]string)
+			}
 			calls = append(calls, ToolCall{ID: item.CallID, Name: item.Name, Args: args})
 		}
 	}

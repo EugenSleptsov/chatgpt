@@ -1,8 +1,9 @@
-package handler
+package normalize
 
 import (
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
@@ -17,7 +18,7 @@ func (v *VoiceHandler) Match(ctx *telegram.UpdateContext) bool {
 }
 
 // Handle transcribes voice into text, producing a normalized Request.
-func (v *VoiceHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *Request {
+func (v *VoiceHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *handler.Request {
 	transcription, err := v.processAudio(ctx.Msg.Voice.FileID)
 	if err != nil {
 		v.Deps.Notifier.LogError(err)
@@ -25,9 +26,9 @@ func (v *VoiceHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *
 		return nil
 	}
 
-	return &Request{
+	return &handler.Request{
 		Text:          transcription,
-		OriginalMedia: MediaVoice,
+		OriginalMedia: handler.MediaVoice,
 		IsForwarded:   ctx.Msg.ForwardFrom != nil,
 	}
 }

@@ -40,7 +40,9 @@ func NewClient(apiKey string, log logger.Log) *Client {
 func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instructions string, tools ...gpt.Tool) (*gpt.Response, error) {
 	outerAiModel := gpt.ResolveAPIName(aimodel)
 
-	allTools := append(defaultTools, tools...)
+	allTools := make([]gpt.Tool, 0, len(defaultTools)+len(tools))
+	allTools = append(allTools, defaultTools...)
+	allTools = append(allTools, tools...)
 
 	requestPayload := RequestResponsesPayload{
 		Model:        outerAiModel,

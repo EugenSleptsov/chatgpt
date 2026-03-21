@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"strconv"
 )
@@ -25,7 +26,7 @@ func (c *CommandSummarize) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSummarize) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandSummarize) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	messageCount := SummarizeDefaultMessageCount
 	if len(ctx.Msg.CommandArguments()) > 0 {
 		messageCount, _ = strconv.Atoi(ctx.Msg.CommandArguments())
@@ -38,5 +39,5 @@ func (c *CommandSummarize) Execute(ctx *telegram.UpdateContext, chat *storage.Ch
 		}
 	}
 
-	summarizeText(c.Deps, chat, ctx.MessageID, chat.Settings.SummarizePrompt, messageCount)
+	return summarizeText(c.Deps, chat, chat.Settings.SummarizePrompt, messageCount)
 }

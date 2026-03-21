@@ -1,8 +1,9 @@
-package handler
+package execute
 
 import (
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
+	"GPTBot/handler"
 	"GPTBot/service"
 	"GPTBot/storage"
 	"fmt"
@@ -15,7 +16,7 @@ type ChatExecutor struct {
 	Deps *commands.Deps
 }
 
-func (e *ChatExecutor) Execute(ctx *telegram.UpdateContext, chat *storage.Chat, req *Request) []Response {
+func (e *ChatExecutor) Execute(ctx *telegram.UpdateContext, chat *storage.Chat, req *handler.Request) []handler.Response {
 	result, err := e.Deps.GPTService.ChatCompletion(chat, req.Text)
 	e.Deps.Notifier.LogError(err)
 
@@ -32,29 +33,30 @@ func (e *ChatExecutor) Execute(ctx *telegram.UpdateContext, chat *storage.Chat, 
 
 	// Voice-input guarantee: if the user sent voice and GPT didn't call
 	// generate_voice, we synthesize audio from the text response.
-	if req.OriginalMedia == MediaVoice && result.Audio == nil {
+	if req.OriginalMedia == handler.MediaVoice && result.Audio == nil {
 		audio, voiceErr := e.Deps.GPTService.GenerateVoice(result.Text)
 		e.Deps.Notifier.LogError(voiceErr)
 		if audio != nil {
-			responses = append(responses, Response{Audio: audio})
+			responses = append(responses, handler.Response{Audio: audio})
 		}
 	}
 
 	return responses
 }
 
-// chatResultToResponses maps a service.ChatResult to handler.Response slice.
-func chatResultToResponses(r *service.ChatResult, markdown bool) []Response {
-	var out []Response
+// chatResultToResponses maps a service.ChatResult to []handler.Response.
+// Used by all group/private executors.
+func chatResultToResponses(r *service.ChatResult, markdown bool) []handler.Response {
+	var out []handler.Response
 
 	if r.Text != "" {
-		out = append(out, Response{Text: r.Text, Markdown: markdown})
+		out = append(out, handler.Response{Text: r.Text, Markdown: markdown})
 	}
 	for _, img := range r.Images {
-		out = append(out, Response{ImageURL: img.URL, Caption: img.Caption})
+		out = append(out, handler.Response{ImageURL: img.URL, Caption: img.Caption})
 	}
 	if r.Audio != nil {
-		out = append(out, Response{Audio: r.Audio})
+		out = append(out, handler.Response{Audio: r.Audio})
 	}
 
 	return out

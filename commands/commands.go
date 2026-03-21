@@ -3,6 +3,7 @@ package commands
 import (
 	"GPTBot/api/telegram"
 	conf "GPTBot/config"
+	"GPTBot/handler"
 	"GPTBot/service"
 	"GPTBot/storage"
 	"fmt"
@@ -24,36 +25,38 @@ type Command interface {
 	Name() string
 	Description() string
 	IsAdmin() bool
-	Execute(ctx *telegram.UpdateContext, chat *storage.Chat)
+	Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response
 }
 
-// gptText is a convenience wrapper: calls GPTService.GPTCommand, logs and replies.
-func gptText(d *Deps, chat *storage.Chat, messageID int, systemPrompt, userPrompt string) {
+// reply is a shorthand for building a single text response.
+func reply(text string) []handler.Response {
+	return []handler.Response{{Text: text}}
+}
+
+// gptText is a convenience wrapper: calls GPTService.GPTCommand and returns the response.
+func gptText(d *Deps, chat *storage.Chat, systemPrompt, userPrompt string) []handler.Response {
 	session := chat.ActiveSession()
 	response, err := d.GPTService.GPTCommand(session.Model, systemPrompt, userPrompt)
 	if err != nil {
 		d.Notifier.Logf("Error: %v", err)
-		return
+		return nil
 	}
 
 	d.Notifier.Notify(fmt.Sprintf("[%s | %s]\nSystemPrompt: %s\n\nUserPrompt: %s\n\nResponse: %s", chat.Title, session.Model, systemPrompt, userPrompt, response))
-	d.Bot.Reply(chat.ChatID, messageID, response)
+	return reply(response)
 }
 
 // summarizeText reads chat log, then delegates to gptText.
-func summarizeText(d *Deps, chat *storage.Chat, messageID int, systemPrompt string, messageCount int) {
+func summarizeText(d *Deps, chat *storage.Chat, systemPrompt string, messageCount int) []handler.Response {
 	lines, err := d.GPTService.ReadChatLog(chat.ChatID, messageCount)
 	if err != nil {
-		d.Bot.Reply(chat.ChatID, messageID, "Произошла ошибка")
-		return
+		return reply("Произошла ошибка")
 	}
 
 	if len(lines) == 0 {
-		d.Bot.Reply(chat.ChatID, messageID, "История чата пуста")
-		return
+		return reply("История чата пуста")
 	}
 
-	d.Bot.Reply(chat.ChatID, messageID, fmt.Sprintf("Обработка %d сообщений...", len(lines)))
 	chatLog := strings.Join(lines, "\n")
-	gptText(d, chat, messageID, systemPrompt, "Вот сообщения чата, которые ты должен обработать:\n\n"+chatLog)
+	return gptText(d, chat, systemPrompt, "Вот сообщения чата, которые ты должен обработать:\n\n"+chatLog)
 }

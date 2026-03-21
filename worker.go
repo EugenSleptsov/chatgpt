@@ -10,18 +10,26 @@ import (
 )
 
 type Worker struct {
-	Deps        *commands.Deps
-	ChatManager manager.ChatManager
-	Router      *handler.Router
-	Pipeline    *handler.Pipeline
+	Deps           *commands.Deps
+	ChatManager    manager.ChatManager
+	Router         *handler.Router
+	Dispatcher     *handler.Dispatcher
+	ResponseSender *handler.ResponseSender
 }
 
-func NewWorker(deps *commands.Deps, chatManager manager.ChatManager, router *handler.Router, pipeline *handler.Pipeline) *Worker {
+func NewWorker(
+	deps *commands.Deps,
+	chatManager manager.ChatManager,
+	router *handler.Router,
+	dispatcher *handler.Dispatcher,
+	sender *handler.ResponseSender,
+) *Worker {
 	return &Worker{
-		Deps:        deps,
-		ChatManager: chatManager,
-		Router:      router,
-		Pipeline:    pipeline,
+		Deps:           deps,
+		ChatManager:    chatManager,
+		Router:         router,
+		Dispatcher:     dispatcher,
+		ResponseSender: sender,
 	}
 }
 
@@ -60,32 +68,15 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 	req := h.Handle(ctx, chat)
 	if req == nil {
 		w.ChatManager.MarkDirty(chat.ChatID)
-		return // handler dealt with it internally (commands, stickers, edits)
+		return // nothing to process (stickers, edits, errors)
 	}
 
-	// 2. Pipeline resolves intents and executes them
-	responses := w.Pipeline.Process(ctx, chat, req)
+	// 2. Dispatcher routes to command or conversational branch
+	responses := w.Dispatcher.Process(ctx, chat, req)
 
-	// 3. Deliver responses
-	w.sendResponses(ctx, chat, responses)
+	// 3. ResponseSender delivers responses to Telegram
+	w.ResponseSender.Send(chat.ChatID, ctx.MessageID, responses)
 	w.ChatManager.MarkDirty(chat.ChatID)
-}
-
-func (w *Worker) sendResponses(ctx *telegram.UpdateContext, chat *storage.Chat, responses []handler.Response) {
-	for _, r := range responses {
-		switch {
-		case len(r.Audio) > 0:
-			if err := w.Deps.Bot.AudioUpload(chat.ChatID, r.Audio); err != nil {
-				w.Deps.Notifier.LogError(err)
-			}
-		case r.ImageURL != "":
-			if err := w.Deps.Bot.SendImage(chat.ChatID, r.ImageURL, r.Caption); err != nil {
-				w.Deps.Notifier.LogError(err)
-			}
-		case r.Text != "":
-			w.Deps.Bot.ReplyMarkdown(chat.ChatID, ctx.MessageID, r.Text, r.Markdown)
-		}
-	}
 }
 
 func (w *Worker) handleUnauthorizedAccess(ctx *telegram.UpdateContext, chat *storage.Chat) {

@@ -3,6 +3,7 @@ package commands
 import (
 	"GPTBot/api/telegram"
 	conf "GPTBot/config"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 	"strconv"
@@ -24,23 +25,21 @@ func (c *CommandAdminRemoveUser) IsAdmin() bool {
 	return true
 }
 
-func (c *CommandAdminRemoveUser) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
-	chatID := chat.ChatID
+func (c *CommandAdminRemoveUser) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	if len(ctx.Msg.CommandArguments()) == 0 {
-		c.Bot.Reply(chatID, ctx.MessageID, "Укажите ID пользователя. Использование: /removeuser <id>")
-		return
+		return reply("Укажите ID пользователя. Использование: /removeuser <id>")
 	}
 
 	userId, err := strconv.ParseInt(ctx.Msg.CommandArguments(), 10, 64)
 	if err != nil {
-		c.Bot.Reply(chatID, ctx.MessageID, fmt.Sprintf("Некорректный ID: %s", ctx.Msg.CommandArguments()))
-		return
+		return reply(fmt.Sprintf("Некорректный ID: %s", ctx.Msg.CommandArguments()))
 	}
 
+	var responses []handler.Response
 	newList := make([]int64, 0)
 	for _, id := range c.Auth.GetAuthorizedUsers() {
 		if id == userId {
-			c.Bot.Reply(chatID, ctx.MessageID, fmt.Sprintf("Пользователь будет удалён: %d", userId))
+			responses = append(responses, handler.Response{Text: fmt.Sprintf("Пользователь будет удалён: %d", userId)})
 		} else {
 			newList = append(newList, id)
 		}
@@ -50,9 +49,9 @@ func (c *CommandAdminRemoveUser) Execute(ctx *telegram.UpdateContext, chat *stor
 	c.Config.AuthorizedUserIds = c.Auth.GetAuthorizedUsers()
 	if err = conf.UpdateConfig(c.ConfigPath, c.Config); err != nil {
 		c.Notifier.LogError(err)
-		c.Bot.Reply(chatID, ctx.MessageID, fmt.Sprintf("Ошибка сохранения конфига: %v", err))
-		return
+		return append(responses, handler.Response{Text: fmt.Sprintf("Ошибка сохранения конфига: %v", err)})
 	}
 
-	c.Bot.Reply(chatID, ctx.MessageID, "Пользователь удалён.")
+	responses = append(responses, handler.Response{Text: "Пользователь удалён."})
+	return responses
 }

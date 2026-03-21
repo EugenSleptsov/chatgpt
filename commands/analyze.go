@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"strconv"
 	"strings"
@@ -26,10 +27,9 @@ func (c *CommandAnalyze) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandAnalyze) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandAnalyze) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	if len(ctx.Msg.CommandArguments()) == 0 {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Пожалуйста укажите количество сообщений (опционально) и промпт для обработки. Использование: /analyze <count> <prompt>")
-		return
+		return reply("Пожалуйста укажите количество сообщений (опционально) и промпт для обработки. Использование: /analyze <count> <prompt>")
 	}
 
 	var systemPrompt string
@@ -40,8 +40,7 @@ func (c *CommandAnalyze) Execute(ctx *telegram.UpdateContext, chat *storage.Chat
 		systemPrompt = ctx.Msg.CommandArguments()
 	} else {
 		if len(arguments) < 2 {
-			c.Bot.Reply(chat.ChatID, ctx.MessageID, "Пожалуйста укажите промпт для обработки. Использование: /analyze <count> <prompt>")
-			return
+			return reply("Пожалуйста укажите промпт для обработки. Использование: /analyze <count> <prompt>")
 		}
 
 		systemPrompt = strings.Join(arguments[1:], " ")
@@ -54,5 +53,5 @@ func (c *CommandAnalyze) Execute(ctx *telegram.UpdateContext, chat *storage.Chat
 		}
 	}
 
-	summarizeText(c.Deps, chat, ctx.MessageID, systemPrompt, messageCount)
+	return summarizeText(c.Deps, chat, systemPrompt, messageCount)
 }

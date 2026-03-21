@@ -1,19 +1,19 @@
-package handler
+package execute
 
 import (
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
+	"GPTBot/handler"
 	"GPTBot/storage"
 )
 
 // GroupAutoReplyExecutor handles IntentGroupAutoReply — evaluates whether
 // the bot should proactively join a group conversation (via GPT check).
-// If yes, replies from history; GPT may also call function tools.
 type GroupAutoReplyExecutor struct {
 	Deps *commands.Deps
 }
 
-func (e *GroupAutoReplyExecutor) Execute(ctx *telegram.UpdateContext, chat *storage.Chat, _ *Request) []Response {
+func (e *GroupAutoReplyExecutor) Execute(ctx *telegram.UpdateContext, chat *storage.Chat, _ *handler.Request) []handler.Response {
 	if !e.Deps.Auth.IsAuthorized(ctx.SenderID) {
 		return nil
 	}

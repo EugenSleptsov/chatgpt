@@ -1,8 +1,9 @@
-package handler
+package normalize
 
 import (
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"strings"
 )
@@ -16,7 +17,7 @@ func (i *ImageHandler) Match(ctx *telegram.UpdateContext) bool {
 }
 
 // Handle resolves the image URL and extracts caption, producing a normalized Request.
-func (i *ImageHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *Request {
+func (i *ImageHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *handler.Request {
 	image := ctx.Msg.Photo[len(ctx.Msg.Photo)-1]
 	file, err := i.Deps.Bot.GetFile(image.FileID)
 	if err != nil {
@@ -40,15 +41,14 @@ func (i *ImageHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *
 			caption = strings.TrimSpace(strings.ReplaceAll(caption, "@"+botUsername, ""))
 		}
 
-		// Log photo for group context regardless of whether bot is addressed
 		i.Deps.GPTService.LogGroupPhoto(chat, ctx.SenderName, ctx.Msg.Caption)
 		i.Deps.Notifier.Logf("[Group] %s → фото, botAddressed=%v", ctx.SenderName, botAddressed)
 	}
 
-	return &Request{
+	return &handler.Request{
 		Text:          caption,
 		ImageURL:      imageURL,
 		BotAddressed:  botAddressed,
-		OriginalMedia: MediaImage,
+		OriginalMedia: handler.MediaImage,
 	}
 }

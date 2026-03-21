@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 )
 
@@ -21,7 +22,7 @@ func (c *CommandClear) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandClear) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandClear) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	chat.ActiveSession().History = nil
-	c.Bot.Reply(chat.ChatID, ctx.MessageID, "История разговоров была очищена.")
+	return reply("История разговоров была очищена.")
 }

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 )
@@ -22,13 +23,12 @@ func (c *CommandGrammar) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandGrammar) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandGrammar) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	if len(ctx.Msg.CommandArguments()) == 0 {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Пожалуйста укажите текст, который необходимо скорректировать. Использование: /grammar <text>")
-	} else {
-		prompt := ctx.Msg.CommandArguments()
-		grammarPrompt := fmt.Sprintf("Correct the following text: \"%s\". Answer with corrected text only.", prompt)
-		systemPrompt := "You are a helpful assistant that corrects grammar."
-		gptText(c.Deps, chat, ctx.MessageID, systemPrompt, grammarPrompt)
+		return reply("Пожалуйста укажите текст, который необходимо скорректировать. Использование: /grammar <text>")
 	}
+	prompt := ctx.Msg.CommandArguments()
+	grammarPrompt := fmt.Sprintf("Correct the following text: \"%s\". Answer with corrected text only.", prompt)
+	systemPrompt := "You are a helpful assistant that corrects grammar."
+	return gptText(c.Deps, chat, systemPrompt, grammarPrompt)
 }

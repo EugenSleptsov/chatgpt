@@ -23,15 +23,36 @@ type GPTService struct {
 
 // ChatResult holds the full output of a GPT call, including tool-call results.
 type ChatResult struct {
-	Text   string        // assistant text reply
-	Images []ImageResult // generated images (from generate_image tool calls)
-	Audio  []byte        // generated audio  (from generate_voice tool call)
+	Text      string        // assistant text reply
+	Images    []ImageResult // generated images (from generate_image tool calls)
+	Audio     []byte        // generated audio  (from generate_voice tool call)
+	AudioText string        // text that was synthesized (for history storage)
 }
 
 // ImageResult is one image produced by a generate_image tool call.
 type ImageResult struct {
 	URL     string
 	Caption string
+}
+
+// buildHistoryContent composes the full assistant turn for storage in chat history.
+// Text reply, generated images (as caption) and audio (as transcript) are all included
+// so GPT has full context of what was produced in previous turns.
+func buildHistoryContent(r *ChatResult) string {
+	var parts []string
+	if r.Text != "" {
+		parts = append(parts, r.Text)
+	}
+	for _, img := range r.Images {
+		parts = append(parts, fmt.Sprintf("[Сгенерирована картинка: %s]", img.Caption))
+	}
+	if r.AudioText != "" {
+		parts = append(parts, fmt.Sprintf("[Сгенерировано аудио: «%s»]", r.AudioText))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\n")
 }
 
 // chatTools are the function tools sent with every chat completion request.
@@ -92,7 +113,7 @@ func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (*ChatR
 		s.executeToolCalls(payload.ToolCalls(), result)
 	}
 
-	entry.Response = storage.Message{Role: "assistant", Content: result.Text}
+	entry.Response = storage.Message{Role: "assistant", Content: buildHistoryContent(result)}
 	return result, err
 }
 
@@ -128,6 +149,7 @@ func (s *GPTService) executeToolCalls(calls []gpt.ToolCall, result *ChatResult) 
 				continue
 			}
 			result.Audio = audio
+			result.AudioText = text
 		default:
 			log.Printf("[ToolCall] unknown tool: %s", tc.Name)
 		}
@@ -270,7 +292,7 @@ func (s *GPTService) ReplyFromGroupHistory(chat *storage.Chat) (*ChatResult, err
 	}
 
 	session.History[len(session.History)-1].Response = storage.Message{
-		Role: "assistant", Content: result.Text,
+		Role: "assistant", Content: buildHistoryContent(result),
 	}
 	return result, err
 }

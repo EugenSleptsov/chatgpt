@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 	"strconv"
@@ -24,25 +25,22 @@ func (c *CommandSessionUse) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSessionUse) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandSessionUse) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	arg := strings.TrimSpace(ctx.Msg.CommandArguments())
 	if arg == "" {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Укажите ID сессии. Использование: /use <id>")
-		return
+		return reply("Укажите ID сессии. Использование: /use <id>")
 	}
 
 	id, err := strconv.Atoi(arg)
 	if err != nil {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, "ID должен быть числом.")
-		return
+		return reply("ID должен быть числом.")
 	}
 
 	s := chat.FindSession(id)
 	if s == nil {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Сессия #%d не найдена.", id))
-		return
+		return reply(fmt.Sprintf("Сессия #%d не найдена.", id))
 	}
 
 	chat.ActiveSessionID = s.ID
-	c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Переключено на сессию #%d — %s.", s.ID, s.Topic))
+	return reply(fmt.Sprintf("Переключено на сессию #%d — %s.", s.ID, s.Topic))
 }

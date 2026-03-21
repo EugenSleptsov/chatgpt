@@ -8,6 +8,11 @@ type Router struct {
 	handlers []UpdateHandler
 }
 
+// NewRouter creates an empty Router. Register handlers via Register().
+func NewRouter() *Router {
+	return &Router{}
+}
+
 // Register adds a handler to the router.
 func (r *Router) Register(h UpdateHandler) {
 	r.handlers = append(r.handlers, h)

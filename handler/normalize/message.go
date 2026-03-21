@@ -1,8 +1,9 @@
-package handler
+package normalize
 
 import (
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"strings"
 )
@@ -18,14 +19,14 @@ func (m *MessageHandler) Match(_ *telegram.UpdateContext) bool {
 // Handle normalizes a text message into a Request.
 // In groups: logs for context, detects mentions, cleans text.
 // Returns nil for edited messages (context-only) and empty text.
-func (m *MessageHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *Request {
+func (m *MessageHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *handler.Request {
 	text := ctx.Text
 	if text == "" {
 		return nil
 	}
 
 	if !ctx.IsGroup {
-		return &Request{Text: text}
+		return &handler.Request{Text: text}
 	}
 
 	// --- Group normalization ---
@@ -50,7 +51,7 @@ func (m *MessageHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat)
 		return nil
 	}
 
-	return &Request{
+	return &handler.Request{
 		Text:         cleanText,
 		BotAddressed: botMentioned || isReplyToBot || botCalledByName,
 	}

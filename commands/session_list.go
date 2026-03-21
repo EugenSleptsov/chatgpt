@@ -3,6 +3,7 @@ package commands
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 )
@@ -23,7 +24,7 @@ func (c *CommandSessionList) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSessionList) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandSessionList) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	msg := "📋 Сессии:\n\n"
 	for _, s := range chat.Sessions {
 		marker := "  "
@@ -38,5 +39,5 @@ func (c *CommandSessionList) Execute(ctx *telegram.UpdateContext, chat *storage.
 		msg += fmt.Sprintf("%s#%d — %s [%s, %d сообщ.]\n", marker, s.ID, s.Topic, modelLabel, len(s.History))
 	}
 	msg += fmt.Sprintf("\nАктивная: #%d", chat.ActiveSessionID)
-	c.Bot.Reply(chat.ChatID, ctx.MessageID, msg)
+	return reply(msg)
 }

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 )
@@ -22,11 +23,10 @@ func (c *CommandSummarizePrompt) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSummarizePrompt) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandSummarizePrompt) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	if len(ctx.Msg.CommandArguments()) == 0 {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprint("Текущий промпт для команды /summarize: ", chat.Settings.SummarizePrompt))
-	} else {
-		chat.Settings.SummarizePrompt = ctx.Msg.CommandArguments()
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Промпт для команды /summarize установлен")
+		return reply(fmt.Sprint("Текущий промпт для команды /summarize: ", chat.Settings.SummarizePrompt))
 	}
+	chat.Settings.SummarizePrompt = ctx.Msg.CommandArguments()
+	return reply("Промпт для команды /summarize установлен")
 }

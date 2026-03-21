@@ -3,6 +3,7 @@ package commands
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
@@ -28,7 +29,7 @@ func (c *CommandHistory) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandHistory) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandHistory) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	chunks := formatHistory(storage.ToGPTMessages(chat.ActiveSession().History))
 	totalPages := (len(chunks) + historyPageSize - 1) / historyPageSize
 
@@ -53,8 +54,9 @@ func (c *CommandHistory) Execute(ctx *telegram.UpdateContext, chat *storage.Chat
 
 	pageChunks := chunks[start:end]
 
+	var responses []handler.Response
 	for _, message := range pageChunks {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, message)
+		responses = append(responses, handler.Response{Text: message})
 	}
 
 	// navigation hint
@@ -63,8 +65,10 @@ func (c *CommandHistory) Execute(ctx *telegram.UpdateContext, chat *storage.Chat
 		if page < totalPages {
 			hint += fmt.Sprintf(" Ранние сообщения: /history %d", page+1)
 		}
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, hint)
+		responses = append(responses, handler.Response{Text: hint})
 	}
+
+	return responses
 }
 
 func formatHistory(history []gpt.Message) []string {

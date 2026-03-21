@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 	"strconv"
@@ -24,29 +25,25 @@ func (c *CommandSessionRemove) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSessionRemove) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandSessionRemove) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	arg := strings.TrimSpace(ctx.Msg.CommandArguments())
 	if arg == "" {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Укажите ID сессии. Использование: /remove <id>")
-		return
+		return reply("Укажите ID сессии. Использование: /remove <id>")
 	}
 
 	id, err := strconv.Atoi(arg)
 	if err != nil {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, "ID должен быть числом.")
-		return
+		return reply("ID должен быть числом.")
 	}
 
 	s := chat.FindSession(id)
 	if s == nil {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Сессия #%d не найдена.", id))
-		return
+		return reply(fmt.Sprintf("Сессия #%d не найдена.", id))
 	}
 
 	if !chat.RemoveSession(id) {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Нельзя удалить единственную сессию.")
-		return
+		return reply("Нельзя удалить единственную сессию.")
 	}
 
-	c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Сессия #%d (%s) удалена. Активная: #%d.", id, s.Topic, chat.ActiveSessionID))
+	return reply(fmt.Sprintf("Сессия #%d (%s) удалена. Активная: #%d.", id, s.Topic, chat.ActiveSessionID))
 }

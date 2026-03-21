@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
@@ -24,7 +25,7 @@ func (c *CommandRollback) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandRollback) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandRollback) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	session := chat.ActiveSession()
 	number := 1
 	if len(ctx.Msg.CommandArguments()) > 0 {
@@ -41,8 +42,7 @@ func (c *CommandRollback) Execute(ctx *telegram.UpdateContext, chat *storage.Cha
 
 	if len(session.History) > 0 {
 		session.History = session.History[:len(session.History)-number]
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
-	} else {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, "История разговоров пуста.")
+		return reply(fmt.Sprintf("Удалено %d %s.", number, util.Pluralize(number, [3]string{"сообщение", "сообщения", "сообщений"})))
 	}
+	return reply("История разговоров пуста.")
 }

@@ -12,6 +12,15 @@ type Pipeline struct {
 	executors map[IntentType]IntentExecutor
 }
 
+// NewPipeline creates an empty Pipeline with the given resolver.
+// Register executors via RegisterExecutor().
+func NewPipeline(resolver *IntentResolver) *Pipeline {
+	return &Pipeline{
+		resolver:  resolver,
+		executors: make(map[IntentType]IntentExecutor),
+	}
+}
+
 // RegisterExecutor binds an executor to an intent type.
 func (p *Pipeline) RegisterExecutor(t IntentType, exec IntentExecutor) {
 	p.executors[t] = exec

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"GPTBot/util"
 	"fmt"
@@ -40,19 +41,18 @@ func (c *CommandTranslate) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandTranslate) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandTranslate) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	args := strings.Fields(ctx.Msg.CommandArguments())
 
 	if len(args) == 0 {
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, "Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
-		return
+		return reply("Пожалуйста укажите текст, который необходимо перевести. Использование: /translate <text>")
 	}
 
 	language, textToTranslate := c.extractLanguageAndText(args)
 	translationPrompt := c.buildTranslationPrompt(language, textToTranslate)
 
 	systemPrompt := "You are a helpful assistant that translates. You should answer only with translated text without explanations and quotation marks."
-	gptText(c.Deps, chat, ctx.MessageID, systemPrompt, translationPrompt)
+	return gptText(c.Deps, chat, systemPrompt, translationPrompt)
 }
 
 func (c *CommandTranslate) extractLanguageAndText(args []string) (string, string) {

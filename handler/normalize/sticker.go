@@ -1,8 +1,9 @@
-package handler
+package normalize
 
 import (
 	"GPTBot/api/telegram"
 	"GPTBot/commands"
+	"GPTBot/handler"
 	"GPTBot/storage"
 )
 
@@ -15,7 +16,7 @@ func (s *StickerHandler) Match(ctx *telegram.UpdateContext) bool {
 }
 
 // Handle logs stickers for group context. Nothing to process further.
-func (s *StickerHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *Request {
+func (s *StickerHandler) Handle(ctx *telegram.UpdateContext, chat *storage.Chat) *handler.Request {
 	if !ctx.IsGroup {
 		return nil
 	}

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 )
@@ -22,19 +23,17 @@ func (c *CommandSystem) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSystem) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandSystem) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	session := chat.ActiveSession()
 	if len(ctx.Msg.CommandArguments()) == 0 {
 		if session.SystemPrompt == "" {
-			c.Bot.Reply(chat.ChatID, ctx.MessageID, "Системное сообщение не установлено.")
-		} else {
-			c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprint(session.SystemPrompt))
+			return reply("Системное сообщение не установлено.")
 		}
-	} else {
-		session.SystemPrompt = ctx.Msg.CommandArguments()
-		if len(session.SystemPrompt) > 1024 {
-			session.SystemPrompt = session.SystemPrompt[:1024]
-		}
-		c.Bot.Reply(chat.ChatID, ctx.MessageID, fmt.Sprintf("Системное сообщение установлено на: %s.", session.SystemPrompt))
+		return reply(fmt.Sprint(session.SystemPrompt))
 	}
+	session.SystemPrompt = ctx.Msg.CommandArguments()
+	if len(session.SystemPrompt) > 1024 {
+		session.SystemPrompt = session.SystemPrompt[:1024]
+	}
+	return reply(fmt.Sprintf("Системное сообщение установлено на: %s.", session.SystemPrompt))
 }

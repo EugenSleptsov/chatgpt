@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 )
@@ -22,7 +23,7 @@ func (c *CommandHelp) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandHelp) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
+func (c *CommandHelp) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	CommandList := c.Registry.GetCommands()
 
 	message := "Список доступных команд и их описание:\n"
@@ -43,5 +44,5 @@ func (c *CommandHelp) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
 		}
 	}
 
-	c.Bot.Reply(chat.ChatID, ctx.MessageID, message)
+	return reply(message)
 }

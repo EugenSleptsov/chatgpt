@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 )
 
@@ -21,6 +22,6 @@ func (c *CommandStart) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandStart) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) {
-	c.Bot.Reply(chat.ChatID, ctx.MessageID, "Здравствуйте! Я чатбот-помощник, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help.")
+func (c *CommandStart) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
+	return reply("Здравствуйте! Я чатбот-помощник, и я здесь, чтобы помочь вам с любыми вопросами или задачами. Просто напишите ваш вопрос или запрос, и я сделаю все возможное, чтобы помочь вам! Для справки наберите /help.")
 }
