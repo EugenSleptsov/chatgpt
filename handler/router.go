@@ -18,6 +18,11 @@ func (r *Router) Register(h UpdateHandler) {
 	r.handlers = append(r.handlers, h)
 }
 
+// RegisterAll adds multiple handlers in order.
+func (r *Router) RegisterAll(handlers []UpdateHandler) {
+	r.handlers = append(r.handlers, handlers...)
+}
+
 // Route returns the first handler whose Match returns true, or nil.
 func (r *Router) Route(ctx *telegram.UpdateContext) UpdateHandler {
 	for _, h := range r.handlers {

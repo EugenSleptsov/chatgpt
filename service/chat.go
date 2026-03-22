@@ -7,6 +7,7 @@ import (
 	"GPTBot/api/gpt"
 	"GPTBot/storage"
 	"GPTBot/util"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -85,8 +86,9 @@ var chatTools = []gpt.Tool{
 }
 
 // ChatCompletion appends a user message to chat history, sends the
-// conversation context to GPT (with function tools), executes any tool
-// calls GPT makes, and returns the full result.
+// conversation context to GPT (with function tools), runs the full tool
+// loop (execute → send results back → model finalises), and returns
+// the complete result.
 func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (*ChatResult, error) {
 	session := chat.ActiveSession()
 
@@ -102,58 +104,128 @@ func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (*ChatR
 	// Build message list from history — system prompt goes as instructions, not as a message.
 	messages := storage.ToGPTMessages(session.History)
 
-	result := &ChatResult{}
 	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt, chatTools...)
-
 	if err != nil {
 		log.Printf("[ChatCompletion] GPT error: %v", err)
-		result.Text = fallbackResponse
-	} else {
-		result.Text = strings.TrimSpace(payload.OutputText())
-		s.executeToolCalls(payload.ToolCalls(), result)
+		result := &ChatResult{Text: fallbackResponse}
+		entry.Response = storage.Message{Role: "assistant", Content: fallbackResponse}
+		return result, err
 	}
 
+	result, err := s.toolLoop(payload, session.Model, session.SystemPrompt)
 	entry.Response = storage.Message{Role: "assistant", Content: buildHistoryContent(result)}
 	return result, err
 }
 
-// executeToolCalls processes function calls returned by GPT and fills the ChatResult.
-func (s *GPTService) executeToolCalls(calls []gpt.ToolCall, result *ChatResult) {
-	for _, tc := range calls {
-		log.Printf("[ToolCall] %s(%v)", tc.Name, tc.Args)
-		switch tc.Name {
-		case "generate_image":
-			prompt := tc.Args["prompt"]
-			if prompt == "" {
-				log.Printf("[ToolCall] generate_image: empty prompt, skipping")
-				continue
+// maxToolIterations limits how many tool-call rounds the model can do
+// in a single request to prevent infinite loops.
+const maxToolIterations = 5
+
+// toolLoop implements the correct function-calling cycle:
+//  1. model returns function_call(s)
+//  2. we execute each function
+//  3. we send function_call_output(s) back (with the same call_id)
+//  4. model produces a final answer (or more tool calls → repeat)
+func (s *GPTService) toolLoop(response *gpt.Response, model, systemPrompt string) (*ChatResult, error) {
+	result := &ChatResult{}
+
+	for i := 0; i < maxToolIterations; i++ {
+		calls := response.ToolCalls()
+		if len(calls) == 0 {
+			result.Text = strings.TrimSpace(response.OutputText())
+			return result, nil
+		}
+
+		log.Printf("[ToolLoop] iteration %d: %d tool call(s)", i+1, len(calls))
+
+		outputs := make([]gpt.ToolCallOutput, 0, len(calls))
+		for _, tc := range calls {
+			output := s.executeSingleToolCall(tc, result)
+			outputs = append(outputs, gpt.NewToolCallOutput(tc.ID, output))
+		}
+
+		var err error
+		response, err = s.GptClient.ContinueWithToolOutputs(
+			response.ID, outputs, model, systemPrompt, chatTools...,
+		)
+		if err != nil {
+			log.Printf("[ToolLoop] error continuing response: %v", err)
+			if result.Text == "" {
+				result.Text = fallbackResponse
 			}
-			imageURL, caption, err := s.GenerateImage(gpt.ImageEnhanceTierID, prompt)
-			if err != nil {
-				log.Printf("[ToolCall] generate_image error: %v", err)
-				continue
-			}
-			result.Images = append(result.Images, ImageResult{URL: imageURL, Caption: caption})
-		case "generate_voice":
-			text := tc.Args["text"]
-			if text == "" {
-				text = result.Text
-			}
-			if text == "" {
-				log.Printf("[ToolCall] generate_voice: no text available, skipping")
-				continue
-			}
-			audio, err := s.GenerateVoice(text)
-			if err != nil {
-				log.Printf("[ToolCall] generate_voice error: %v", err)
-				continue
-			}
-			result.Audio = audio
-			result.AudioText = text
-		default:
-			log.Printf("[ToolCall] unknown tool: %s", tc.Name)
+			return result, err
 		}
 	}
+
+	// Max iterations reached — take whatever text the last response has.
+	log.Printf("[ToolLoop] max iterations (%d) reached", maxToolIterations)
+	result.Text = strings.TrimSpace(response.OutputText())
+	if result.Text == "" {
+		result.Text = fallbackResponse
+	}
+	return result, nil
+}
+
+// toolResult is the JSON structure sent back to the model as function output.
+type toolResult struct {
+	Status  string `json:"status"`
+	URL     string `json:"url,omitempty"`
+	Caption string `json:"caption,omitempty"`
+	Text    string `json:"text,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+func marshalToolResult(r toolResult) string {
+	data, _ := json.Marshal(r)
+	return string(data)
+}
+
+// executeSingleToolCall runs one tool call and returns the JSON output
+// string to send back to the model. Side-effects (images, audio) are
+// accumulated into result.
+func (s *GPTService) executeSingleToolCall(tc gpt.ToolCall, result *ChatResult) string {
+	log.Printf("[ToolCall] %s(%v)", tc.Name, tc.Args)
+	switch tc.Name {
+	case "generate_image":
+		return s.executeImageToolCall(tc, result)
+	case "generate_voice":
+		return s.executeVoiceToolCall(tc, result)
+	default:
+		log.Printf("[ToolCall] unknown tool: %s", tc.Name)
+		return marshalToolResult(toolResult{Status: "error", Error: "unknown tool: " + tc.Name})
+	}
+}
+
+func (s *GPTService) executeImageToolCall(tc gpt.ToolCall, result *ChatResult) string {
+	prompt := tc.Args["prompt"]
+	if prompt == "" {
+		return marshalToolResult(toolResult{Status: "error", Error: "empty prompt"})
+	}
+	imageURL, caption, err := s.GenerateImage(gpt.ImageEnhanceTierID, prompt)
+	if err != nil {
+		log.Printf("[ToolCall] generate_image error: %v", err)
+		return marshalToolResult(toolResult{Status: "error", Error: err.Error()})
+	}
+	result.Images = append(result.Images, ImageResult{URL: imageURL, Caption: caption})
+	return marshalToolResult(toolResult{Status: "success", URL: imageURL, Caption: caption})
+}
+
+func (s *GPTService) executeVoiceToolCall(tc gpt.ToolCall, result *ChatResult) string {
+	text := tc.Args["text"]
+	if text == "" {
+		text = result.Text
+	}
+	if text == "" {
+		return marshalToolResult(toolResult{Status: "error", Error: "no text available for voice synthesis"})
+	}
+	audio, err := s.GenerateVoice(text)
+	if err != nil {
+		log.Printf("[ToolCall] generate_voice error: %v", err)
+		return marshalToolResult(toolResult{Status: "error", Error: err.Error()})
+	}
+	result.Audio = audio
+	result.AudioText = text
+	return marshalToolResult(toolResult{Status: "success", Text: text})
 }
 
 // GPTCommand sends a one-shot system+user prompt pair to GPT and returns
@@ -272,7 +344,7 @@ func (s *GPTService) LogBotResponse(chat *storage.Chat, text string) {
 }
 
 // ReplyFromGroupHistory sends the full group history to GPT (with function
-// tools), executes any tool calls, attaches the assistant response to the
+// tools), runs the full tool loop, attaches the assistant response to the
 // last history entry and returns the full ChatResult.
 func (s *GPTService) ReplyFromGroupHistory(chat *storage.Chat) (*ChatResult, error) {
 	session := chat.ActiveSession()
@@ -281,15 +353,13 @@ func (s *GPTService) ReplyFromGroupHistory(chat *storage.Chat) (*ChatResult, err
 	}
 
 	messages := storage.ToGPTMessages(session.History)
-	result := &ChatResult{}
 	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt, chatTools...)
 	if err != nil {
 		log.Printf("[ReplyFromGroupHistory] GPT error: %v", err)
-		result.Text = fallbackResponse
-	} else {
-		result.Text = strings.TrimSpace(payload.OutputText())
-		s.executeToolCalls(payload.ToolCalls(), result)
+		return &ChatResult{Text: fallbackResponse}, err
 	}
+
+	result, err := s.toolLoop(payload, session.Model, session.SystemPrompt)
 
 	session.History[len(session.History)-1].Response = storage.Message{
 		Role: "assistant", Content: buildHistoryContent(result),

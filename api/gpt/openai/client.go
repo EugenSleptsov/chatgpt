@@ -18,6 +18,16 @@ type RequestResponsesPayload struct {
 	Store        bool          `json:"store"` // false = do not persist on OpenAI servers
 }
 
+// ContinueResponsesPayload continues a previous response with tool-call outputs.
+type ContinueResponsesPayload struct {
+	Model              string               `json:"model"`
+	Instructions       string               `json:"instructions,omitempty"`
+	PreviousResponseID string               `json:"previous_response_id"`
+	Input              []gpt.ToolCallOutput `json:"input"`
+	Tools              []gpt.Tool           `json:"tools,omitempty"`
+	Store              bool                 `json:"store"`
+}
+
 // defaultTools lists tools enabled on every CallGPT request.
 var defaultTools = []gpt.Tool{
 	{Type: "web_search"},
@@ -37,6 +47,8 @@ func NewClient(apiKey string, log logger.Log) *Client {
 	return &Client{Transport: NewHTTPTransport(apiKey), Log: log}
 }
 
+const responsesEndpoint = "https://api.openai.com/v1/responses"
+
 func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instructions string, tools ...gpt.Tool) (*gpt.Response, error) {
 	outerAiModel := gpt.ResolveAPIName(aimodel)
 
@@ -44,20 +56,41 @@ func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instruc
 	allTools = append(allTools, defaultTools...)
 	allTools = append(allTools, tools...)
 
-	requestPayload := RequestResponsesPayload{
+	return c.postResponses(RequestResponsesPayload{
 		Model:        outerAiModel,
 		Instructions: instructions,
 		Input:        chatConversation,
 		Tools:        allTools,
 		Store:        false,
-	}
+	})
+}
 
-	jsonPayload, err := json.Marshal(requestPayload)
+func (c *Client) ContinueWithToolOutputs(previousResponseID string, outputs []gpt.ToolCallOutput, aimodel string, instructions string, tools ...gpt.Tool) (*gpt.Response, error) {
+	outerAiModel := gpt.ResolveAPIName(aimodel)
+
+	allTools := make([]gpt.Tool, 0, len(defaultTools)+len(tools))
+	allTools = append(allTools, defaultTools...)
+	allTools = append(allTools, tools...)
+
+	return c.postResponses(ContinueResponsesPayload{
+		Model:              outerAiModel,
+		Instructions:       instructions,
+		PreviousResponseID: previousResponseID,
+		Input:              outputs,
+		Tools:              allTools,
+		Store:              false,
+	})
+}
+
+// postResponses marshals a payload, POSTs it to the Responses API and
+// decodes the response. Used by both CallGPT and ContinueWithToolOutputs.
+func (c *Client) postResponses(payload interface{}) (*gpt.Response, error) {
+	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.Transport.Post("https://api.openai.com/v1/responses", "application/json", jsonPayload)
+	resp, err := c.Transport.Post(responsesEndpoint, "application/json", jsonPayload)
 	if err != nil {
 		return nil, err
 	}

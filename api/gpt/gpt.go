@@ -115,6 +115,19 @@ type Response struct {
 	Usage  ResponseUsage        `json:"usage"`
 }
 
+// HasToolCalls returns true if the response contains any function_call items.
+func (r *Response) HasToolCalls() bool {
+	if r == nil {
+		return false
+	}
+	for _, item := range r.Output {
+		if item.Type == "function_call" {
+			return true
+		}
+	}
+	return false
+}
+
 // OutputText returns the first assistant text from the response, or "".
 func (r *Response) OutputText() string {
 	if r == nil {
@@ -154,12 +167,29 @@ type ToolCall struct {
 	Args map[string]string
 }
 
+// ToolCallOutput is the result of executing a tool call, sent back to the
+// model so it can formulate a final answer based on the actual outcome.
+type ToolCallOutput struct {
+	Type   string `json:"type"` // always "function_call_output"
+	CallID string `json:"call_id"`
+	Output string `json:"output"`
+}
+
+// NewToolCallOutput creates a ToolCallOutput with the correct type tag.
+func NewToolCallOutput(callID, output string) ToolCallOutput {
+	return ToolCallOutput{Type: "function_call_output", CallID: callID, Output: output}
+}
+
 // --- Client interface ---
 
 // Client is the public API of the gpt package.
 // Implement this interface to add alternative providers (e.g. Anthropic, local LLM).
 type Client interface {
 	CallGPT(chatConversation []Message, aimodel string, instructions string, tools ...Tool) (*Response, error)
+	// ContinueWithToolOutputs sends tool execution results back to the model
+	// so it can produce a final answer. previousResponseID links to the response
+	// that contained the original function_call items.
+	ContinueWithToolOutputs(previousResponseID string, outputs []ToolCallOutput, aimodel string, instructions string, tools ...Tool) (*Response, error)
 	GenerateImage(prompt string, size string) (string, error)
 	GenerateVoice(inputText string, voiceModel, voiceVoice string) ([]byte, error)
 	TranscribeAudio(audioContent []byte) (string, error)

@@ -26,6 +26,13 @@ func (p *Pipeline) RegisterExecutor(t IntentType, exec IntentExecutor) {
 	p.executors[t] = exec
 }
 
+// RegisterAll binds multiple executors at once.
+func (p *Pipeline) RegisterAll(executors map[IntentType]IntentExecutor) {
+	for t, exec := range executors {
+		p.executors[t] = exec
+	}
+}
+
 // Process resolves intents and runs the matching executors sequentially.
 func (p *Pipeline) Process(ctx *telegram.UpdateContext, chat *storage.Chat, req *Request) []Response {
 	intents := p.resolver.Resolve(ctx, chat, req)

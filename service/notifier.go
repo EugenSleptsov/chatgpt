@@ -2,15 +2,21 @@ package service
 
 import (
 	"GPTBot/api/logger"
-	"GPTBot/api/telegram/adminlog"
 	"GPTBot/util"
 )
+
+// AdminLog sends administrative notifications (e.g. to a separate Telegram bot).
+// Defined here, at the consumer side, so that the service layer does not depend
+// on any concrete transport package.
+type AdminLog interface {
+	Log(message string) error
+}
 
 // Notifier combines console logging with optional admin notifications
 // via a separate Telegram bot. It is NOT part of the transport layer.
 type Notifier struct {
 	Log             logger.Log
-	AdminLog        adminlog.AdminLogger // may be nil
+	AdminLog        AdminLog // may be nil
 	IgnoreReportIDs []int64
 }
 

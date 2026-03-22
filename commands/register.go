@@ -1,45 +1,41 @@
 package commands
 
-// Constructors returns all available command constructors.
-// Each constructor receives *Deps and returns a ready-to-use Command.
-// To add a new command, append it here — no changes in main.go needed.
-func Constructors() []func(d *Deps) Command {
-	return []func(d *Deps) Command{
-		func(d *Deps) Command { return &CommandHelp{Deps: d} },
-		func(d *Deps) Command { return &CommandStart{Deps: d} },
-		func(d *Deps) Command { return &CommandClear{Deps: d} },
-		func(d *Deps) Command { return &CommandHistory{Deps: d} },
-		func(d *Deps) Command { return &CommandRollback{Deps: d} },
-		func(d *Deps) Command { return &CommandTranslate{Deps: d} },
-		func(d *Deps) Command { return &CommandTechTranslate{Deps: d} },
-		func(d *Deps) Command { return &CommandEnhance{Deps: d} },
-		func(d *Deps) Command { return &CommandGrammar{Deps: d} },
-		func(d *Deps) Command { return &CommandSummarize{Deps: d} },
-		func(d *Deps) Command { return &CommandSummarizePrompt{Deps: d} },
-		func(d *Deps) Command { return &CommandAnalyze{Deps: d} },
-		func(d *Deps) Command { return &CommandModel{Deps: d} },
-		func(d *Deps) Command { return &CommandImagine{Deps: d} },
-		func(d *Deps) Command { return &CommandSystem{Deps: d} },
-		func(d *Deps) Command { return &CommandMarkdown{Deps: d} },
-		func(d *Deps) Command { return &CommandAdminReload{Deps: d} },
-		func(d *Deps) Command { return &CommandAdminAddUser{Deps: d} },
-		func(d *Deps) Command { return &CommandAdminRemoveUser{Deps: d} },
-		func(d *Deps) Command { return &CommandAutoReply{Deps: d} },
-		func(d *Deps) Command { return &CommandSessionList{Deps: d} },
-		func(d *Deps) Command { return &CommandSessionCurrent{Deps: d} },
-		func(d *Deps) Command { return &CommandSessionUse{Deps: d} },
-		func(d *Deps) Command { return &CommandSessionNew{Deps: d} },
-		func(d *Deps) Command { return &CommandSessionRemove{Deps: d} },
-		func(d *Deps) Command { return &CommandSessionUpdate{Deps: d} },
+// AllCommands returns every bot command, ready to use.
+// To add a new command, append it here — no other changes needed.
+func AllCommands(d *Deps) []Command {
+	return []Command{
+		&CommandHelp{Deps: d},
+		&CommandStart{Deps: d},
+		&CommandClear{Deps: d},
+		&CommandHistory{Deps: d},
+		&CommandRollback{Deps: d},
+		&CommandTranslate{Deps: d},
+		&CommandTechTranslate{Deps: d},
+		&CommandEnhance{Deps: d},
+		&CommandGrammar{Deps: d},
+		&CommandSummarize{Deps: d},
+		&CommandSummarizePrompt{Deps: d},
+		&CommandAnalyze{Deps: d},
+		&CommandModel{Deps: d},
+		&CommandImagine{Deps: d},
+		&CommandSystem{Deps: d},
+		&CommandMarkdown{Deps: d},
+		&CommandAdminReload{Deps: d},
+		&CommandAdminAddUser{Deps: d},
+		&CommandAdminRemoveUser{Deps: d},
+		&CommandAutoReply{Deps: d},
+		&CommandSessionList{Deps: d},
+		&CommandSessionCurrent{Deps: d},
+		&CommandSessionUse{Deps: d},
+		&CommandSessionNew{Deps: d},
+		&CommandSessionRemove{Deps: d},
+		&CommandSessionUpdate{Deps: d},
 	}
 }
 
-// RegisterAll registers every known command with the given Deps.
+// RegisterAll populates the registry with every known command.
 func RegisterAll(d *Deps) {
-	for _, ctor := range Constructors() {
-		cmd := ctor(d)
-		d.Registry.Register(cmd.Name(), func(c Command) func() Command {
-			return func() Command { return c }
-		}(cmd))
+	for _, cmd := range AllCommands(d) {
+		d.Registry.Add(cmd)
 	}
 }

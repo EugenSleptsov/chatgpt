@@ -24,7 +24,7 @@ func (c *CommandHelp) IsAdmin() bool {
 }
 
 func (c *CommandHelp) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
-	CommandList := c.Registry.GetCommands()
+	CommandList := c.Registry.All()
 
 	message := "Список доступных команд и их описание:\n"
 	var adminCommands []Command

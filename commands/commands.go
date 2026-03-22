@@ -15,7 +15,7 @@ type Deps struct {
 	Bot        telegram.BotAPI
 	Config     *conf.Config
 	ConfigPath string
-	Registry   CommandRegistry
+	Registry   *Registry
 	GPTService *service.GPTService
 	Notifier   *service.Notifier
 	Auth       *service.Auth

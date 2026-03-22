@@ -36,6 +36,25 @@ func (m *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instruc
 	}, nil
 }
 
+func (m *Client) ContinueWithToolOutputs(_ string, outputs []gpt.ToolCallOutput, aimodel string, _ string, _ ...gpt.Tool) (*gpt.Response, error) {
+	summary := fmt.Sprintf("[mock] tool outputs received: %d", len(outputs))
+	return &gpt.Response{
+		ID:     "mock-continue-id",
+		Object: "response",
+		Output: []gpt.ResponseOutputItem{
+			{
+				Type: "message",
+				ID:   "mock-continue-msg",
+				Role: "assistant",
+				Content: []gpt.ResponseOutputContent{
+					{Type: "output_text", Text: summary},
+				},
+			},
+		},
+		Usage: gpt.ResponseUsage{InputTokens: 20, OutputTokens: 10, TotalTokens: 30},
+	}, nil
+}
+
 func (m *Client) GenerateImage(_ string, _ string) (string, error) {
 	return "https://mock.example.com/image.png", nil
 }
