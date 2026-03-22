@@ -46,14 +46,25 @@ func (e *ChatExecutor) Execute(ctx *telegram.UpdateContext, chat *storage.Chat, 
 
 // chatResultToResponses maps a service.ChatResult to []handler.Response.
 // Used by all group/private executors.
+//
+// When images are present the model's text reply becomes the caption of the
+// first image instead of being sent as a separate message — this avoids the
+// user seeing the raw DALL-E prompt as a caption.
 func chatResultToResponses(r *service.ChatResult, markdown bool) []handler.Response {
 	var out []handler.Response
 
-	if r.Text != "" {
-		out = append(out, handler.Response{Text: r.Text, Markdown: markdown})
+	textUsed := false
+	for i, img := range r.Images {
+		caption := ""
+		if i == 0 && r.Text != "" {
+			caption = r.Text
+			textUsed = true
+		}
+		out = append(out, handler.Response{ImageData: img.Data, Caption: caption})
 	}
-	for _, img := range r.Images {
-		out = append(out, handler.Response{ImageURL: img.URL, Caption: img.Caption})
+
+	if r.Text != "" && !textUsed {
+		out = append(out, handler.Response{Text: r.Text, Markdown: markdown})
 	}
 	if r.Audio != nil {
 		out = append(out, handler.Response{Audio: r.Audio})

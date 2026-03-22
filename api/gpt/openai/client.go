@@ -15,7 +15,7 @@ type RequestResponsesPayload struct {
 	Instructions string        `json:"instructions,omitempty"`
 	Input        []gpt.Message `json:"input"`
 	Tools        []gpt.Tool    `json:"tools,omitempty"`
-	Store        bool          `json:"store"` // false = do not persist on OpenAI servers
+	Store        bool          `json:"store"` // must be true for previous_response_id to work in tool loop
 }
 
 // ContinueResponsesPayload continues a previous response with tool-call outputs.
@@ -28,9 +28,10 @@ type ContinueResponsesPayload struct {
 	Store              bool                 `json:"store"`
 }
 
-// defaultTools lists tools enabled on every CallGPT request.
+// defaultTools lists built-in tools enabled on every CallGPT request.
 var defaultTools = []gpt.Tool{
 	{Type: "web_search"},
+	{Type: "image_generation"},
 }
 
 // Client implements gpt.Client using the OpenAI Responses API.
@@ -61,7 +62,7 @@ func (c *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instruc
 		Instructions: instructions,
 		Input:        chatConversation,
 		Tools:        allTools,
-		Store:        false,
+		Store:        true,
 	})
 }
 
@@ -78,7 +79,7 @@ func (c *Client) ContinueWithToolOutputs(previousResponseID string, outputs []gp
 		PreviousResponseID: previousResponseID,
 		Input:              outputs,
 		Tools:              allTools,
-		Store:              false,
+		Store:              true,
 	})
 }
 

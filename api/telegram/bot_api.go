@@ -14,6 +14,7 @@ type BotAPI interface {
 	ReplyMarkdown(chatID int64, replyTo int, text string, isMarkdown bool)
 	Message(message string, chatID int64, isMarkdown bool)
 	SendImage(chatID int64, imageUrl string, caption string) error
+	SendImageData(chatID int64, data []byte, caption string) error
 	AudioUpload(chatID int64, bytes []byte) error
 	GetFile(fileID string) (FileInfo, error)
 	FileURL(filePath string) string

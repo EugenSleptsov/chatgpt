@@ -168,3 +168,11 @@ func (botInstance *Bot) AudioUpload(chatID int64, bytes []byte) error {
 	_, err := botInstance.transport.Send(audioMsg)
 	return err
 }
+
+// SendImageData sends raw image bytes (PNG) to a chat with an optional caption.
+func (botInstance *Bot) SendImageData(chatID int64, data []byte, caption string) error {
+	photoMsg := tgbotapi.NewPhoto(chatID, tgbotapi.FileBytes{Name: "image.png", Bytes: data})
+	photoMsg.Caption = caption
+	_, err := botInstance.transport.Send(photoMsg)
+	return err
+}

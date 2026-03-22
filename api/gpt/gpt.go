@@ -1,6 +1,7 @@
 package gpt
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"log"
 )
@@ -88,7 +89,8 @@ type ResponseOutputContent struct {
 }
 
 // ResponseOutputItem is one element in the output array.
-// Type can be "message", "function_call", "web_search_call", etc.
+// Type can be "message", "function_call", "web_search_call",
+// "image_generation_call", etc.
 type ResponseOutputItem struct {
 	Type    string                  `json:"type"`
 	ID      string                  `json:"id"`
@@ -98,6 +100,8 @@ type ResponseOutputItem struct {
 	Name      string `json:"name,omitempty"`
 	CallID    string `json:"call_id,omitempty"`
 	Arguments string `json:"arguments,omitempty"`
+	// Image generation fields (type == "image_generation_call")
+	Result string `json:"result,omitempty"` // base64-encoded PNG
 }
 
 // ResponseUsage tracks token consumption for a Responses API request.
@@ -158,6 +162,25 @@ func (r *Response) ToolCalls() []ToolCall {
 		}
 	}
 	return calls
+}
+
+// ImageResults returns decoded PNG data for every image_generation_call in the output.
+func (r *Response) ImageResults() [][]byte {
+	if r == nil {
+		return nil
+	}
+	var images [][]byte
+	for _, item := range r.Output {
+		if item.Type == "image_generation_call" && item.Result != "" {
+			data, err := base64.StdEncoding.DecodeString(item.Result)
+			if err != nil {
+				log.Printf("[ImageResults] failed to decode base64 image: %v", err)
+				continue
+			}
+			images = append(images, data)
+		}
+	}
+	return images
 }
 
 // ToolCall represents a single function invocation made by the model.

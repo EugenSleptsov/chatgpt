@@ -18,6 +18,10 @@ func (s *ResponseSender) Send(chatID int64, messageID int, responses []Response)
 			if err := s.Bot.AudioUpload(chatID, r.Audio); err != nil && s.OnError != nil {
 				s.OnError(err)
 			}
+		case len(r.ImageData) > 0:
+			if err := s.Bot.SendImageData(chatID, r.ImageData, r.Caption); err != nil && s.OnError != nil {
+				s.OnError(err)
+			}
 		case r.ImageURL != "":
 			if err := s.Bot.SendImage(chatID, r.ImageURL, r.Caption); err != nil && s.OnError != nil {
 				s.OnError(err)
