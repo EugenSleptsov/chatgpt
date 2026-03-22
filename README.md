@@ -1,12 +1,10 @@
 # OpenAI GPT model powered Telegram Bot
 
-This repository contains the source code for a Telegram bot that utilizes OpenAI's GPT models to assist users in answering questions and solving tasks.
+A Telegram bot powered by OpenAI GPT models. Supports private and group chats, multi-session conversations, image generation, voice transcription, auto-reply with configurable personas, and more.
 
 ## Prerequisites
 
-To set up and run this bot, you'll need:
-
-- Go (version 1.18 or higher)
+- Go 1.26+
 - A Telegram bot token
 - An OpenAI API key
 
@@ -14,59 +12,137 @@ To set up and run this bot, you'll need:
 
 1. Clone this repository
 2. Build the project:
-```
+```bash
 go build -o gptbot
 ```
-
-3. Rename a `bot.conf.sample` file to `bot.conf` in the project root directory and add your Telegram bot token, OpenAI API key, and other configuration values:
-```
-telegram_token = YOUR_TELEGRAM_BOT_TOKEN
-gpt_token = YOUR_OPENAI_API_KEY
-timeout_value = 60
-max_messages = 10
-admin_id = YOUR_TELEGRAM_ADMIN_USER_ID (optional)
-ignore_report_ids = COMMA_SEPARATED_USER_IDS_TO_IGNORE (optional)
-authorized_user_ids = COMMA_SEPARATED_USER_IDS (optional)
-command_menu = COMMAND_LIST (optional)
+3. Copy `config/bot.yaml.sample` to `config/bot.yaml` and fill in your tokens and settings:
+```yaml
+telegram_token: YOUR_TG_TOKEN
+gpt_token: YOUR_OPENAI_TOKEN
+timeout_value: 60
+max_messages: 20
+admin_id: 0
 ```
 
-Replace YOUR_TELEGRAM_BOT_TOKEN with your actual Telegram bot token and YOUR_OPENAI_API_KEY with your OpenAI API key.
+See [`config/bot.yaml.sample`](config/bot.yaml.sample) for the full list of options.
 
-Additionally, you can set the timeout_value, max_messages, admin_id, ignore_report_ids, and authorized_users to customize the bot's behavior. The admin_id, ignore_report_ids, and authorized_users are optional and can be left empty if not needed. If authorized_users is left empty, the bot will be available for public use.
+## Configuration
 
-You can also customize the command_menu to change the list of available commands. If command_menu is left empty, the default list of commands will be used.
+| Parameter | Description | Default                          |
+|-----------|-------------|----------------------------------|
+| `telegram_token` | Telegram Bot API token | *required*                       |
+| `gpt_token` | OpenAI API key | *required*                       |
+| `timeout_value` | Long-polling timeout (seconds) | `1`                              |
+| `max_messages` | Max conversation messages kept in context | `20`                             |
+| `admin_id` | Telegram user ID of the bot admin (`0` = disabled) | `0`                              |
+| `ignore_report_ids` | User IDs excluded from admin reports | `[]`                             |
+| `authorized_user_ids` | Authorized user IDs (empty = public bot) | `[]`                             |
+| `command_menu` | Custom command menu (empty = default) | `[]`                             |
+| `summarize_prompt` | System prompt for the `/summarize` command | *(built-in)*                     |
+| `default_system_prompt` | Default system prompt for new sessions | `"You are a helpful assistant."` |
+| `default_autoreply_persona` | Default role/persona for auto-reply decision (overridable per-chat via `/autorole`) | *(built-in)*                     |
+| `telegram_token_log_bot` | Separate bot token for admin logging | `""`                             |
+| `storage_type` | Storage backend: `file`, `sqlite`, or `memory` | `"file"`                         |
+| `storage_dsn` | DSN for sqlite (path to db file) | `""`                             |
+| `data_dir` | Directory for persistent data | `"_var/data"`                    |
+| `log_dir` | Directory for log files | `"_var/log"`                     |
 
 ## Running the bot
-After building the project and creating the bot.conf file, run the bot:
-```
+
+```bash
 ./gptbot
 ```
 
-The bot should now be running, and you can interact with it on Telegram. Send the `/start` command to begin using the bot. You can also add the bot to a group chat and use it there, but in such case you'll need to mention his name via @BotName or reply to any of his messages.
+The bot starts polling for Telegram updates. Send `/start` to begin.
+
+In group chats the bot responds when mentioned via `@BotName`, replied to, or called by name (e.g. "бот"). With auto-reply enabled, the bot can also proactively join conversations.
 
 ## Bot Commands
-* /start - Sends a welcome message and describes the bot's purpose
-* /help - Shows a list of available commands and their descriptions
-* /history - Shows the current chat history in a formatted output
-* /clear - Clears the chat history for the current chat
-* /rollback `num` - Rolls back the chat history by `num` messages
-* /translate `text` - Translates `text` from any language to English
-* /grammar `text` - Checks the grammar of `text` and returns corrected text
-* /enhance `text` - Enhances `text` by adding more details
-* /imagine `text` - Generates an image based on `text`
-* /temperature `value` - Sets the temperature value for the GPT-3.5 Turbo API
-* /system `value` - Sets the system prompt for the GPT-3.5 Turbo API
-* /model `value` - Sets openai model for API calls (gpt-3/gpt-4)
-* /summarize `num` - Provides sarcastic summary for last `num` messages in group/private chat
 
-## Admin Bot Commands
-* /reload - Reloads config in case if you have changed parameters (for example, added new authorized users)
-* /adduser userId - Adds a user to the authorized users list
-* /removeuser userId - Removes a user from the authorized users list
+### General
+| Command | Description |
+|---------|-------------|
+| `/start` | Sends a welcome message |
+| `/help` | Shows available commands |
+| `/clear` | Clears conversation history for the current session |
+| `/history [page]` | Shows conversation history (paginated) |
+| `/rollback [n]` | Removes last *n* messages from history (default 1) |
+| `/model [id]` | Shows or switches the AI model (`basic` / `advanced`) |
+| `/system [text]` | Shows or sets the system prompt for the current session |
+| `/markdown [on\|off]` | Toggles Markdown formatting in responses |
+| `/memory` | Shows the bot's long-term memory for this chat. `/memory clear` to wipe |
+
+### Sessions
+| Command | Description |
+|---------|-------------|
+| `/list` | Lists all sessions |
+| `/current` | Shows the active session |
+| `/new <topic>` | Creates a new session and switches to it |
+| `/use <id>` | Switches to a session by ID |
+| `/update <id> <topic>` | Renames a session |
+| `/remove <id>` | Deletes a session (cannot delete the last one) |
+
+### GPT Text Tools
+| Command | Description |
+|---------|-------------|
+| `/translate [lang] <text>` | Translates text to the specified language (default: English) |
+| `/tech_translate <text>` | Translates text to technical English |
+| `/enhance <text>` | Enhances text with more detail |
+| `/grammar <text>` | Corrects grammar |
+| `/summarize [n]` | Summarizes the last *n* chat messages (default 50, max 500) |
+| `/summarize_prompt <text>` | Sets the system prompt for `/summarize` |
+| `/analyze <n> <prompt>` | Analyzes last *n* messages using a custom prompt |
+
+### Image
+| Command | Description |
+|---------|-------------|
+| `/imagine <text>` | Generates a 1024×1024 image from a text description |
+
+### Group Auto-Reply
+| Command | Description |
+|---------|-------------|
+| `/autoreply` | Toggles proactive auto-reply mode in group chats |
+| `/autorole [text]` | Shows or sets the bot's persona for auto-reply decisions. `/autorole reset` restores the default |
+
+The auto-reply system uses a two-part prompt:
+1. **Persona** — a configurable role describing who the bot "is" (e.g. teacher, listener, opinionated friend). Set globally via `default_autoreply_persona` in config, or per-chat via `/autorole`.
+2. **Decision** — a fixed YES/NO instruction that determines whether the bot should respond based on conversation context.
+
+### Admin
+| Command | Description |
+|---------|-------------|
+| `/reload` | Reloads the configuration file |
+| `/adduser <userId>` | Adds a user to the authorized list |
+| `/removeuser <userId>` | Removes a user from the authorized list |
+
+## Architecture
+
+```
+pipeline/          Transport-agnostic types (RequestContext, FileResolver)
+  decoder/         Picks the right executor for each update
+  executor/        Handles text, voice, image, sticker, command flows
+  sender/          Delivers responses to Telegram
+
+application/
+  commands/        Slash-command implementations
+  service/         Core services (GPT, history, memory, auth, config, notifier)
+
+domain/
+  ai/              AI client interface & tier definitions
+  chat/            Chat & session domain models, storage interface
+
+integration/ai/    OpenAI client implementation
+infrastructure/    Storage backends (file, sqlite, memory), logger, utilities
+api/telegram/      Telegram Bot API transport layer
+app/               Wiring, worker pool, graceful shutdown
+config/            YAML configuration
+```
 
 ## Contributing
-Contributions are welcome! Please feel free to submit issues or pull requests for enhancements or bug fixes.
+
+Contributions are welcome! Feel free to submit issues or pull requests.
 
 ## Special Thanks
+
 Huge thanks to JetBrains for support, which greatly contributed to the development of this project.
 https://www.jetbrains.com/community/opensource
