@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 )
 
@@ -21,11 +22,10 @@ func (c *CommandAutoReply) IsAdmin() bool {
 	return true
 }
 
-func (c *CommandAutoReply) Execute(update telegram.Update, chat *storage.Chat) {
+func (c *CommandAutoReply) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	chat.Settings.GroupAutoReply = !chat.Settings.GroupAutoReply
 	if chat.Settings.GroupAutoReply {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "✅ Авто-ответ включён. Бот будет самостоятельно вступать в разговор.")
-	} else {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "❌ Авто-ответ выключен. Бот отвечает только при упоминании.")
+		return reply("✅ Авто-ответ включён. Бот будет самостоятельно вступать в разговор.")
 	}
+	return reply("❌ Авто-ответ выключен. Бот отвечает только при упоминании.")
 }

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 )
 
@@ -21,17 +22,15 @@ func (c *CommandMarkdown) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandMarkdown) Execute(update telegram.Update, chat *storage.Chat) {
-	if update.Message.CommandArguments() == "on" {
+func (c *CommandMarkdown) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
+	if ctx.Msg.CommandArguments() == "on" {
 		chat.Settings.UseMarkdown = true
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Markdown включен")
-	} else if update.Message.CommandArguments() == "off" {
+		return reply("Markdown включен")
+	} else if ctx.Msg.CommandArguments() == "off" {
 		chat.Settings.UseMarkdown = false
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Markdown выключен")
-	} else {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Текущее состояние Markdown: "+boolToString(chat.Settings.UseMarkdown))
-		return
+		return reply("Markdown выключен")
 	}
+	return reply("Текущее состояние Markdown: " + boolToString(chat.Settings.UseMarkdown))
 }
 
 func boolToString(b bool) string {

@@ -3,6 +3,7 @@ package commands
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 )
@@ -23,9 +24,9 @@ func (c *CommandModel) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
+func (c *CommandModel) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	session := chat.ActiveSession()
-	args := update.Message.CommandArguments()
+	args := ctx.Msg.CommandArguments()
 
 	if len(args) == 0 {
 		current := gpt.FindTier(session.Model)
@@ -33,28 +34,14 @@ func (c *CommandModel) Execute(update telegram.Update, chat *storage.Chat) {
 		if current != nil {
 			name = current.Label + " (" + current.APIModel + ")"
 		}
-		c.Bot.Reply(
-			chat.ChatID,
-			update.Message.MessageID,
-			fmt.Sprintf("Текущая модель: %s\n\nДоступные модели:\n%s", name, gpt.TierList()),
-		)
-		return
+		return reply(fmt.Sprintf("Текущая модель: %s\n\nДоступные модели:\n%s", name, gpt.TierList()))
 	}
 
 	tier := gpt.FindTier(args)
 	if tier == nil {
-		c.Bot.Reply(
-			chat.ChatID,
-			update.Message.MessageID,
-			fmt.Sprintf("Модель не найдена: %s\n\nДоступные модели:\n%s", args, gpt.TierList()),
-		)
-		return
+		return reply(fmt.Sprintf("Модель не найдена: %s\n\nДоступные модели:\n%s", args, gpt.TierList()))
 	}
 
 	session.Model = tier.ID
-	c.Bot.Reply(
-		chat.ChatID,
-		update.Message.MessageID,
-		fmt.Sprintf("Модель установлена: %s (%s)", tier.Label, tier.Desc),
-	)
+	return reply(fmt.Sprintf("Модель установлена: %s (%s)", tier.Label, tier.Desc))
 }

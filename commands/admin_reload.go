@@ -3,6 +3,7 @@ package commands
 import (
 	"GPTBot/api/telegram"
 	conf "GPTBot/config"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 )
@@ -23,17 +24,14 @@ func (c *CommandAdminReload) IsAdmin() bool {
 	return true
 }
 
-func (c *CommandAdminReload) Execute(update telegram.Update, chat *storage.Chat) {
-	chatID := chat.ChatID
-
+func (c *CommandAdminReload) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	newConfig, err := conf.ReadConfig(c.ConfigPath)
 	if err != nil {
-		c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Ошибка чтения конфига: %v", err))
-		return
+		return reply(fmt.Sprintf("Ошибка чтения конфига: %v", err))
 	}
 
 	*c.Config = *newConfig
 	c.Auth.SetAuthorizedUsers(c.Config.AuthorizedUserIds)
 
-	c.Bot.Reply(chatID, update.Message.MessageID, fmt.Sprintf("Config updated: %s", fmt.Sprint(c.Config)))
+	return reply(fmt.Sprintf("Config updated: %s", fmt.Sprint(c.Config)))
 }

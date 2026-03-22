@@ -3,58 +3,76 @@ package telegram
 import (
 	"GPTBot/api/logger"
 	conf "GPTBot/config"
-	"fmt"
 	"io"
 	"net/http"
 
-	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// Bot is a low-level Telegram transport layer.
-// It handles message delivery, file operations and update polling.
-// Authorization, admin notifications and business logic live elsewhere.
+// Bot is the high-level Telegram bot used for GPT interactions.
+// It adds message formatting, splitting, file helpers and update
+// polling on top of the shared Transport layer.
 type Bot struct {
-	api       *tgbotapi.BotAPI
 	Username  string
-	token     string
 	LogClient logger.Log
+	transport *Transport
 }
 
 // FileURL returns the full download URL for a Telegram file path.
 func (botInstance *Bot) FileURL(filePath string) string {
-	return fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", botInstance.token, filePath)
+	return botInstance.transport.FileURL(filePath)
 }
 
 type UpdatesChannel <-chan Update
 type Update tgbotapi.Update
 
+// Msg returns the effective message from an update.
+// It looks through Message, EditedMessage, ChannelPost, EditedChannelPost
+// and returns the first non-nil one. Returns nil if none is present.
+func (u Update) Msg() *tgbotapi.Message {
+	switch {
+	case u.Message != nil:
+		return u.Message
+	case u.EditedMessage != nil:
+		return u.EditedMessage
+	case u.ChannelPost != nil:
+		return u.ChannelPost
+	case u.EditedChannelPost != nil:
+		return u.EditedChannelPost
+	default:
+		return nil
+	}
+}
+
+// IsEdited returns true when the update is an edit of an existing message.
+func (u Update) IsEdited() bool {
+	return u.EditedMessage != nil || u.EditedChannelPost != nil
+}
+
 func NewInstance(config *conf.Config, logClient logger.Log) (*Bot, error) {
-	api, err := tgbotapi.NewBotAPI(config.TelegramToken)
+	transport, err := NewTransport(config.TelegramToken)
 	if err != nil {
 		return nil, err
 	}
 
 	bot := &Bot{
-		api:       api,
-		Username:  api.Self.UserName,
-		token:     config.TelegramToken,
+		Username:  transport.Username(),
 		LogClient: logClient,
+		transport: transport,
 	}
 
 	bot.SetCommandList(config.CommandMenu)
 
-	bot.LogClient.Logf("Authorized on account %s", bot.api.Self.UserName)
+	bot.LogClient.Logf("Authorized on account %s", bot.Username)
 
 	return bot, nil
 }
 
 func (botInstance *Bot) GetUpdateChannel(timeout int) UpdatesChannel {
-	botInstance.api.Debug = false
-
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = timeout
 
-	updates := botInstance.api.GetUpdatesChan(updateConfig)
+	updates := botInstance.transport.GetUpdatesChan(updateConfig)
 
 	ourChannel := make(chan Update)
 	go func(channel tgbotapi.UpdatesChannel) {
@@ -97,7 +115,7 @@ func (botInstance *Bot) sendChunk(chatID int64, replyTo int, text string, isMark
 		if replyTo != 0 {
 			msg.ReplyToMessageID = replyTo
 		}
-		if _, err := botInstance.api.Send(msg); err == nil {
+		if _, err := botInstance.transport.Send(msg); err == nil {
 			return
 		}
 		botInstance.LogClient.Logf("HTML formatting failed, falling back to plain text")
@@ -107,7 +125,7 @@ func (botInstance *Bot) sendChunk(chatID int64, replyTo int, text string, isMark
 	if replyTo != 0 {
 		msg.ReplyToMessageID = replyTo
 	}
-	if _, err := botInstance.api.Send(msg); err != nil {
+	if _, err := botInstance.transport.Send(msg); err != nil {
 		botInstance.LogClient.Logf("Error sending message: %v", err)
 	}
 }
@@ -133,12 +151,12 @@ func (botInstance *Bot) SendImage(chatID int64, imageUrl string, caption string)
 
 	photoMsg := tgbotapi.NewPhoto(chatID, tgbotapi.FileBytes{Name: "image.png", Bytes: imageData})
 	photoMsg.Caption = caption
-	_, err = botInstance.api.Send(photoMsg)
+	_, err = botInstance.transport.Send(photoMsg)
 	return err
 }
 
 func (botInstance *Bot) GetFile(fileId string) (FileInfo, error) {
-	f, err := botInstance.api.GetFile(tgbotapi.FileConfig{FileID: fileId})
+	f, err := botInstance.transport.GetFile(fileId)
 	if err != nil {
 		return FileInfo{}, err
 	}
@@ -147,22 +165,14 @@ func (botInstance *Bot) GetFile(fileId string) (FileInfo, error) {
 
 func (botInstance *Bot) AudioUpload(chatID int64, bytes []byte) error {
 	audioMsg := tgbotapi.NewAudio(chatID, tgbotapi.FileBytes{Name: "audio.ogg", Bytes: bytes})
-	_, err := botInstance.api.Send(audioMsg)
+	_, err := botInstance.transport.Send(audioMsg)
 	return err
 }
 
-// --- Telegram API helpers ---
-
-func (botInstance *Bot) GetUserCount(chatID int64) (int, error) {
-	return botInstance.api.GetChatMembersCount(tgbotapi.ChatMemberCountConfig{ChatConfig: tgbotapi.ChatConfig{ChatID: chatID}})
-}
-
-// --- Helpers ---
-
-func GetChatTitle(update Update) string {
-	if update.Message.Chat.ID > 0 {
-		return fmt.Sprintf("%s %s [@%s / %d]", update.Message.Chat.FirstName, update.Message.Chat.LastName, update.Message.Chat.UserName, update.Message.Chat.ID)
-	}
-
-	return fmt.Sprintf("Chat %d [%s]", update.Message.Chat.ID, update.Message.Chat.Title)
+// SendImageData sends raw image bytes (PNG) to a chat with an optional caption.
+func (botInstance *Bot) SendImageData(chatID int64, data []byte, caption string) error {
+	photoMsg := tgbotapi.NewPhoto(chatID, tgbotapi.FileBytes{Name: "image.png", Bytes: data})
+	photoMsg.Caption = caption
+	_, err := botInstance.transport.Send(photoMsg)
+	return err
 }

@@ -48,7 +48,13 @@ func (t *HTTPTransport) Post(url, contentType string, payload []byte) (*http.Res
 			return resp, nil
 		}
 
-		// Drain and close the body before retrying to avoid connection leak.
+		// Client errors (4xx): our request is wrong, retrying won't help.
+		// Return immediately with body intact so the caller can read the error.
+		if err == nil && resp != nil && resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			return resp, nil
+		}
+
+		// Server errors (5xx) or transient failures: drain body and retry.
 		if err == nil && resp != nil {
 			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
@@ -57,7 +63,7 @@ func (t *HTTPTransport) Post(url, contentType string, payload []byte) (*http.Res
 		time.Sleep(time.Duration(i+1) * time.Second)
 	}
 
-	// Last attempt: return whatever we got (caller is responsible for body).
+	// Retries exhausted: return whatever we got (caller is responsible for body).
 	if err != nil {
 		return nil, err
 	}

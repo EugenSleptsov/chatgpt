@@ -53,6 +53,6 @@ func (botInstance *Bot) setCommandList(commands ...Command) error {
 		tgCommands = append(tgCommands, tgbotapi.BotCommand{Command: string(command), Description: CommandDescriptions[command]})
 	}
 
-	_, err := botInstance.api.Request(tgbotapi.NewSetMyCommands(tgCommands...))
+	_, err := botInstance.transport.Request(tgbotapi.NewSetMyCommands(tgCommands...))
 	return err
 }

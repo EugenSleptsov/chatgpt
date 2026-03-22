@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 	"strings"
@@ -23,8 +24,8 @@ func (c *CommandSessionNew) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSessionNew) Execute(update telegram.Update, chat *storage.Chat) {
-	topic := strings.TrimSpace(update.Message.CommandArguments())
+func (c *CommandSessionNew) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
+	topic := strings.TrimSpace(ctx.Msg.CommandArguments())
 	if topic == "" {
 		topic = "untitled"
 	}
@@ -34,5 +35,5 @@ func (c *CommandSessionNew) Execute(update telegram.Update, chat *storage.Chat) 
 
 	s := chat.AddSession(topic)
 	chat.ActiveSessionID = s.ID
-	c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Создана и активирована сессия #%d — %s.", s.ID, s.Topic))
+	return reply(fmt.Sprintf("Создана и активирована сессия #%d — %s.", s.ID, s.Topic))
 }

@@ -33,12 +33,11 @@ func (cm *TelegramChatManager) MarkDirty(chatID int64) {
 	cm.StorageClient.MarkDirty(chatID)
 }
 
-func (cm *TelegramChatManager) GetOrCreateChat(update telegram.Update) *storage.Chat {
-	chatID := update.Message.Chat.ID
-	chat, ok := cm.StorageClient.Get(chatID)
+func (cm *TelegramChatManager) GetOrCreateChat(ctx *telegram.UpdateContext) *storage.Chat {
+	chat, ok := cm.StorageClient.Get(ctx.ChatID)
 	if !ok {
 		chat = &storage.Chat{
-			ChatID: chatID,
+			ChatID: ctx.ChatID,
 			Settings: storage.ChatSettings{
 				MaxMessages:     cm.Config.MaxMessages,
 				UseMarkdown:     true,
@@ -54,28 +53,31 @@ func (cm *TelegramChatManager) GetOrCreateChat(update telegram.Update) *storage.
 			ActiveSessionID:  storage.DefaultSessionID,
 			NextSessionID:    storage.DefaultNextSessionID,
 			ImageGenNextTime: time.Now(),
-			Title:            telegram.GetChatTitle(update),
+			Title:            ctx.ChatTitle(),
 		}
-		_ = cm.StorageClient.Set(chatID, chat)
+		_ = cm.StorageClient.Set(ctx.ChatID, chat)
 	}
-	chat.Title = telegram.GetChatTitle(update)
+	chat.Title = ctx.ChatTitle()
 	return chat
 }
 
-func (cm *TelegramChatManager) LogMessage(update telegram.Update, chat *storage.Chat) {
+func (cm *TelegramChatManager) LogMessage(ctx *telegram.UpdateContext, chat *storage.Chat) {
+	if ctx.SenderName == "" {
+		return
+	}
+
 	var lines []string
-	name := update.Message.From.FirstName + " " + update.Message.From.LastName
-	for _, v := range strings.Split(update.Message.Text, "\n") {
+	for _, v := range strings.Split(ctx.Text, "\n") {
 		if v != "" {
 			lines = append(lines, v)
 		}
 	}
 
-	if chat.ChatID < 0 {
+	if ctx.IsGroup {
 		for i := range lines {
-			lines[i] = fmt.Sprintf("%s: %s", name, lines[i])
+			lines[i] = fmt.Sprintf("%s: %s", ctx.SenderName, lines[i])
 		}
 	}
 
-	cm.FileLogClient.LogToFile(fmt.Sprintf("%s/%d.log", cm.Config.LogDir, chat.ChatID), lines)
+	cm.FileLogClient.LogToFile(fmt.Sprintf("%s/%d.log", cm.Config.LogDir, ctx.ChatID), lines)
 }

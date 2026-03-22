@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 	"strconv"
@@ -24,23 +25,20 @@ func (c *CommandSessionUpdate) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandSessionUpdate) Execute(update telegram.Update, chat *storage.Chat) {
-	args := strings.SplitN(strings.TrimSpace(update.Message.CommandArguments()), " ", 2)
+func (c *CommandSessionUpdate) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
+	args := strings.SplitN(strings.TrimSpace(ctx.Msg.CommandArguments()), " ", 2)
 	if len(args) < 2 || args[1] == "" {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Использование: /update <id> <topic>")
-		return
+		return reply("Использование: /update <id> <topic>")
 	}
 
 	id, err := strconv.Atoi(args[0])
 	if err != nil {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "ID должен быть числом.")
-		return
+		return reply("ID должен быть числом.")
 	}
 
 	s := chat.FindSession(id)
 	if s == nil {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Сессия #%d не найдена.", id))
-		return
+		return reply(fmt.Sprintf("Сессия #%d не найдена.", id))
 	}
 
 	topic := args[1]
@@ -50,5 +48,5 @@ func (c *CommandSessionUpdate) Execute(update telegram.Update, chat *storage.Cha
 
 	old := s.Topic
 	s.Topic = topic
-	c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Сессия #%d переименована: %s → %s.", s.ID, old, s.Topic))
+	return reply(fmt.Sprintf("Сессия #%d переименована: %s → %s.", s.ID, old, s.Topic))
 }

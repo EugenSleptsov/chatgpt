@@ -12,14 +12,24 @@ import (
 type Worker struct {
 	Deps           *commands.Deps
 	ChatManager    manager.ChatManager
-	HandlerFactory handler.UpdateHandlerFactory
+	Router         *handler.Router
+	Dispatcher     *handler.Dispatcher
+	ResponseSender *handler.ResponseSender
 }
 
-func NewWorker(deps *commands.Deps, chatManager manager.ChatManager, handlerFactory handler.UpdateHandlerFactory) *Worker {
+func NewWorker(
+	deps *commands.Deps,
+	chatManager manager.ChatManager,
+	router *handler.Router,
+	dispatcher *handler.Dispatcher,
+	sender *handler.ResponseSender,
+) *Worker {
 	return &Worker{
 		Deps:           deps,
 		ChatManager:    chatManager,
-		HandlerFactory: handlerFactory,
+		Router:         router,
+		Dispatcher:     dispatcher,
+		ResponseSender: sender,
 	}
 }
 
@@ -31,61 +41,48 @@ func (w *Worker) Start(updateChan <-chan telegram.Update) {
 }
 
 func (w *Worker) ProcessUpdate(update telegram.Update) {
-	if !w.isMessage(update) {
+	ctx := telegram.NewUpdateContext(update)
+	if ctx == nil {
 		return
 	}
 
-	chat := w.ChatManager.GetOrCreateChat(update)
-	w.logIfNonCommandMessage(update, chat)
+	chat := w.ChatManager.GetOrCreateChat(ctx)
+	w.ChatManager.LogMessage(ctx, chat)
 
-	isGroup := chat.ChatID < 0
-
-	// Group chats: let ALL messages through so handlers can log context.
-	// Commands in groups still require authorization.
-	if isGroup {
-		if update.Message.IsCommand() && !w.isAuthorized(update) {
+	if ctx.IsGroup {
+		if ctx.IsCommand && !w.Deps.Auth.IsAuthorized(ctx.SenderID) {
 			return
 		}
-		w.handleUpdate(update, chat)
+	} else {
+		if !w.Deps.Auth.IsAuthorized(ctx.SenderID) {
+			w.handleUnauthorizedAccess(ctx, chat)
+			return
+		}
+	}
+
+	// 1. Handler normalizes the update into a Request
+	h := w.Router.Route(ctx)
+	if h == nil {
+		return
+	}
+	req := h.Handle(ctx, chat)
+	if req == nil {
 		w.ChatManager.MarkDirty(chat.ChatID)
-		return
+		return // nothing to process (stickers, edits, errors)
 	}
 
-	// Private chats: strict authorization.
-	if !w.isAuthorized(update) {
-		w.handleUnauthorizedAccess(update, chat)
-		return
-	}
+	// 2. Dispatcher routes to command or conversational branch
+	responses := w.Dispatcher.Process(ctx, chat, req)
 
-	w.handleUpdate(update, chat)
+	// 3. ResponseSender delivers responses to Telegram
+	w.ResponseSender.Send(chat.ChatID, ctx.MessageID, responses)
 	w.ChatManager.MarkDirty(chat.ChatID)
 }
 
-func (w *Worker) isMessage(update telegram.Update) bool {
-	return update.Message != nil
-}
-
-func (w *Worker) logIfNonCommandMessage(update telegram.Update, chat *storage.Chat) {
-	if !update.Message.IsCommand() {
-		w.ChatManager.LogMessage(update, chat)
-	}
-}
-
-func (w *Worker) isAuthorized(update telegram.Update) bool {
-	return w.Deps.Auth.IsAuthorized(update.Message.From.ID)
-}
-
-func (w *Worker) handleUnauthorizedAccess(update telegram.Update, chat *storage.Chat) {
-	if update.Message.Chat.Type != "private" {
+func (w *Worker) handleUnauthorizedAccess(ctx *telegram.UpdateContext, chat *storage.Chat) {
+	if ctx.Msg.Chat.Type != "private" {
 		return
 	}
-
-	w.Deps.Bot.Reply(chat.ChatID, update.Message.MessageID, "Извините, у вас нет доступа к этому боту.")
-	w.Deps.Notifier.Notify(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, update.Message.Text))
-}
-
-func (w *Worker) handleUpdate(update telegram.Update, chat *storage.Chat) {
-	if err := w.HandlerFactory.GetHandler(update).Handle(update, chat); err != nil {
-		w.Deps.Notifier.Notify(fmt.Sprintf("Error handling input: %v", err))
-	}
+	w.Deps.Bot.Reply(chat.ChatID, ctx.MessageID, "Извините, у вас нет доступа к этому боту.")
+	w.Deps.Notifier.Notify(fmt.Sprintf("[%s]\nMessage: %s", chat.Title, ctx.Text))
 }

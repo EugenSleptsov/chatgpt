@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"strconv"
 	"strings"
@@ -26,22 +27,20 @@ func (c *CommandAnalyze) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandAnalyze) Execute(update telegram.Update, chat *storage.Chat) {
-	if len(update.Message.CommandArguments()) == 0 {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите количество сообщений (опционально) и промпт для обработки. Использование: /analyze <count> <prompt>")
-		return
+func (c *CommandAnalyze) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
+	if len(ctx.Msg.CommandArguments()) == 0 {
+		return reply("Пожалуйста укажите количество сообщений (опционально) и промпт для обработки. Использование: /analyze <count> <prompt>")
 	}
 
 	var systemPrompt string
-	arguments := strings.Split(update.Message.CommandArguments(), " ")
+	arguments := strings.Split(ctx.Msg.CommandArguments(), " ")
 	messageCount, err := strconv.Atoi(arguments[0])
 	if err != nil {
 		messageCount = AnalyzeDefaultMessageCount
-		systemPrompt = update.Message.CommandArguments()
+		systemPrompt = ctx.Msg.CommandArguments()
 	} else {
 		if len(arguments) < 2 {
-			c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите промпт для обработки. Использование: /analyze <count> <prompt>")
-			return
+			return reply("Пожалуйста укажите промпт для обработки. Использование: /analyze <count> <prompt>")
 		}
 
 		systemPrompt = strings.Join(arguments[1:], " ")
@@ -54,5 +53,5 @@ func (c *CommandAnalyze) Execute(update telegram.Update, chat *storage.Chat) {
 		}
 	}
 
-	summarizeText(c.Deps, chat, update.Message.MessageID, systemPrompt, messageCount)
+	return summarizeText(c.Deps, chat, systemPrompt, messageCount)
 }

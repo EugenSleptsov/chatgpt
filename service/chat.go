@@ -7,7 +7,9 @@ import (
 	"GPTBot/api/gpt"
 	"GPTBot/storage"
 	"GPTBot/util"
+	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -20,10 +22,61 @@ type GPTService struct {
 	LogDir    string
 }
 
+// ChatResult holds the full output of a GPT call, including tool-call results.
+type ChatResult struct {
+	Text      string        // assistant text reply
+	Images    []ImageResult // generated images (from generate_image tool calls)
+	Audio     []byte        // generated audio  (from generate_voice tool call)
+	AudioText string        // text that was synthesized (for history storage)
+}
+
+// ImageResult is one image produced by the built-in image_generation tool.
+type ImageResult struct {
+	Data []byte // decoded PNG bytes
+}
+
+// buildHistoryContent composes the full assistant turn for storage in chat history.
+// Text reply, generated images (as caption) and audio (as transcript) are all included
+// so GPT has full context of what was produced in previous turns.
+func buildHistoryContent(r *ChatResult) string {
+	var parts []string
+	if r.Text != "" {
+		parts = append(parts, r.Text)
+	}
+	for range r.Images {
+		parts = append(parts, "[Сгенерирована картинка]")
+	}
+	if r.AudioText != "" {
+		parts = append(parts, fmt.Sprintf("[Сгенерировано аудио: «%s»]", r.AudioText))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\n")
+}
+
+// chatTools are the custom function tools sent with every chat completion request.
+// Built-in tools (web_search, image_generation) are added by the client automatically.
+var chatTools = []gpt.Tool{
+	{
+		Type:        "function",
+		Name:        "generate_voice",
+		Description: "Convert text to a voice/audio message. Call when the user asks to record voice, speak out loud, or create audio.",
+		Parameters: &gpt.FunctionParameters{
+			Type: "object",
+			Properties: map[string]gpt.ParameterProperty{
+				"text": {Type: "string", Description: "The text to convert to speech"},
+			},
+			Required: []string{"text"},
+		},
+	},
+}
+
 // ChatCompletion appends a user message to chat history, sends the
-// conversation context to GPT, stores the assistant response in history
-// and returns it. On GPT failure returns a fallback message and the error.
-func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (string, error) {
+// conversation context to GPT (with function tools), runs the full tool
+// loop (execute → send results back → model finalises), and returns
+// the complete result.
+func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (*ChatResult, error) {
 	session := chat.ActiveSession()
 
 	entry := &storage.ConversationEntry{
@@ -38,17 +91,124 @@ func (s *GPTService) ChatCompletion(chat *storage.Chat, userText string) (string
 	// Build message list from history — system prompt goes as instructions, not as a message.
 	messages := storage.ToGPTMessages(session.History)
 
-	response := fallbackResponse
-	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt)
+	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt, chatTools...)
+	if err != nil {
+		log.Printf("[ChatCompletion] GPT error: %v", err)
+		result := &ChatResult{Text: fallbackResponse}
+		entry.Response = storage.Message{Role: "assistant", Content: fallbackResponse}
+		return result, err
+	}
 
-	if err == nil {
-		if text := strings.TrimSpace(payload.OutputText()); text != "" {
-			response = text
+	result, err := s.toolLoop(payload, session.Model, session.SystemPrompt)
+	entry.Response = storage.Message{Role: "assistant", Content: buildHistoryContent(result)}
+	return result, err
+}
+
+// maxToolIterations limits how many tool-call rounds the model can do
+// in a single request to prevent infinite loops.
+const maxToolIterations = 5
+
+// toolLoop implements the correct function-calling cycle:
+//  1. model returns function_call(s)
+//  2. we execute each function
+//  3. we send function_call_output(s) back (with the same call_id)
+//  4. model produces a final answer (or more tool calls → repeat)
+func (s *GPTService) toolLoop(response *gpt.Response, model, systemPrompt string) (*ChatResult, error) {
+	result := &ChatResult{}
+
+	for i := 0; i < maxToolIterations; i++ {
+		// Collect images from built-in image_generation tool (resolved server-side).
+		for _, imgData := range response.ImageResults() {
+			result.Images = append(result.Images, ImageResult{Data: imgData})
+		}
+
+		calls := response.ToolCalls()
+		if len(calls) == 0 {
+			result.Text = strings.TrimSpace(response.OutputText())
+			return result, nil
+		}
+
+		// Capture any intermediate text the model produced alongside tool calls,
+		// so we don't lose it if a subsequent continuation fails.
+		if text := strings.TrimSpace(response.OutputText()); text != "" {
+			result.Text = text
+		}
+
+		log.Printf("[ToolLoop] iteration %d: %d tool call(s)", i+1, len(calls))
+
+		outputs := make([]gpt.ToolCallOutput, 0, len(calls))
+		for _, tc := range calls {
+			output := s.executeSingleToolCall(tc, result)
+			outputs = append(outputs, gpt.NewToolCallOutput(tc.ID, output))
+		}
+
+		var err error
+		response, err = s.GptClient.ContinueWithToolOutputs(
+			response.ID, outputs, model, systemPrompt, chatTools...,
+		)
+		if err != nil {
+			log.Printf("[ToolLoop] error continuing response: %v", err)
+			if result.Text == "" {
+				result.Text = fallbackResponse
+			}
+			return result, err
 		}
 	}
 
-	entry.Response = storage.Message{Role: "assistant", Content: response}
-	return response, err
+	// Max iterations reached — take whatever text the last response has.
+	log.Printf("[ToolLoop] max iterations (%d) reached", maxToolIterations)
+	for _, imgData := range response.ImageResults() {
+		result.Images = append(result.Images, ImageResult{Data: imgData})
+	}
+	result.Text = strings.TrimSpace(response.OutputText())
+	if result.Text == "" {
+		result.Text = fallbackResponse
+	}
+	return result, nil
+}
+
+// toolResult is the JSON structure sent back to the model as function output.
+type toolResult struct {
+	Status string `json:"status"`
+	Text   string `json:"text,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+func marshalToolResult(r toolResult) string {
+	data, _ := json.Marshal(r)
+	return string(data)
+}
+
+// executeSingleToolCall runs one tool call and returns the JSON output
+// string to send back to the model. Side-effects (images, audio) are
+// accumulated into result.
+func (s *GPTService) executeSingleToolCall(tc gpt.ToolCall, result *ChatResult) string {
+	log.Printf("[ToolCall] %s(%v)", tc.Name, tc.Args)
+	switch tc.Name {
+	case "generate_voice":
+		return s.executeVoiceToolCall(tc, result)
+	default:
+		log.Printf("[ToolCall] unknown tool: %s", tc.Name)
+		return marshalToolResult(toolResult{Status: "error", Error: "unknown tool: " + tc.Name})
+	}
+}
+
+func (s *GPTService) executeVoiceToolCall(tc gpt.ToolCall, result *ChatResult) string {
+	text := tc.Args["text"]
+	if text == "" {
+		text = result.Text
+	}
+	if text == "" {
+		return marshalToolResult(toolResult{Status: "error", Error: "no text available for voice synthesis"})
+	}
+	audio, err := s.GenerateVoice(text)
+	if err != nil {
+		log.Printf("[ToolCall] generate_voice error: %v", err)
+		return marshalToolResult(toolResult{Status: "error", Error: err.Error()})
+	}
+	result.Audio = audio
+	result.AudioText = text
+	return marshalToolResult(toolResult{Status: "success", Text: text})
 }
 
 // GPTCommand sends a one-shot system+user prompt pair to GPT and returns
@@ -166,27 +326,28 @@ func (s *GPTService) LogBotResponse(chat *storage.Chat, text string) {
 	}
 }
 
-// ReplyFromGroupHistory sends the full group history to GPT and attaches the
-// assistant response to the last history entry. Call after LogGroupMessage.
-func (s *GPTService) ReplyFromGroupHistory(chat *storage.Chat) (string, error) {
+// ReplyFromGroupHistory sends the full group history to GPT (with function
+// tools), runs the full tool loop, attaches the assistant response to the
+// last history entry and returns the full ChatResult.
+func (s *GPTService) ReplyFromGroupHistory(chat *storage.Chat) (*ChatResult, error) {
 	session := chat.ActiveSession()
 	if len(session.History) == 0 {
-		return fallbackResponse, nil
+		return &ChatResult{Text: fallbackResponse}, nil
 	}
 
 	messages := storage.ToGPTMessages(session.History)
-	response := fallbackResponse
-	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt)
-	if err == nil {
-		if t := strings.TrimSpace(payload.OutputText()); t != "" {
-			response = t
-		}
+	payload, err := s.GptClient.CallGPT(messages, session.Model, session.SystemPrompt, chatTools...)
+	if err != nil {
+		log.Printf("[ReplyFromGroupHistory] GPT error: %v", err)
+		return &ChatResult{Text: fallbackResponse}, err
 	}
 
+	result, err := s.toolLoop(payload, session.Model, session.SystemPrompt)
+
 	session.History[len(session.History)-1].Response = storage.Message{
-		Role: "assistant", Content: response,
+		Role: "assistant", Content: buildHistoryContent(result),
 	}
-	return response, err
+	return result, err
 }
 
 // autoReplyCheckInstructions is the system prompt for the YES/NO auto-reply decision.
@@ -202,35 +363,11 @@ Reply NO only if:
 - your last message already addressed the topic and nothing new was added
 Respond with exactly one word: YES or NO.`
 
-// silenceThreshold is the number of consecutive messages without a bot response
-// after which the bot forcibly joins the conversation.
-const silenceThreshold = 20
-
-// messagesSinceLastReply counts how many entries at the tail of history
-// have no bot response. Used to force auto-reply after prolonged silence.
-func messagesSinceLastReply(history []*storage.ConversationEntry) int {
-	count := 0
-	for i := len(history) - 1; i >= 0; i-- {
-		if history[i].Response != (storage.Message{}) {
-			break
-		}
-		count++
-	}
-	return count
-}
-
 // ShouldAutoReply asks GPT (using the last few messages) whether the bot should
 // proactively join the group conversation.
-// Forces YES if the bot has been silent for silenceThreshold messages.
 // Returns (decision, reason, error).
 func (s *GPTService) ShouldAutoReply(chat *storage.Chat) (bool, string, error) {
 	session := chat.ActiveSession()
-
-	// Forced reply after prolonged silence
-	silent := messagesSinceLastReply(session.History)
-	if silent >= silenceThreshold {
-		return true, fmt.Sprintf("молчал %d сообщений, принудительный ответ", silent), nil
-	}
 
 	const lookback = 10
 	history := session.History

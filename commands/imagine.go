@@ -3,6 +3,7 @@ package commands
 import (
 	"GPTBot/api/gpt"
 	"GPTBot/api/telegram"
+	"GPTBot/handler"
 	"GPTBot/storage"
 	"fmt"
 	"time"
@@ -24,35 +25,29 @@ func (c *CommandImagine) IsAdmin() bool {
 	return false
 }
 
-func (c *CommandImagine) Execute(update telegram.Update, chat *storage.Chat) {
+func (c *CommandImagine) Execute(ctx *telegram.UpdateContext, chat *storage.Chat) []handler.Response {
 	now := time.Now()
 	nextTime := chat.ImageGenNextTime
-	if nextTime.After(now) && !c.Auth.IsAdmin(update.Message.From.ID) {
+	if nextTime.After(now) && !c.Auth.IsAdmin(ctx.SenderID) {
 		nextTimeStr := nextTime.Format("15:04:05")
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, fmt.Sprintf("Следующая генерация изображения будет доступна в %s.", nextTimeStr))
-		return
+		return reply(fmt.Sprintf("Следующая генерация изображения будет доступна в %s.", nextTimeStr))
 	}
 
-	if len(update.Message.CommandArguments()) == 0 {
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
-		return
+	if len(ctx.Msg.CommandArguments()) == 0 {
+		return reply("Пожалуйста укажите текст, по которому необходимо сгенерировать изображение. Использование: /imagine <text>")
 	}
 
 	chat.ImageGenNextTime = now.Add(time.Second * 900)
 	aiModel := gpt.ImageEnhanceTierID
-	prompt := update.Message.CommandArguments()
+	prompt := ctx.Msg.CommandArguments()
 
 	c.Notifier.Notify(fmt.Sprintf("[%s | %s (%s)] Image prompt: \"%s\"", chat.Title, aiModel, gpt.ResolveAPIName(aiModel), prompt))
 
 	imageURL, caption, err := c.GPTService.GenerateImage(aiModel, prompt)
 	if err != nil {
 		c.Notifier.Notify(fmt.Sprintf("[%d] Error generating image: %v", chat.ChatID, err))
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
-		return
+		return reply("Произошла ошибка при генерации изображения, попробуйте позже.")
 	}
 
-	if err := c.Bot.SendImage(chat.ChatID, imageURL, caption); err != nil {
-		c.Notifier.Notify(fmt.Sprintf("[%d] Error sending image: %v", chat.ChatID, err))
-		c.Bot.Reply(chat.ChatID, update.Message.MessageID, "Произошла ошибка при генерации изображения, попробуйте позже.")
-	}
+	return []handler.Response{{ImageURL: imageURL, Caption: caption}}
 }

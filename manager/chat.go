@@ -1,6 +1,6 @@
 // Package manager handles Telegram-specific chat lifecycle:
 // creating/finding chat objects in storage and writing chat message logs.
-// It depends on Telegram types (Update) by design.
+// It depends on Telegram types (UpdateContext) by design.
 package manager
 
 import (
@@ -9,8 +9,8 @@ import (
 )
 
 type ChatManager interface {
-	GetOrCreateChat(update telegram.Update) *storage.Chat
-	LogMessage(update telegram.Update, chat *storage.Chat)
+	GetOrCreateChat(ctx *telegram.UpdateContext) *storage.Chat
+	LogMessage(ctx *telegram.UpdateContext, chat *storage.Chat)
 	Save()
 	MarkDirty(chatID int64)
 }

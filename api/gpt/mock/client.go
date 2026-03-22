@@ -14,7 +14,7 @@ func NewClient() *Client {
 	return &Client{}
 }
 
-func (m *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instructions string) (*gpt.Response, error) {
+func (m *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instructions string, tools ...gpt.Tool) (*gpt.Response, error) {
 	return &gpt.Response{
 		ID:     "mock-id",
 		Object: "response",
@@ -33,6 +33,25 @@ func (m *Client) CallGPT(chatConversation []gpt.Message, aimodel string, instruc
 			OutputTokens: 5,
 			TotalTokens:  15,
 		},
+	}, nil
+}
+
+func (m *Client) ContinueWithToolOutputs(_ string, outputs []gpt.ToolCallOutput, aimodel string, _ string, _ ...gpt.Tool) (*gpt.Response, error) {
+	summary := fmt.Sprintf("[mock] tool outputs received: %d", len(outputs))
+	return &gpt.Response{
+		ID:     "mock-continue-id",
+		Object: "response",
+		Output: []gpt.ResponseOutputItem{
+			{
+				Type: "message",
+				ID:   "mock-continue-msg",
+				Role: "assistant",
+				Content: []gpt.ResponseOutputContent{
+					{Type: "output_text", Text: summary},
+				},
+			},
+		},
+		Usage: gpt.ResponseUsage{InputTokens: 20, OutputTokens: 10, TotalTokens: 30},
 	}, nil
 }
 
