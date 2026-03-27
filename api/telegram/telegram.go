@@ -1,8 +1,7 @@
 package telegram
 
 import (
-	"GPTBot/api/logger"
-	conf "GPTBot/config"
+	"GPTBot/infrastructure/logger"
 	"io"
 	"net/http"
 
@@ -49,8 +48,8 @@ func (u Update) IsEdited() bool {
 	return u.EditedMessage != nil || u.EditedChannelPost != nil
 }
 
-func NewInstance(config *conf.Config, logClient logger.Log) (*Bot, error) {
-	transport, err := NewTransport(config.TelegramToken)
+func NewInstance(token string, commandMenu []string, logClient logger.Log) (*Bot, error) {
+	transport, err := NewTransport(token)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +60,7 @@ func NewInstance(config *conf.Config, logClient logger.Log) (*Bot, error) {
 		transport: transport,
 	}
 
-	bot.SetCommandList(config.CommandMenu)
+	bot.SetCommandList(commandMenu)
 
 	bot.LogClient.Logf("Authorized on account %s", bot.Username)
 
@@ -153,14 +152,6 @@ func (botInstance *Bot) SendImage(chatID int64, imageUrl string, caption string)
 	photoMsg.Caption = caption
 	_, err = botInstance.transport.Send(photoMsg)
 	return err
-}
-
-func (botInstance *Bot) GetFile(fileId string) (FileInfo, error) {
-	f, err := botInstance.transport.GetFile(fileId)
-	if err != nil {
-		return FileInfo{}, err
-	}
-	return toFileInfo(f), nil
 }
 
 func (botInstance *Bot) AudioUpload(chatID int64, bytes []byte) error {

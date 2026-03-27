@@ -8,28 +8,34 @@ import (
 )
 
 type Config struct {
-	TelegramToken       string   `yaml:"telegram_token"`
-	GPTToken            string   `yaml:"gpt_token"`
-	SummarizePrompt     string   `yaml:"summarize_prompt"`
-	DefaultSystemPrompt string   `yaml:"default_system_prompt"`
-	TimeoutValue        int      `yaml:"timeout_value"`
-	MaxMessages         int      `yaml:"max_messages"`
-	AdminId             int64    `yaml:"admin_id"`
-	IgnoreReportIds     []int64  `yaml:"ignore_report_ids"`
-	AuthorizedUserIds   []int64  `yaml:"authorized_user_ids"`
-	CommandMenu         []string `yaml:"command_menu"`
-	TelegramTokenLogBot string   `yaml:"telegram_token_log_bot"`
-	DataDir             string   `yaml:"data_dir"`
-	LogDir              string   `yaml:"log_dir"`
+	TelegramToken           string   `yaml:"telegram_token"`
+	GPTToken                string   `yaml:"gpt_token"`
+	SummarizePrompt         string   `yaml:"summarize_prompt"`
+	DefaultSystemPrompt     string   `yaml:"default_system_prompt"`
+	TimeoutValue            int      `yaml:"timeout_value"`
+	MaxMessages             int      `yaml:"max_messages"`
+	AdminId                 int64    `yaml:"admin_id"`
+	IgnoreReportIds         []int64  `yaml:"ignore_report_ids"`
+	AuthorizedUserIds       []int64  `yaml:"authorized_user_ids"`
+	CommandMenu             []string `yaml:"command_menu"`
+	TelegramTokenLogBot     string   `yaml:"telegram_token_log_bot"`
+	DataDir                 string   `yaml:"data_dir"`
+	LogDir                  string   `yaml:"log_dir"`
+	StorageType             string   `yaml:"storage_type"`              // "file" (default), "sqlite", "memory"
+	StorageDSN              string   `yaml:"storage_dsn"`               // DSN for sqlite (path to db file); ignored for file/memory
+	DefaultAutoReplyPersona string   `yaml:"default_autoreply_persona"` // default role/persona for auto-reply decision prompt
 }
 
 // Defaults fills zero-valued fields with sensible defaults.
 func (c *Config) ApplyDefaults() {
 	if c.DataDir == "" {
-		c.DataDir = "data"
+		c.DataDir = "_var/data"
 	}
 	if c.LogDir == "" {
-		c.LogDir = "log"
+		c.LogDir = "_var/log"
+	}
+	if c.StorageType == "" {
+		c.StorageType = "file"
 	}
 }
 

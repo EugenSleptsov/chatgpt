@@ -8,7 +8,7 @@ import (
 
 // Transport is the lowest-level Telegram wrapper.
 // It owns a single *tgbotapi.BotAPI and token and exposes only
-// primitive operations: send, get file, poll updates.
+// primitive operations: sender, get file, poll updates.
 // No formatting, no business logic, no splitting — just the wire.
 type Transport struct {
 	api      *tgbotapi.BotAPI

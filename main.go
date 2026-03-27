@@ -1,13 +1,16 @@
 package main
 
-import "log"
+import (
+	"GPTBot/app"
+	"log"
+)
 
-const configFile = "bot.yaml"
+const configFile = "config/bot.yaml"
 
 func main() {
-	app, err := NewApp(configFile)
+	core, err := app.NewApp(configFile)
 	if err != nil {
 		log.Fatal(err)
 	}
-	app.Run()
+	core.Run()
 }

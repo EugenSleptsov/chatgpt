@@ -1,35 +1,35 @@
 package telegram
 
-import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+import (
+	"GPTBot/pipeline"
+	"GPTBot/pipeline/sender"
+)
 
-// FileInfo is a transport-agnostic wrapper for a remote file descriptor.
-type FileInfo struct {
-	FilePath string
-}
-
-// BotAPI is the interface used by handlers and commands to interact with
-// the Telegram transport. Implementing this interface allows mocking in tests.
+// BotAPI is the full interface of the Telegram bot.
+// Sub-interfaces (sender.MessageSender, pipeline.FileResolver) are defined
+// in their consumer packages; BotAPI composes them all for convenience
+// in the composition root.
 type BotAPI interface {
-	Reply(chatID int64, replyTo int, text string)
-	ReplyMarkdown(chatID int64, replyTo int, text string, isMarkdown bool)
-	Message(message string, chatID int64, isMarkdown bool)
-	SendImage(chatID int64, imageUrl string, caption string) error
-	SendImageData(chatID int64, data []byte, caption string) error
-	AudioUpload(chatID int64, bytes []byte) error
-	GetFile(fileID string) (FileInfo, error)
-	FileURL(filePath string) string
+	sender.MessageSender
+	pipeline.FileResolver
 	GetUsername() string
 }
 
-// compile-time check: Bot implements BotAPI
+// compile-time checks
 var _ BotAPI = (*Bot)(nil)
+var _ sender.MessageSender = (*Bot)(nil)
+var _ pipeline.FileResolver = (*Bot)(nil)
 
 // GetUsername returns the bot's Telegram username.
 func (botInstance *Bot) GetUsername() string {
 	return botInstance.Username
 }
 
-// GetFileInfo wraps tgbotapi.File into transport-agnostic FileInfo.
-func toFileInfo(f tgbotapi.File) FileInfo {
-	return FileInfo{FilePath: f.FilePath}
+// GetFile resolves a Telegram file ID into a pipeline.FileInfo.
+func (botInstance *Bot) GetFile(fileID string) (pipeline.FileInfo, error) {
+	f, err := botInstance.transport.GetFile(fileID)
+	if err != nil {
+		return pipeline.FileInfo{}, err
+	}
+	return pipeline.FileInfo{FilePath: f.FilePath}, nil
 }

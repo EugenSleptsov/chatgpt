@@ -1,5 +1,5 @@
-bot.yaml
-data/
-log/*.log
+config/bot.yaml
+_var/data/
+_var/log/
 GPTBot
 .idea/
