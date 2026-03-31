@@ -13,7 +13,6 @@ import (
 
 // ChatDefaults holds the values used when creating a brand-new chat.
 type ChatDefaults struct {
-	MaxMessages     int
 	SummarizePrompt string
 	SystemPrompt    string
 	LogDir          string
@@ -50,7 +49,6 @@ func (cs *ChatService) GetOrCreateChat(ctx *pipeline.RequestContext) *chat.Chat 
 		c = &chat.Chat{
 			ChatID: ctx.ChatID,
 			Settings: chat.ChatSettings{
-				MaxMessages:     cs.defaults.MaxMessages,
 				UseMarkdown:     true,
 				SummarizePrompt: cs.defaults.SummarizePrompt,
 				CostLimitUSD:    cs.defaults.CostLimitUSD,

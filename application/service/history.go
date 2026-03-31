@@ -17,11 +17,13 @@ func NewHistoryService() *HistoryService {
 	return &HistoryService{}
 }
 
-// Append adds a user message to the session history and trims to maxMessages.
-func (h *HistoryService) Append(session *chatdomain.Session, prompt chatdomain.Message, maxMessages int) {
+// Append adds a user message to the session history.
+// No trimming is done here — context management is handled entirely by
+// CompactService.ShouldCompact / Compact, mirroring Claude Code's approach
+// where autoCompactIfNeeded replaces any hard message limit.
+func (h *HistoryService) Append(session *chatdomain.Session, prompt chatdomain.Message) {
 	entry := &chatdomain.ConversationEntry{Prompt: prompt}
 	session.History = append(session.History, entry)
-	h.Trim(session, maxMessages)
 }
 
 // AttachResponse sets the assistant response on the last history entry.
@@ -30,13 +32,6 @@ func (h *HistoryService) AttachResponse(session *chatdomain.Session, response ch
 		return
 	}
 	session.History[len(session.History)-1].Response = response
-}
-
-// Trim removes the oldest entries so that at most maxMessages remain.
-func (h *HistoryService) Trim(session *chatdomain.Session, maxMessages int) {
-	if maxMessages > 0 && len(session.History) > maxMessages {
-		session.History = session.History[len(session.History)-maxMessages:]
-	}
 }
 
 // Clear removes all entries from the session history.
@@ -75,7 +70,7 @@ func (h *HistoryService) LogGroupMessage(chat *chatdomain.Chat, author, text str
 	h.Append(session, chatdomain.Message{
 		Role:    "user",
 		Content: fmt.Sprintf("%s: %s", author, text),
-	}, chat.Settings.MaxMessages)
+	})
 }
 
 // LogGroupPhoto stores a photo placeholder in the active session history.

@@ -47,7 +47,7 @@ func (e *TextExecutor) ProcessText(ctx *pipeline.RequestContext, c *chat.Chat, t
 
 func (e *TextExecutor) privateChat(ctx *pipeline.RequestContext, c *chat.Chat, text string, isVoice bool) []sender.Response {
 	session := c.ActiveSession()
-	e.History.Append(session, chat.Message{Role: "user", Content: text}, c.Settings.MaxMessages)
+	e.History.Append(session, chat.Message{Role: "user", Content: text})
 
 	result, err := e.GPT.Complete(c)
 	e.Notifier.LogError(err)

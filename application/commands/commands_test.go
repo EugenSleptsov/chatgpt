@@ -68,7 +68,7 @@ func buildDeps(t *testing.T) (*testDeps, *fakeBot) {
 	bot := &fakeBot{}
 	logDir := t.TempDir()
 	auth := service.NewAuth(100, []int64{100, 200})
-	config := &conf.Config{MaxMessages: 50, DataDir: t.TempDir(), LogDir: logDir, SummarizePrompt: "summarize"}
+	config := &conf.Config{DataDir: t.TempDir(), LogDir: logDir, SummarizePrompt: "summarize"}
 	configService := service.NewConfigService(config, "")
 	notifier := &service.Notifier{Log: &fakeLog{}}
 	history := service.NewHistoryService()
@@ -84,7 +84,7 @@ func buildDeps(t *testing.T) (*testDeps, *fakeBot) {
 	}
 	chatSvc := service.NewChatService(
 		storage.NewMemoryStorage(),
-		service.ChatDefaults{MaxMessages: 50, LogDir: logDir},
+		service.ChatDefaults{LogDir: logDir},
 		&fakeLog{},
 	)
 	registry := commands.NewRegistry()
@@ -148,7 +148,6 @@ func newTestChat() *domain.Chat {
 	return &domain.Chat{
 		ChatID: 1,
 		Settings: domain.ChatSettings{
-			MaxMessages:     50,
 			UseMarkdown:     true,
 			SummarizePrompt: "summarize",
 		},
@@ -933,7 +932,6 @@ func TestCommandAdminReload(t *testing.T) {
 		TelegramToken:     "new_tok",
 		GPTToken:          "new_gpt",
 		TimeoutValue:      99,
-		MaxMessages:       77,
 		AdminId:           100,
 		AuthorizedUserIds: []int64{100, 200, 300},
 		DataDir:           "d",
@@ -951,8 +949,8 @@ func TestCommandAdminReload(t *testing.T) {
 	if !strings.Contains(resp, "Config updated") {
 		t.Errorf("unexpected reply: %q", resp)
 	}
-	if deps.Config.MaxMessages != 77 {
-		t.Errorf("MaxMessages = %d, want 77", deps.Config.MaxMessages)
+	if deps.Config.TimeoutValue != 99 {
+		t.Errorf("TimeoutValue = %d, want 99", deps.Config.TimeoutValue)
 	}
 }
 

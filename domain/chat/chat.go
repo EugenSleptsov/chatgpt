@@ -24,11 +24,12 @@ type Storage interface {
 
 // Session represents an independent conversation thread inside a Telegram chat.
 type Session struct {
-	ID           int
-	Topic        string
-	History      []*ConversationEntry
-	SystemPrompt string
-	Model        string
+	ID              int
+	Topic           string
+	History         []*ConversationEntry
+	SystemPrompt    string
+	Model           string
+	LastInputTokens int // real input_tokens from last API response (used by auto-compact)
 }
 
 // Chat is the aggregate root for a Telegram chat.
@@ -52,7 +53,6 @@ type Chat struct {
 
 // ChatSettings holds per-chat configuration.
 type ChatSettings struct {
-	MaxMessages      int
 	UseMarkdown      bool
 	SummarizePrompt  string
 	GroupAutoReply   bool    // bot proactively joins group conversations

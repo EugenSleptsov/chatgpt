@@ -13,7 +13,6 @@ type Config struct {
 	SummarizePrompt         string   `yaml:"summarize_prompt"`
 	DefaultSystemPrompt     string   `yaml:"default_system_prompt"`
 	TimeoutValue            int      `yaml:"timeout_value"`
-	MaxMessages             int      `yaml:"max_messages"`
 	AdminId                 int64    `yaml:"admin_id"`
 	IgnoreReportIds         []int64  `yaml:"ignore_report_ids"`
 	AuthorizedUserIds       []int64  `yaml:"authorized_user_ids"`
@@ -50,8 +49,8 @@ func maskToken(token string) string {
 
 func (c *Config) String() string {
 	return fmt.Sprintf(
-		"Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  MaxMessages: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUserIds: %v,\n  CommandMenu: %v\n  SummarizePrompt: %s\n}",
-		maskToken(c.TelegramToken), maskToken(c.GPTToken), c.TimeoutValue, c.MaxMessages, c.AdminId, c.IgnoreReportIds, c.AuthorizedUserIds, c.CommandMenu, c.SummarizePrompt,
+		"Config{\n  TelegramToken: %s,\n  GPTToken: %s,\n  TimeoutValue: %d,\n  AdminId: %d,\n  IgnoreReportIds: %v,\n  AuthorizedUserIds: %v,\n  CommandMenu: %v\n  SummarizePrompt: %s\n  CostLimitUSD: %.2f\n}",
+		maskToken(c.TelegramToken), maskToken(c.GPTToken), c.TimeoutValue, c.AdminId, c.IgnoreReportIds, c.AuthorizedUserIds, c.CommandMenu, c.SummarizePrompt, c.CostLimitUSD,
 	)
 }
 

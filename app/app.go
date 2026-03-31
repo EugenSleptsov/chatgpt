@@ -69,7 +69,6 @@ func NewApp(configFile string) (*App, error) {
 	aiClient := openai.NewClient(config.GPTToken, logSystem)
 
 	chatDefaults := service.ChatDefaults{
-		MaxMessages:     config.MaxMessages,
 		SummarizePrompt: config.SummarizePrompt,
 		SystemPrompt:    config.DefaultSystemPrompt,
 		LogDir:          config.LogDir,

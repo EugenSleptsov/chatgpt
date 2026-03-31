@@ -102,15 +102,17 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 	session := chat.ActiveSession()
 
 	// Auto-compact: if context is approaching the model's limit, summarize
-	// old messages before sending.
+	// old messages before sending. Uses real API token count from last
+	// response when available (like Claude Code's tokenCountWithEstimation).
 	if s.Compact != nil {
 		memPrompt := s.Memory.BuildPrompt(chat)
-		if s.Compact.ShouldCompact(session, memPrompt) {
+		if s.Compact.ShouldCompact(session, memPrompt, session.LastInputTokens) {
 			compactUsage, compactErr := s.Compact.Compact(session, memPrompt)
 			if compactErr != nil {
 				log.Printf("[Complete] auto-compact failed: %v (proceeding without compaction)", compactErr)
 			} else if compactUsage != nil {
 				chat.AccumulateCost(compactUsage.Cost, compactUsage.InputTokens, compactUsage.OutputTokens)
+				session.LastInputTokens = 0 // reset after compaction
 			}
 		}
 	}
@@ -144,6 +146,11 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 
 	// Accumulate cost on the chat (daily rolling counter).
 	chat.AccumulateCost(result.Usage.Cost, result.Usage.InputTokens, result.Usage.OutputTokens)
+
+	// Save real API input_tokens for next auto-compact threshold check.
+	// Claude Code's tokenCountWithEstimation prefers the last API response's
+	// usage.input_tokens over rough character-based estimates.
+	session.LastInputTokens = result.Usage.InputTokens
 
 	s.History.AttachResponse(session, chatdomain.Message{Role: "assistant", Content: buildHistoryContent(result)})
 	return result, err

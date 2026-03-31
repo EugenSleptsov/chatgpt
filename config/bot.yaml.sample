@@ -7,9 +7,6 @@ gpt_token: YOUR_OPENAI_TOKEN
 # Polling timeout in seconds
 timeout_value: 1
 
-# Max conversation messages to keep in context
-max_messages: 20
-
 # Telegram user ID of the bot admin (0 = disabled)
 admin_id: 0
 
