@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 )
 
 const (
@@ -72,6 +73,7 @@ func NewApp(configFile string) (*App, error) {
 		SummarizePrompt: config.SummarizePrompt,
 		SystemPrompt:    config.DefaultSystemPrompt,
 		LogDir:          config.LogDir,
+		CostLimitUSD:    config.CostLimitUSD,
 	}
 
 	botStorage, err := storage.NewStorage(config.StorageType, config.DataDir, config.StorageDSN)
@@ -86,16 +88,23 @@ func NewApp(configFile string) (*App, error) {
 		ImageCost: openai.ImageGenerationCost,
 	}
 
+	compactService := &service.CompactService{
+		GptClient:       aiClient,
+		CostFn:          openai.CostForTokens,
+		ContextWindowFn: openai.ContextWindowForTier,
+	}
+
 	gptService := &service.GPTService{
 		GptClient: aiClient,
 		History:   historyService,
 		Memory:    memoryService,
+		Compact:   compactService,
 		CostFn:    openai.CostForTokens,
 		ImageCost: openai.ImageGenerationCost,
 	}
 
 	registry := commands.NewRegistry()
-	commands.RegisterAll(registry, gptCommandService, chatService, notifier, auth, historyService, memoryService, configService)
+	commands.RegisterAll(registry, gptCommandService, chatService, notifier, auth, historyService, memoryService, configService, openai.ContextWindowForTier)
 
 	return &App{
 		bot:         bot,
@@ -107,12 +116,21 @@ func NewApp(configFile string) (*App, error) {
 	}, nil
 }
 
+// shutdownTimeout is the maximum time we wait for in-flight workers to drain.
+//
+// After this deadline the process exits regardless of pending work.
+const shutdownTimeout = 30 * time.Second
+
 // Run starts the update polling, worker pool and blocks until a shutdown
 // signal is received or the update channel is closed.
 //
 // Updates are hash-partitioned by chat ID: every message from the same
 // Telegram chat always lands on the same worker goroutine. This eliminates
 // data races on *storage.Chat without per-chat mutexes.
+//
+// - First SIGINT/SIGTERM: stop accepting updates, drain workers with timeout
+// - Second SIGINT: force-quit immediately (double Ctrl+C pattern)
+// - Failsafe timer: exit after shutdownTimeout even if workers are stuck
 func (a *App) Run() {
 	updates := a.bot.GetUpdateChannel(60)
 
@@ -129,7 +147,7 @@ func (a *App) Run() {
 		}(workerChans[i])
 	}
 
-	sigChan := make(chan os.Signal, 1)
+	sigChan := make(chan os.Signal, 2) // buffered for 2: graceful + force
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	for {
@@ -143,9 +161,29 @@ func (a *App) Run() {
 			}
 			workerChans[partitionIndex(update, numWorkers)] <- update
 		case sig := <-sigChan:
-			log.Printf("Получен сигнал %v, завершение...", sig)
+			log.Printf("Получен сигнал %v, начинаю graceful shutdown...", sig)
 			closeAll(workerChans)
-			wg.Wait()
+
+			// Drain workers with a timeout failsafe.
+			done := make(chan struct{})
+			go func() {
+				wg.Wait()
+				close(done)
+			}()
+
+			// Second signal = force quit (double Ctrl+C pattern).
+			forceQuit := make(chan os.Signal, 1)
+			signal.Notify(forceQuit, syscall.SIGINT, syscall.SIGTERM)
+
+			select {
+			case <-done:
+				log.Println("Все воркеры завершены.")
+			case <-time.After(shutdownTimeout):
+				log.Printf("Таймаут %v: принудительное завершение (in-flight запросы потеряны).", shutdownTimeout)
+			case sig2 := <-forceQuit:
+				log.Printf("Повторный сигнал %v: принудительный выход.", sig2)
+			}
+
 			a.chatService.Save()
 			log.Println("Данные сохранены. Выход.")
 			return

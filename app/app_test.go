@@ -146,7 +146,7 @@ func buildTestDeps(bot *fakeBot) (*commands.Registry, *service.Auth, *service.No
 	registry := commands.NewRegistry()
 	config := &conf.Config{MaxMessages: 50, DataDir: "_var/data", LogDir: "_var/log"}
 	configService := service.NewConfigService(config, "")
-	commands.RegisterAll(registry, cmdSvc, chatSvc, notifier, auth, history, memory, configService)
+	commands.RegisterAll(registry, cmdSvc, chatSvc, notifier, auth, history, memory, configService, nil)
 	return registry, auth, notifier, gptSvc, mockClient
 }
 

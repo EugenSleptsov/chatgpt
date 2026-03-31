@@ -15,6 +15,7 @@ func AllCommands(
 	history *service.HistoryService,
 	memory *service.MemoryService,
 	configService *service.ConfigService,
+	contextWindowFn func(string) int,
 ) []Command {
 	return []Command{
 		// --- zero-dep commands ---
@@ -30,6 +31,8 @@ func AllCommands(
 		&CommandAutoRole{},
 		&CommandMemory{Memory: memory},
 		&CommandSummarizePrompt{},
+		&CommandUsage{},
+		&CommandContext{ContextWindowFn: contextWindowFn},
 		&CommandSessionList{},
 		&CommandSessionCurrent{},
 		&CommandSessionUse{},
@@ -65,8 +68,9 @@ func RegisterAll(
 	history *service.HistoryService,
 	memory *service.MemoryService,
 	configService *service.ConfigService,
+	contextWindowFn func(string) int,
 ) {
-	for _, cmd := range AllCommands(registry, cmdService, chatService, notifier, auth, history, memory, configService) {
+	for _, cmd := range AllCommands(registry, cmdService, chatService, notifier, auth, history, memory, configService, contextWindowFn) {
 		registry.Add(cmd)
 	}
 }

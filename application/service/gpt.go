@@ -37,6 +37,7 @@ type GPTService struct {
 	GptClient ai.Client
 	History   *HistoryService
 	Memory    *MemoryService
+	Compact   *CompactService                                            // auto-compact (may be nil)
 	CostFn    func(tierID string, inputTokens, outputTokens int) float64 // provider-specific token cost calculator
 	ImageCost float64                                                    // provider-specific per-image generation cost (USD)
 }
@@ -68,7 +69,11 @@ func buildHistoryContent(r *ChatResult) string {
 	return strings.Join(parts, "\n")
 }
 func (s *GPTService) buildInstructions(session *chatdomain.Session, chat *chatdomain.Chat) string {
-	return s.History.BuildInstructions(session, s.Memory.BuildPrompt(chat))
+	return s.History.BuildInstructionsWithContext(session, s.Memory.BuildPrompt(chat), &PromptContext{
+		ChatTitle:   chat.Title,
+		IsGroup:     chat.ChatID < 0, // Telegram convention: group IDs are negative
+		UseMarkdown: chat.Settings.UseMarkdown,
+	})
 }
 
 // failSession records a fallback response in the session history and returns
@@ -78,12 +83,38 @@ func (s *GPTService) failSession(session *chatdomain.Session, text string) *Chat
 	return &ChatResult{Text: text}
 }
 
+// costLimitResponse is returned when the chat has exceeded its daily spending cap.
+const costLimitResponse = "⚠️ Дневной лимит расходов для этого чата исчерпан. Попробуйте завтра или попросите администратора увеличить лимит."
+
 // Complete runs the GPT pipeline on the active session: calls GPT with the
 // current history, handles tool calls, records metrics and attaches the
 // assistant response. The caller is responsible for preparing the session
 // (appending user messages, checking history, etc.) before calling Complete.
+//
+// checks the cumulative daily spend before calling the API.
 func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
+	// Cost guard: refuse to call API if daily limit exceeded.
+	if chat.CostLimitExceeded(chat.Settings.CostLimitUSD) {
+		session := chat.ActiveSession()
+		return s.failSession(session, costLimitResponse), nil
+	}
+
 	session := chat.ActiveSession()
+
+	// Auto-compact: if context is approaching the model's limit, summarize
+	// old messages before sending.
+	if s.Compact != nil {
+		memPrompt := s.Memory.BuildPrompt(chat)
+		if s.Compact.ShouldCompact(session, memPrompt) {
+			compactUsage, compactErr := s.Compact.Compact(session, memPrompt)
+			if compactErr != nil {
+				log.Printf("[Complete] auto-compact failed: %v (proceeding without compaction)", compactErr)
+			} else if compactUsage != nil {
+				chat.AccumulateCost(compactUsage.Cost, compactUsage.InputTokens, compactUsage.OutputTokens)
+			}
+		}
+	}
+
 	messages := s.History.Messages(session)
 	instructions := s.buildInstructions(session, chat)
 
@@ -110,6 +141,9 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 	}
 	result.Usage.prepend(preflight)
 	result.Usage.Input = computeInputMetrics(session, s.Memory.BuildPrompt(chat), chatToolsLight)
+
+	// Accumulate cost on the chat (daily rolling counter).
+	chat.AccumulateCost(result.Usage.Cost, result.Usage.InputTokens, result.Usage.OutputTokens)
 
 	s.History.AttachResponse(session, chatdomain.Message{Role: "assistant", Content: buildHistoryContent(result)})
 	return result, err
