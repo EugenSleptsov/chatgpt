@@ -74,7 +74,7 @@ func (l *fakeLog) LogToFile(_ string, _ []string)  {}
 func fakeChatService() *service.ChatService {
 	return service.NewChatService(
 		storage.NewMemoryStorage(),
-		service.ChatDefaults{MaxMessages: 50, LogDir: "_var/log"},
+		service.ChatDefaults{LogDir: "_var/log"},
 		&fakeLog{},
 	)
 }
@@ -144,9 +144,18 @@ func buildTestDeps(bot *fakeBot) (*commands.Registry, *service.Auth, *service.No
 	cmdSvc := &service.GPTCommandService{GptClient: mockClient}
 	chatSvc := fakeChatService()
 	registry := commands.NewRegistry()
-	config := &conf.Config{MaxMessages: 50, DataDir: "_var/data", LogDir: "_var/log"}
+	config := &conf.Config{DataDir: "_var/data", LogDir: "_var/log"}
 	configService := service.NewConfigService(config, "")
-	commands.RegisterAll(registry, cmdSvc, chatSvc, notifier, auth, history, memory, configService)
+	commands.RegisterAll(commands.Deps{
+		Registry:      registry,
+		CmdService:    cmdSvc,
+		ChatService:   chatSvc,
+		Notifier:      notifier,
+		Auth:          auth,
+		History:       history,
+		Memory:        memory,
+		ConfigService: configService,
+	})
 	return registry, auth, notifier, gptSvc, mockClient
 }
 
@@ -409,7 +418,17 @@ func TestBuildDecoder_ReturnsDecoder(t *testing.T) {
 	bot := &fakeBot{}
 	registry, auth, notifier, gptSvc, aiClient := buildTestDeps(bot)
 	cmdSvc := &service.GPTCommandService{GptClient: aiClient}
-	d := buildDecoder(bot, bot.GetUsername(), aiClient, gptSvc, cmdSvc, gptSvc.History, notifier, auth, registry, "")
+	d := buildDecoder(decoderDeps{
+		files:       bot,
+		botUsername: bot.GetUsername(),
+		aiClient:    aiClient,
+		gpt:         gptSvc,
+		cmds:        cmdSvc,
+		history:     gptSvc.History,
+		notifier:    notifier,
+		auth:        auth,
+		registry:    registry,
+	})
 	if d == nil {
 		t.Fatal("buildDecoder returned nil")
 	}
@@ -468,7 +487,7 @@ func TestTextExecutor_PrivateChat(t *testing.T) {
 	ctx := makeReqCtx(makeUpdate(1, 100, "hello"))
 	chat := &chat.Chat{
 		ChatID:   1,
-		Settings: chat.ChatSettings{MaxMessages: 10, UseMarkdown: true},
+		Settings: chat.ChatSettings{UseMarkdown: true},
 		Sessions: []*chat.Session{{
 			ID: 1, Topic: "test", Model: "basic",
 			History: make([]*chat.ConversationEntry, 0),

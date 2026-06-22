@@ -6,6 +6,7 @@ import (
 	"GPTBot/infrastructure/util"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // HistoryService manages conversation history within a session.
@@ -16,11 +17,13 @@ func NewHistoryService() *HistoryService {
 	return &HistoryService{}
 }
 
-// Append adds a user message to the session history and trims to maxMessages.
-func (h *HistoryService) Append(session *chatdomain.Session, prompt chatdomain.Message, maxMessages int) {
+// Append adds a user message to the session history.
+// No trimming is done here — context management is handled entirely by
+// CompactService.ShouldCompact / Compact, mirroring Claude Code's approach
+// where autoCompactIfNeeded replaces any hard message limit.
+func (h *HistoryService) Append(session *chatdomain.Session, prompt chatdomain.Message) {
 	entry := &chatdomain.ConversationEntry{Prompt: prompt}
 	session.History = append(session.History, entry)
-	h.Trim(session, maxMessages)
 }
 
 // AttachResponse sets the assistant response on the last history entry.
@@ -29,13 +32,6 @@ func (h *HistoryService) AttachResponse(session *chatdomain.Session, response ch
 		return
 	}
 	session.History[len(session.History)-1].Response = response
-}
-
-// Trim removes the oldest entries so that at most maxMessages remain.
-func (h *HistoryService) Trim(session *chatdomain.Session, maxMessages int) {
-	if maxMessages > 0 && len(session.History) > maxMessages {
-		session.History = session.History[len(session.History)-maxMessages:]
-	}
 }
 
 // Clear removes all entries from the session history.
@@ -74,7 +70,7 @@ func (h *HistoryService) LogGroupMessage(chat *chatdomain.Chat, author, text str
 	h.Append(session, chatdomain.Message{
 		Role:    "user",
 		Content: fmt.Sprintf("%s: %s", author, text),
-	}, chat.Settings.MaxMessages)
+	})
 }
 
 // LogGroupPhoto stores a photo placeholder in the active session history.
@@ -146,14 +142,68 @@ func (h *HistoryService) formatHistory(history []ai.Message) []string {
 	return chunks
 }
 
-// BuildInstructions constructs the system prompt from session settings and chat memory.
+// PromptContext holds dynamic context injected into the system prompt.
+// which separates static cacheable sections from dynamic runtime context.
+type PromptContext struct {
+	ChatTitle   string // Telegram chat title
+	IsGroup     bool   // true for group chats
+	UseMarkdown bool   // whether markdown formatting is enabled
+}
+
+// BuildInstructions constructs a structured system prompt from multiple sections:
+//  1. Persona/role (session system prompt)
+//  2. Capabilities (available tools)
+//  3. Memory (persistent facts)
+//  4. Dynamic context (date/time, chat info)
+//  5. Response style guidelines
 func (h *HistoryService) BuildInstructions(session *chatdomain.Session, memoryPrompt string) string {
+	return h.BuildInstructionsWithContext(session, memoryPrompt, nil)
+}
+
+// BuildInstructionsWithContext is the full prompt builder with dynamic context.
+func (h *HistoryService) BuildInstructionsWithContext(session *chatdomain.Session, memoryPrompt string, ctx *PromptContext) string {
 	var parts []string
+
+	// Section 1: Persona / Role (static, cacheable)
 	if session.SystemPrompt != "" {
 		parts = append(parts, session.SystemPrompt)
 	}
+
+	// Section 2: Capabilities (static, cacheable)
+	parts = append(parts, `Capabilities:
+- You can search the internet for up-to-date information
+- You can generate images from text descriptions
+- You can create voice/audio messages
+- You can remember facts about the user for future conversations`)
+
+	// Section 3: Memory (semi-static, changes infrequently)
 	if memoryPrompt != "" {
 		parts = append(parts, memoryPrompt)
 	}
+
+	// Section 4: Dynamic context (changes every request)
+	now := time.Now()
+	dynamicCtx := fmt.Sprintf("Current date and time: %s", now.Format("2006-01-02 15:04 MST"))
+	if ctx != nil {
+		if ctx.ChatTitle != "" {
+			dynamicCtx += fmt.Sprintf("\nChat: %s", ctx.ChatTitle)
+		}
+		if ctx.IsGroup {
+			dynamicCtx += "\nChat type: group conversation (multiple participants)"
+		} else {
+			dynamicCtx += "\nChat type: private conversation"
+		}
+	}
+	parts = append(parts, dynamicCtx)
+
+	// Section 5: Response style (static, cacheable)
+	style := "Response guidelines:\n- Be concise — this is a Telegram chat, not a document.\n- Prefer short paragraphs over walls of text."
+	if ctx != nil && ctx.UseMarkdown {
+		style += "\n- You may use Markdown formatting (bold, italic, code blocks, lists)."
+	} else if ctx != nil {
+		style += "\n- Use plain text only, no Markdown."
+	}
+	parts = append(parts, style)
+
 	return strings.Join(parts, "\n\n")
 }

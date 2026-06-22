@@ -4,32 +4,40 @@ import (
 	"GPTBot/application/service"
 )
 
+// Deps bundles every dependency the command set needs. Using a struct instead
+// of a long positional argument list keeps wiring readable and makes adding a
+// new dependency a non-breaking, field-only change.
+type Deps struct {
+	Registry        *Registry
+	CmdService      *service.GPTCommandService
+	ChatService     *service.ChatService
+	Notifier        *service.Notifier
+	Auth            *service.Auth
+	History         *service.HistoryService
+	Memory          *service.MemoryService
+	ConfigService   *service.ConfigService
+	ContextWindowFn func(string) int
+}
+
 // AllCommands returns every bot command, ready to use.
 // Each command receives only the dependencies it actually needs.
-func AllCommands(
-	registry *Registry,
-	cmdService *service.GPTCommandService,
-	chatService *service.ChatService,
-	notifier *service.Notifier,
-	auth *service.Auth,
-	history *service.HistoryService,
-	memory *service.MemoryService,
-	configService *service.ConfigService,
-) []Command {
+func AllCommands(d Deps) []Command {
 	return []Command{
 		// --- zero-dep commands ---
-		&CommandHelp{Registry: registry, Auth: auth},
+		&CommandHelp{Registry: d.Registry, Auth: d.Auth},
 		&CommandStart{},
-		&CommandClear{History: history},
-		&CommandHistory{History: history},
-		&CommandRollback{History: history},
+		&CommandClear{History: d.History},
+		&CommandHistory{History: d.History},
+		&CommandRollback{History: d.History},
 		&CommandModel{},
 		&CommandSystem{},
 		&CommandMarkdown{},
 		&CommandAutoReply{},
 		&CommandAutoRole{},
-		&CommandMemory{Memory: memory},
+		&CommandMemory{Memory: d.Memory},
 		&CommandSummarizePrompt{},
+		&CommandUsage{},
+		&CommandContext{ContextWindowFn: d.ContextWindowFn},
 		&CommandSessionList{},
 		&CommandSessionCurrent{},
 		&CommandSessionUse{},
@@ -38,35 +46,26 @@ func AllCommands(
 		&CommandSessionUpdate{},
 
 		// --- GPT text commands ---
-		&CommandTranslate{Commands: cmdService, Notifier: notifier},
-		&CommandTechTranslate{Commands: cmdService, Notifier: notifier},
-		&CommandEnhance{Commands: cmdService, Notifier: notifier},
-		&CommandGrammar{Commands: cmdService, Notifier: notifier},
-		&CommandSummarize{Commands: cmdService, ChatService: chatService, Notifier: notifier},
-		&CommandAnalyze{Commands: cmdService, ChatService: chatService, Notifier: notifier},
+		&CommandTranslate{Commands: d.CmdService, Notifier: d.Notifier},
+		&CommandTechTranslate{Commands: d.CmdService, Notifier: d.Notifier},
+		&CommandEnhance{Commands: d.CmdService, Notifier: d.Notifier},
+		&CommandGrammar{Commands: d.CmdService, Notifier: d.Notifier},
+		&CommandSummarize{Commands: d.CmdService, ChatService: d.ChatService, Notifier: d.Notifier},
+		&CommandAnalyze{Commands: d.CmdService, ChatService: d.ChatService, Notifier: d.Notifier},
 
 		// --- image ---
-		&CommandImagine{Commands: cmdService, Notifier: notifier, Auth: auth},
+		&CommandImagine{Commands: d.CmdService, Notifier: d.Notifier, Auth: d.Auth},
 
 		// --- admin ---
-		&CommandAdminReload{ConfigService: configService, Auth: auth},
-		&CommandAdminAddUser{ConfigService: configService, Auth: auth, Notifier: notifier},
-		&CommandAdminRemoveUser{ConfigService: configService, Auth: auth, Notifier: notifier},
+		&CommandAdminReload{ConfigService: d.ConfigService, Auth: d.Auth},
+		&CommandAdminAddUser{ConfigService: d.ConfigService, Auth: d.Auth, Notifier: d.Notifier},
+		&CommandAdminRemoveUser{ConfigService: d.ConfigService, Auth: d.Auth, Notifier: d.Notifier},
 	}
 }
 
 // RegisterAll populates the registry with every known command.
-func RegisterAll(
-	registry *Registry,
-	cmdService *service.GPTCommandService,
-	chatService *service.ChatService,
-	notifier *service.Notifier,
-	auth *service.Auth,
-	history *service.HistoryService,
-	memory *service.MemoryService,
-	configService *service.ConfigService,
-) {
-	for _, cmd := range AllCommands(registry, cmdService, chatService, notifier, auth, history, memory, configService) {
-		registry.Add(cmd)
+func RegisterAll(d Deps) {
+	for _, cmd := range AllCommands(d) {
+		d.Registry.Add(cmd)
 	}
 }

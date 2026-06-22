@@ -24,11 +24,12 @@ type Storage interface {
 
 // Session represents an independent conversation thread inside a Telegram chat.
 type Session struct {
-	ID           int
-	Topic        string
-	History      []*ConversationEntry
-	SystemPrompt string
-	Model        string
+	ID              int
+	Topic           string
+	History         []*ConversationEntry
+	SystemPrompt    string
+	Model           string
+	LastInputTokens int // real input_tokens from last API response (used by auto-compact)
 }
 
 // Chat is the aggregate root for a Telegram chat.
@@ -41,15 +42,22 @@ type Chat struct {
 	ImageGenNextTime time.Time
 	Title            string
 	Memory           []string
+
+	// Persisted across restarts so the admin can monitor per-chat spend.
+	TotalCostUSD      float64   // accumulated USD cost
+	TotalInputTokens  int       // accumulated input tokens
+	TotalOutputTokens int       // accumulated output tokens
+	TotalRequests     int       // number of GPT API calls
+	CostResetTime     time.Time // when the daily cost counter was last reset
 }
 
 // ChatSettings holds per-chat configuration.
 type ChatSettings struct {
-	MaxMessages      int
 	UseMarkdown      bool
 	SummarizePrompt  string
-	GroupAutoReply   bool   // bot proactively joins group conversations
-	AutoReplyPersona string // configurable role/persona for the auto-reply decision prompt (empty = use global default)
+	GroupAutoReply   bool    // bot proactively joins group conversations
+	AutoReplyPersona string  // configurable role/persona for the auto-reply decision prompt (empty = use global default)
+	CostLimitUSD     float64 // daily cost limit in USD, 0 = unlimited
 }
 
 // ConversationEntry stores one prompt/response pair in the session history.
@@ -137,4 +145,40 @@ func (c *Chat) AddSession(topic string) *Session {
 	c.NextSessionID++
 	c.Sessions = append(c.Sessions, s)
 	return s
+}
+
+// AccumulateCost adds usage from a single request to the running totals.
+// Resets counters if a new calendar day has started (daily budget cycle).
+func (c *Chat) AccumulateCost(cost float64, inputTokens, outputTokens int) {
+	now := time.Now()
+	if !sameDay(c.CostResetTime, now) {
+		c.TotalCostUSD = 0
+		c.TotalInputTokens = 0
+		c.TotalOutputTokens = 0
+		c.TotalRequests = 0
+		c.CostResetTime = now
+	}
+	c.TotalCostUSD += cost
+	c.TotalInputTokens += inputTokens
+	c.TotalOutputTokens += outputTokens
+	c.TotalRequests++
+}
+
+// CostLimitExceeded returns true if the chat has exceeded its daily cost limit.
+// A zero limit means unlimited.
+func (c *Chat) CostLimitExceeded(limitUSD float64) bool {
+	if limitUSD <= 0 {
+		return false
+	}
+	// Reset if new day
+	if !sameDay(c.CostResetTime, time.Now()) {
+		return false
+	}
+	return c.TotalCostUSD >= limitUSD
+}
+
+func sameDay(a, b time.Time) bool {
+	y1, m1, d1 := a.Date()
+	y2, m2, d2 := b.Date()
+	return y1 == y2 && m1 == m2 && d1 == d2
 }

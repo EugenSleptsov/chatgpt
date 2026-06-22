@@ -16,7 +16,6 @@ func TestReadConfig_ValidFile(t *testing.T) {
 telegram_token: "tok_telegram"
 gpt_token: "tok_gpt"
 timeout_value: 5
-max_messages: 30
 admin_id: 111
 authorized_user_ids: [111, 222]
 summarize_prompt: "sum it up"
@@ -40,9 +39,6 @@ log_dir: "mylog"
 	}
 	if cfg.TimeoutValue != 5 {
 		t.Errorf("TimeoutValue = %d", cfg.TimeoutValue)
-	}
-	if cfg.MaxMessages != 30 {
-		t.Errorf("MaxMessages = %d", cfg.MaxMessages)
 	}
 	if cfg.AdminId != 111 {
 		t.Errorf("AdminId = %d", cfg.AdminId)
@@ -129,7 +125,6 @@ func TestUpdateConfig_RoundTrip(t *testing.T) {
 		TelegramToken:     "tg_token_123",
 		GPTToken:          "gpt_token_456",
 		TimeoutValue:      10,
-		MaxMessages:       25,
 		AdminId:           999,
 		AuthorizedUserIds: []int64{100, 200},
 		DataDir:           "d",
@@ -153,9 +148,6 @@ func TestUpdateConfig_RoundTrip(t *testing.T) {
 	}
 	if loaded.TimeoutValue != original.TimeoutValue {
 		t.Errorf("TimeoutValue mismatch")
-	}
-	if loaded.MaxMessages != original.MaxMessages {
-		t.Errorf("MaxMessages mismatch")
 	}
 	if loaded.AdminId != original.AdminId {
 		t.Errorf("AdminId mismatch")

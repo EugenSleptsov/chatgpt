@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 )
 
 const (
@@ -68,10 +69,10 @@ func NewApp(configFile string) (*App, error) {
 	aiClient := openai.NewClient(config.GPTToken, logSystem)
 
 	chatDefaults := service.ChatDefaults{
-		MaxMessages:     config.MaxMessages,
 		SummarizePrompt: config.SummarizePrompt,
 		SystemPrompt:    config.DefaultSystemPrompt,
 		LogDir:          config.LogDir,
+		CostLimitUSD:    config.CostLimitUSD,
 	}
 
 	botStorage, err := storage.NewStorage(config.StorageType, config.DataDir, config.StorageDSN)
@@ -86,26 +87,59 @@ func NewApp(configFile string) (*App, error) {
 		ImageCost: openai.ImageGenerationCost,
 	}
 
+	compactService := &service.CompactService{
+		GptClient:       aiClient,
+		CostFn:          openai.CostForTokens,
+		ContextWindowFn: openai.ContextWindowForTier,
+	}
+
 	gptService := &service.GPTService{
 		GptClient: aiClient,
 		History:   historyService,
 		Memory:    memoryService,
+		Compact:   compactService,
 		CostFn:    openai.CostForTokens,
 		ImageCost: openai.ImageGenerationCost,
 	}
 
 	registry := commands.NewRegistry()
-	commands.RegisterAll(registry, gptCommandService, chatService, notifier, auth, historyService, memoryService, configService)
+	commands.RegisterAll(commands.Deps{
+		Registry:        registry,
+		CmdService:      gptCommandService,
+		ChatService:     chatService,
+		Notifier:        notifier,
+		Auth:            auth,
+		History:         historyService,
+		Memory:          memoryService,
+		ConfigService:   configService,
+		ContextWindowFn: openai.ContextWindowForTier,
+	})
 
 	return &App{
 		bot:         bot,
 		chatService: chatService,
-		decoder:     buildDecoder(bot, bot.GetUsername(), aiClient, gptService, gptCommandService, historyService, notifier, auth, registry, config.DefaultAutoReplyPersona),
-		sender:      buildResponseSender(bot, notifier),
-		auth:        auth,
-		notifier:    notifier,
+		decoder: buildDecoder(decoderDeps{
+			files:                   bot,
+			botUsername:             bot.GetUsername(),
+			aiClient:                aiClient,
+			gpt:                     gptService,
+			cmds:                    gptCommandService,
+			history:                 historyService,
+			notifier:                notifier,
+			auth:                    auth,
+			registry:                registry,
+			defaultAutoReplyPersona: config.DefaultAutoReplyPersona,
+		}),
+		sender:   buildResponseSender(bot, notifier),
+		auth:     auth,
+		notifier: notifier,
 	}, nil
 }
+
+// shutdownTimeout is the maximum time we wait for in-flight workers to drain.
+//
+// After this deadline the process exits regardless of pending work.
+const shutdownTimeout = 30 * time.Second
 
 // Run starts the update polling, worker pool and blocks until a shutdown
 // signal is received or the update channel is closed.
@@ -113,6 +147,10 @@ func NewApp(configFile string) (*App, error) {
 // Updates are hash-partitioned by chat ID: every message from the same
 // Telegram chat always lands on the same worker goroutine. This eliminates
 // data races on *storage.Chat without per-chat mutexes.
+//
+// - First SIGINT/SIGTERM: stop accepting updates, drain workers with timeout
+// - Second SIGINT: force-quit immediately (double Ctrl+C pattern)
+// - Failsafe timer: exit after shutdownTimeout even if workers are stuck
 func (a *App) Run() {
 	updates := a.bot.GetUpdateChannel(60)
 
@@ -129,7 +167,7 @@ func (a *App) Run() {
 		}(workerChans[i])
 	}
 
-	sigChan := make(chan os.Signal, 1)
+	sigChan := make(chan os.Signal, 2) // buffered for 2: graceful + force
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	for {
@@ -143,9 +181,29 @@ func (a *App) Run() {
 			}
 			workerChans[partitionIndex(update, numWorkers)] <- update
 		case sig := <-sigChan:
-			log.Printf("Получен сигнал %v, завершение...", sig)
+			log.Printf("Получен сигнал %v, начинаю graceful shutdown...", sig)
 			closeAll(workerChans)
-			wg.Wait()
+
+			// Drain workers with a timeout failsafe.
+			done := make(chan struct{})
+			go func() {
+				wg.Wait()
+				close(done)
+			}()
+
+			// Second signal = force quit (double Ctrl+C pattern).
+			forceQuit := make(chan os.Signal, 1)
+			signal.Notify(forceQuit, syscall.SIGINT, syscall.SIGTERM)
+
+			select {
+			case <-done:
+				log.Println("Все воркеры завершены.")
+			case <-time.After(shutdownTimeout):
+				log.Printf("Таймаут %v: принудительное завершение (in-flight запросы потеряны).", shutdownTimeout)
+			case sig2 := <-forceQuit:
+				log.Printf("Повторный сигнал %v: принудительный выход.", sig2)
+			}
+
 			a.chatService.Save()
 			log.Println("Данные сохранены. Выход.")
 			return
@@ -175,27 +233,43 @@ func closeAll(chans []chan telegram.Update) {
 
 // --- wiring helpers (private to package app) ---
 
-func buildDecoder(files pipeline.FileResolver, botUsername string, aiClient ai.Client, gpt *service.GPTService, cmds *service.GPTCommandService, history *service.HistoryService, notifier *service.Notifier, auth *service.Auth, registry *commands.Registry, defaultAutoReplyPersona string) *decoder.Decoder {
-	d := decoder.NewDecoder()
+// decoderDeps bundles everything buildDecoder needs to construct the executor
+// chain. A struct keeps the wiring readable and lets new deps be added without
+// touching the call signature.
+type decoderDeps struct {
+	files                   pipeline.FileResolver
+	botUsername             string
+	aiClient                ai.Client
+	gpt                     *service.GPTService
+	cmds                    *service.GPTCommandService
+	history                 *service.HistoryService
+	notifier                *service.Notifier
+	auth                    *service.Auth
+	registry                *commands.Registry
+	defaultAutoReplyPersona string
+}
+
+func buildDecoder(d decoderDeps) *decoder.Decoder {
+	dec := decoder.NewDecoder()
 
 	textExec := &executor.TextExecutor{
-		BotUsername:             botUsername,
-		GPT:                     gpt,
-		Commands:                cmds,
-		AIClient:                aiClient,
-		History:                 history,
-		Notifier:                notifier,
-		Auth:                    auth,
-		DefaultAutoReplyPersona: defaultAutoReplyPersona,
+		BotUsername:             d.botUsername,
+		GPT:                     d.gpt,
+		Commands:                d.cmds,
+		AIClient:                d.aiClient,
+		History:                 d.history,
+		Notifier:                d.notifier,
+		Auth:                    d.auth,
+		DefaultAutoReplyPersona: d.defaultAutoReplyPersona,
 	}
 
-	d.Register(&executor.CommandExecutor{Registry: registry, Auth: auth, Notifier: notifier})
-	d.Register(&executor.VoiceExecutor{Files: files, AIClient: aiClient, Notifier: notifier, TextExecutor: textExec})
-	d.Register(&executor.ImageExecutor{Files: files, BotUsername: botUsername, Commands: cmds, History: history, Notifier: notifier})
-	d.Register(&executor.StickerExecutor{History: history, Notifier: notifier})
-	d.Register(textExec) // catch-all — must be last
+	dec.Register(&executor.CommandExecutor{Registry: d.registry, Auth: d.auth, Notifier: d.notifier})
+	dec.Register(&executor.VoiceExecutor{Files: d.files, AIClient: d.aiClient, Notifier: d.notifier, TextExecutor: textExec})
+	dec.Register(&executor.ImageExecutor{Files: d.files, BotUsername: d.botUsername, Commands: d.cmds, History: d.history, Notifier: d.notifier})
+	dec.Register(&executor.StickerExecutor{History: d.history, Notifier: d.notifier})
+	dec.Register(textExec) // catch-all — must be last
 
-	return d
+	return dec
 }
 
 func buildResponseSender(bot sender.MessageSender, notifier *service.Notifier) *sender.ResponseSender {
