@@ -26,12 +26,21 @@ type UpdateContext struct {
 	IsPhoto   bool
 	IsVoice   bool
 	IsSticker bool
+
+	// Callback-query fields (populated only when IsCallback == true).
+	IsCallback   bool
+	CallbackID   string // ID used to acknowledge the tap
+	CallbackData string // button payload, by convention "<command>:<args>"
 }
 
 // NewUpdateContext builds an UpdateContext from a raw Update.
-// Returns nil if the update contains no effective message
-// (e.g. callback_query, inline_query, poll — not yet supported).
+// Returns nil if the update carries neither an effective message nor a
+// supported callback query (e.g. inline_query, poll — not yet supported).
 func NewUpdateContext(update Update) *UpdateContext {
+	if update.CallbackQuery != nil {
+		return newCallbackContext(update)
+	}
+
 	msg := update.Msg()
 	if msg == nil {
 		return nil
@@ -63,6 +72,38 @@ func NewUpdateContext(update Update) *UpdateContext {
 	ctx.IsPhoto = len(msg.Photo) > 0
 	ctx.IsVoice = msg.Voice != nil
 	ctx.IsSticker = msg.Sticker != nil
+
+	return ctx
+}
+
+// newCallbackContext builds an UpdateContext from an inline-keyboard button tap.
+// The message being edited is the bot message that carries the keyboard, so
+// MessageID points at it; the sender is taken from the callback (the tapper).
+func newCallbackContext(update Update) *UpdateContext {
+	cq := update.CallbackQuery
+	if cq.Message == nil || cq.Message.Chat == nil {
+		return nil
+	}
+	msg := cq.Message
+
+	ctx := &UpdateContext{
+		Update:       update,
+		Msg:          msg,
+		ChatID:       msg.Chat.ID,
+		MessageID:    msg.MessageID,
+		IsGroup:      msg.Chat.ID < 0,
+		IsCallback:   true,
+		CallbackID:   cq.ID,
+		CallbackData: cq.Data,
+	}
+
+	if cq.From != nil {
+		ctx.SenderID = cq.From.ID
+		ctx.SenderName = strings.TrimSpace(cq.From.FirstName + " " + cq.From.LastName)
+		if ctx.SenderName == "" {
+			ctx.SenderName = cq.From.UserName
+		}
+	}
 
 	return ctx
 }

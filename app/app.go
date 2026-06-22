@@ -214,14 +214,19 @@ func (a *App) Run() {
 // partitionIndex extracts the chat ID from an update and returns a
 // stable worker index in [0, n). Updates without a message go to worker 0.
 func partitionIndex(update telegram.Update, n int) int {
-	if msg := update.Msg(); msg != nil && msg.Chat != nil {
-		id := msg.Chat.ID
-		if id < 0 {
-			id = -id
-		}
-		return int(id % int64(n))
+	var id int64
+	switch {
+	case update.Msg() != nil && update.Msg().Chat != nil:
+		id = update.Msg().Chat.ID
+	case update.CallbackQuery != nil && update.CallbackQuery.Message != nil:
+		id = update.CallbackQuery.Message.Chat.ID
+	default:
+		return 0
 	}
-	return 0
+	if id < 0 {
+		id = -id
+	}
+	return int(id % int64(n))
 }
 
 // closeAll closes every channel in the slice.

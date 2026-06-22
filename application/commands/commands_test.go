@@ -39,9 +39,17 @@ func (b *fakeBot) Message(message string, chatID int64, _ bool)    {}
 func (b *fakeBot) SendImage(_ int64, _ string, _ string) error     { return nil }
 func (b *fakeBot) SendImageData(_ int64, _ []byte, _ string) error { return nil }
 func (b *fakeBot) AudioUpload(_ int64, _ []byte) error             { return nil }
-func (b *fakeBot) GetFile(_ string) (pipeline.FileInfo, error)     { return pipeline.FileInfo{}, nil }
-func (b *fakeBot) FileURL(filePath string) string                  { return "https://fake/" + filePath }
-func (b *fakeBot) GetUsername() string                             { return "test_bot" }
+func (b *fakeBot) ReplyWithButtons(chatID int64, replyTo int, text string, _ bool, _ [][]sender.Button) error {
+	b.sent = append(b.sent, sentMsg{chatID: chatID, replyTo: replyTo, text: text})
+	return nil
+}
+func (b *fakeBot) EditMessage(_ int64, _ int, _ string, _ bool, _ [][]sender.Button) error {
+	return nil
+}
+func (b *fakeBot) AnswerCallback(_ string, _ string) error     { return nil }
+func (b *fakeBot) GetFile(_ string) (pipeline.FileInfo, error) { return pipeline.FileInfo{}, nil }
+func (b *fakeBot) FileURL(filePath string) string              { return "https://fake/" + filePath }
+func (b *fakeBot) GetUsername() string                         { return "test_bot" }
 
 type fakeLog struct{}
 
@@ -369,12 +377,47 @@ func TestCommandModel_SetValid(t *testing.T) {
 	if len(ai.Tiers) == 0 {
 		t.Skip("no tiers defined")
 	}
-	target := ai.Tiers[0]
+	target := ai.Tiers[len(ai.Tiers)-1] // pick a non-default tier
 	ctx := makeCmdCtx(1, 100, "/model "+target.ID)
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "установлена") {
-		t.Errorf("unexpected reply: %q", resp)
+	responses := cmd.Execute(ctx, chat)
+
+	if chat.ActiveSession().Model != target.ID {
+		t.Errorf("model = %q, want %q", chat.ActiveSession().Model, target.ID)
 	}
+	if len(responses) != 1 {
+		t.Fatalf("expected 1 response, got %d", len(responses))
+	}
+	// The picker must carry one button per tier, with the chosen tier marked.
+	rows := responses[0].Buttons
+	if len(rows) != 1 || len(rows[0]) != len(ai.Tiers) {
+		t.Fatalf("expected 1 row of %d buttons, got %v", len(ai.Tiers), rows)
+	}
+	var marked string
+	for _, b := range rows[0] {
+		if b.Data == "model:"+target.ID {
+			marked = b.Text
+		}
+	}
+	if !strings.HasPrefix(marked, "✅") {
+		t.Errorf("selected tier button not marked: %q", marked)
+	}
+}
+
+func TestCommandModel_ButtonCallback(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("model")
+	chat := newTestChat()
+
+	if len(ai.Tiers) < 2 {
+		t.Skip("need at least 2 tiers")
+	}
+	target := ai.Tiers[len(ai.Tiers)-1]
+
+	// Simulate a button tap: callback data "model:<id>" arrives as CommandArgs.
+	ctx := makeCmdCtx(1, 100, "/model")
+	ctx.CommandArgs = target.ID
+	cmd.Execute(ctx, chat)
+
 	if chat.ActiveSession().Model != target.ID {
 		t.Errorf("model = %q, want %q", chat.ActiveSession().Model, target.ID)
 	}

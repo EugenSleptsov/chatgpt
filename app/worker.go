@@ -8,6 +8,7 @@ import (
 	"GPTBot/pipeline/decoder"
 	"GPTBot/pipeline/sender"
 	"fmt"
+	"strings"
 )
 
 type Worker struct {
@@ -53,7 +54,9 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 	ctx := toRequestContext(tgCtx)
 
 	chat := w.ChatService.GetOrCreateChat(ctx)
-	w.ChatService.LogMessage(ctx, chat)
+	if !ctx.IsCallback {
+		w.ChatService.LogMessage(ctx, chat)
+	}
 
 	if ctx.IsGroup {
 		if ctx.IsCommand && !w.Auth.IsAuthorized(ctx.SenderID) {
@@ -75,8 +78,13 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 	// 2. Executor produces responses
 	responses := exec.Execute(ctx, chat)
 
-	// 3. ResponseSender delivers responses to Telegram
-	w.ResponseSender.Send(chat.ChatID, ctx.MessageID, responses)
+	// 3. ResponseSender delivers responses to Telegram. Button taps edit the
+	//    originating message in place; everything else is a new message.
+	if ctx.IsCallback {
+		w.ResponseSender.Edit(chat.ChatID, ctx.MessageID, ctx.CallbackID, responses)
+	} else {
+		w.ResponseSender.Send(chat.ChatID, ctx.MessageID, responses)
+	}
 	w.ChatService.MarkDirty(chat.ChatID)
 }
 
@@ -107,6 +115,17 @@ func toRequestContext(tc *telegram.UpdateContext) *pipeline.RequestContext {
 		IsSticker:  tc.IsSticker,
 	}
 
+	// A callback (inline-button tap) is routed exactly like a typed command:
+	// the button payload "<command>:<args>" becomes CommandName/CommandArgs so
+	// the existing CommandExecutor handles it. Delivery differs (edit in place).
+	if tc.IsCallback {
+		rc.IsCallback = true
+		rc.CallbackID = tc.CallbackID
+		rc.IsCommand = true
+		rc.CommandName, rc.CommandArgs = parseCallbackData(tc.CallbackData)
+		return rc
+	}
+
 	msg := tc.Msg
 
 	if tc.IsCommand {
@@ -135,4 +154,11 @@ func toRequestContext(tc *telegram.UpdateContext) *pipeline.RequestContext {
 	rc.IsForwarded = msg.ForwardFrom != nil
 
 	return rc
+}
+
+// parseCallbackData splits an inline-button payload "<command>:<args>" into its
+// command name and argument string. Missing parts yield empty strings.
+func parseCallbackData(data string) (name, args string) {
+	name, args, _ = strings.Cut(data, ":")
+	return name, args
 }
