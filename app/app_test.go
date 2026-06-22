@@ -57,6 +57,15 @@ func (b *fakeBot) AudioUpload(chatID int64, bytes []byte) error {
 	b.sent = append(b.sent, fakeSent{chatID: chatID, audio: bytes})
 	return nil
 }
+func (b *fakeBot) ReplyWithButtons(chatID int64, replyTo int, text string, _ bool, _ [][]sender.Button) error {
+	b.sent = append(b.sent, fakeSent{chatID: chatID, replyTo: replyTo, text: text})
+	return nil
+}
+func (b *fakeBot) EditMessage(chatID int64, messageID int, text string, _ bool, _ [][]sender.Button) error {
+	b.sent = append(b.sent, fakeSent{chatID: chatID, replyTo: messageID, text: text})
+	return nil
+}
+func (b *fakeBot) AnswerCallback(_ string, _ string) error { return nil }
 func (b *fakeBot) GetFile(_ string) (pipeline.FileInfo, error) {
 	return pipeline.FileInfo{FilePath: "fake/path"}, nil
 }

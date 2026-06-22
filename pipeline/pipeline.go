@@ -26,6 +26,12 @@ type RequestContext struct {
 	CommandName string
 	CommandArgs string
 
+	// Callback-specific (populated only when IsCallback == true). A callback is
+	// an inline-keyboard button tap; it is routed like a command (IsCommand is
+	// also set) but delivered by editing the originating message in place.
+	IsCallback bool
+	CallbackID string
+
 	// Media-specific.
 	PhotoFileID  string
 	VoiceFileID  string

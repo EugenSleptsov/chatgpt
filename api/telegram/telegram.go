@@ -2,8 +2,10 @@ package telegram
 
 import (
 	"GPTBot/infrastructure/logger"
+	"GPTBot/pipeline/sender"
 	"io"
 	"net/http"
+	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -127,6 +129,83 @@ func (botInstance *Bot) sendChunk(chatID int64, replyTo int, text string, isMark
 	if _, err := botInstance.transport.Send(msg); err != nil {
 		botInstance.LogClient.Logf("Error sending message: %v", err)
 	}
+}
+
+// --- Inline keyboards / callbacks ---
+
+// inlineKeyboard converts transport-agnostic button rows into a Telegram markup.
+func inlineKeyboard(rows [][]sender.Button) tgbotapi.InlineKeyboardMarkup {
+	kbRows := make([][]tgbotapi.InlineKeyboardButton, 0, len(rows))
+	for _, row := range rows {
+		kbRow := make([]tgbotapi.InlineKeyboardButton, 0, len(row))
+		for _, b := range row {
+			kbRow = append(kbRow, tgbotapi.NewInlineKeyboardButtonData(b.Text, b.Data))
+		}
+		kbRows = append(kbRows, kbRow)
+	}
+	return tgbotapi.NewInlineKeyboardMarkup(kbRows...)
+}
+
+// ReplyWithButtons sends a (short) text reply with an inline keyboard attached.
+// Button messages are not split; they are expected to be small control panels.
+func (botInstance *Bot) ReplyWithButtons(chatID int64, replyTo int, text string, markdown bool, buttons [][]sender.Button) error {
+	kb := inlineKeyboard(buttons)
+
+	if markdown {
+		msg := tgbotapi.NewMessage(chatID, markdownToHTML(text))
+		msg.ParseMode = "HTML"
+		msg.ReplyMarkup = kb
+		if replyTo != 0 {
+			msg.ReplyToMessageID = replyTo
+		}
+		if _, err := botInstance.transport.Send(msg); err == nil {
+			return nil
+		}
+		botInstance.LogClient.Logf("HTML formatting failed, falling back to plain text")
+	}
+
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = kb
+	if replyTo != 0 {
+		msg.ReplyToMessageID = replyTo
+	}
+	_, err := botInstance.transport.Send(msg)
+	return err
+}
+
+// EditMessage replaces the text and inline keyboard of an existing message.
+// A "message is not modified" response (tapping the already-selected option) is
+// treated as success.
+func (botInstance *Bot) EditMessage(chatID int64, messageID int, text string, markdown bool, buttons [][]sender.Button) error {
+	kb := inlineKeyboard(buttons)
+
+	if markdown {
+		edit := tgbotapi.NewEditMessageTextAndMarkup(chatID, messageID, markdownToHTML(text), kb)
+		edit.ParseMode = "HTML"
+		if _, err := botInstance.transport.Send(edit); err == nil || isNotModified(err) {
+			return nil
+		}
+		botInstance.LogClient.Logf("HTML formatting failed on edit, falling back to plain text")
+	}
+
+	edit := tgbotapi.NewEditMessageTextAndMarkup(chatID, messageID, text, kb)
+	_, err := botInstance.transport.Send(edit)
+	if isNotModified(err) {
+		return nil
+	}
+	return err
+}
+
+// AnswerCallback acknowledges a button tap (stops Telegram's loading spinner).
+func (botInstance *Bot) AnswerCallback(callbackID string, text string) error {
+	_, err := botInstance.transport.Request(tgbotapi.NewCallback(callbackID, text))
+	return err
+}
+
+// isNotModified reports whether err is Telegram's "message is not modified"
+// error, which is benign for edits that produce identical content.
+func isNotModified(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "message is not modified")
 }
 
 // --- File operations ---

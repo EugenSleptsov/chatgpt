@@ -8,6 +8,14 @@ type MessageSender interface {
 	SendImage(chatID int64, imageUrl string, caption string) error
 	SendImageData(chatID int64, data []byte, caption string) error
 	AudioUpload(chatID int64, bytes []byte) error
+
+	// ReplyWithButtons sends a text reply carrying an inline keyboard.
+	ReplyWithButtons(chatID int64, replyTo int, text string, markdown bool, buttons [][]Button) error
+	// EditMessage replaces the text and inline keyboard of an existing message
+	// (used when a button tap should update the message in place).
+	EditMessage(chatID int64, messageID int, text string, markdown bool, buttons [][]Button) error
+	// AnswerCallback acknowledges a button tap so Telegram stops the loading spinner.
+	AnswerCallback(callbackID string, text string) error
 }
 
 // ResponseSender delivers a list of Response items via a MessageSender.
@@ -35,7 +43,29 @@ func (s *ResponseSender) Send(chatID int64, messageID int, responses []Response)
 				s.OnError(err)
 			}
 		case r.Text != "":
-			s.Bot.ReplyMarkdown(chatID, messageID, r.Text, r.Markdown)
+			if len(r.Buttons) > 0 {
+				if err := s.Bot.ReplyWithButtons(chatID, messageID, r.Text, r.Markdown, r.Buttons); err != nil && s.OnError != nil {
+					s.OnError(err)
+				}
+			} else {
+				s.Bot.ReplyMarkdown(chatID, messageID, r.Text, r.Markdown)
+			}
+		}
+	}
+}
+
+// Edit delivers responses produced by a button tap: it acknowledges the
+// callback and edits the originating message in place (text + keyboard) instead
+// of sending new messages. Only text responses are edited; any image/audio
+// responses are ignored (button-driven commands are expected to be text-only).
+func (s *ResponseSender) Edit(chatID int64, messageID int, callbackID string, responses []Response) {
+	_ = s.Bot.AnswerCallback(callbackID, "")
+	for _, r := range responses {
+		if r.Text == "" {
+			continue
+		}
+		if err := s.Bot.EditMessage(chatID, messageID, r.Text, r.Markdown, r.Buttons); err != nil && s.OnError != nil {
+			s.OnError(err)
 		}
 	}
 }
