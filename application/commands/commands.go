@@ -21,6 +21,28 @@ func reply(text string) []sender.Response {
 	return []sender.Response{{Text: text}}
 }
 
+// boolView renders a boolean setting as a status line plus an On/Off inline
+// keyboard. The active state is marked with ✅. Buttons carry callback data
+// "<cmd>:on" / "<cmd>:off" so a tap is routed back through the command registry
+// and the message is edited in place. Shared by every on/off command.
+func boolView(cmd, title string, on bool) []sender.Response {
+	onLabel, offLabel := "Включить", "Выключить"
+	status := "выключено"
+	if on {
+		onLabel, status = "✅ Включено", "включено"
+	} else {
+		offLabel = "✅ Выключено"
+	}
+	row := []sender.Button{
+		{Text: onLabel, Data: cmd + ":on"},
+		{Text: offLabel, Data: cmd + ":off"},
+	}
+	return []sender.Response{{
+		Text:    fmt.Sprintf("%s: %s", title, status),
+		Buttons: [][]sender.Button{row},
+	}}
+}
+
 // gptText is a convenience wrapper: calls GPTCommandService.GPTCommand and returns the response.
 func gptText(cmds *service.GPTCommandService, notifier *service.Notifier, chat *chat.Chat, systemPrompt, userPrompt string) []sender.Response {
 	session := chat.ActiveSession()

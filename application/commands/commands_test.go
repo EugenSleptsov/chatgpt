@@ -570,27 +570,81 @@ func TestCommandMemory_Clear(t *testing.T) {
 
 // ======================== /autoreply ========================
 
-func TestCommandAutoReply_Toggle(t *testing.T) {
+func TestCommandAutoReply_OnOff(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("autoreply")
 	chat := newTestChat()
 	chat.Settings.GroupAutoReply = false
 
-	ctx := makeCtx(1, 100, "/autoreply")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
+	// "on" arg (typed "/autoreply on" or button tap "autoreply:on") enables it.
+	onCtx := makeCmdCtx(1, 100, "/autoreply on")
+	responses := cmd.Execute(onCtx, chat)
 	if !chat.Settings.GroupAutoReply {
-		t.Error("should be on after toggle")
+		t.Error("GroupAutoReply should be true after 'on'")
 	}
-	if !strings.Contains(resp, "включён") {
-		t.Errorf("unexpected reply: %q", resp)
-	}
+	assertBoolButtons(t, responses, "autoreply", true)
 
-	resp = assertSingleReply(t, cmd.Execute(ctx, chat))
+	// "off" arg disables it.
+	offCtx := makeCmdCtx(1, 100, "/autoreply off")
+	responses = cmd.Execute(offCtx, chat)
 	if chat.Settings.GroupAutoReply {
-		t.Error("should be off after second toggle")
+		t.Error("GroupAutoReply should be false after 'off'")
 	}
-	if !strings.Contains(resp, "выключен") {
-		t.Errorf("unexpected reply: %q", resp)
+	assertBoolButtons(t, responses, "autoreply", false)
+}
+
+func TestCommandAutoReply_ShowPanelNoArgs(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("autoreply")
+	chat := newTestChat()
+	chat.Settings.GroupAutoReply = true
+
+	// No args: show the panel without changing state.
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/autoreply"), chat)
+	if !chat.Settings.GroupAutoReply {
+		t.Error("bare /autoreply must not change state")
+	}
+	assertBoolButtons(t, responses, "autoreply", true)
+}
+
+func TestCommandMarkdown_Buttons(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("markdown")
+	chat := newTestChat()
+	chat.Settings.UseMarkdown = false
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/markdown"), chat)
+	assertBoolButtons(t, responses, "markdown", false)
+}
+
+// assertBoolButtons checks a boolean command's response: a single row with an
+// on/off pair carrying "<cmd>:on" / "<cmd>:off", and the active state marked ✅.
+func assertBoolButtons(t *testing.T, responses []sender.Response, cmd string, on bool) {
+	t.Helper()
+	if len(responses) != 1 {
+		t.Fatalf("expected 1 response, got %d", len(responses))
+	}
+	rows := responses[0].Buttons
+	if len(rows) != 1 || len(rows[0]) != 2 {
+		t.Fatalf("expected one row of 2 buttons, got %v", rows)
+	}
+	var onBtn, offBtn sender.Button
+	for _, b := range rows[0] {
+		switch b.Data {
+		case cmd + ":on":
+			onBtn = b
+		case cmd + ":off":
+			offBtn = b
+		}
+	}
+	if onBtn.Data == "" || offBtn.Data == "" {
+		t.Fatalf("missing on/off button: %v", rows[0])
+	}
+	marked := offBtn
+	if on {
+		marked = onBtn
+	}
+	if !strings.HasPrefix(marked.Text, "✅") {
+		t.Errorf("active state not marked: %q", marked.Text)
 	}
 }
 

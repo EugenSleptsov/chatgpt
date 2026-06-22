@@ -21,19 +21,11 @@ func (c *CommandMarkdown) IsAdmin() bool {
 }
 
 func (c *CommandMarkdown) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) []sender.Response {
-	if ctx.CommandArgs == "on" {
+	switch ctx.CommandArgs {
+	case "on":
 		chat.Settings.UseMarkdown = true
-		return reply("Markdown включен")
-	} else if ctx.CommandArgs == "off" {
+	case "off":
 		chat.Settings.UseMarkdown = false
-		return reply("Markdown выключен")
 	}
-	return reply("Текущее состояние Markdown: " + boolToString(chat.Settings.UseMarkdown))
-}
-
-func boolToString(b bool) string {
-	if b {
-		return "включен"
-	}
-	return "выключен"
+	return boolView("markdown", "Markdown", chat.Settings.UseMarkdown)
 }
