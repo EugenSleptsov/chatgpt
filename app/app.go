@@ -103,15 +103,36 @@ func NewApp(configFile string) (*App, error) {
 	}
 
 	registry := commands.NewRegistry()
-	commands.RegisterAll(registry, gptCommandService, chatService, notifier, auth, historyService, memoryService, configService, openai.ContextWindowForTier)
+	commands.RegisterAll(commands.Deps{
+		Registry:        registry,
+		CmdService:      gptCommandService,
+		ChatService:     chatService,
+		Notifier:        notifier,
+		Auth:            auth,
+		History:         historyService,
+		Memory:          memoryService,
+		ConfigService:   configService,
+		ContextWindowFn: openai.ContextWindowForTier,
+	})
 
 	return &App{
 		bot:         bot,
 		chatService: chatService,
-		decoder:     buildDecoder(bot, bot.GetUsername(), aiClient, gptService, gptCommandService, historyService, notifier, auth, registry, config.DefaultAutoReplyPersona),
-		sender:      buildResponseSender(bot, notifier),
-		auth:        auth,
-		notifier:    notifier,
+		decoder: buildDecoder(decoderDeps{
+			files:                   bot,
+			botUsername:             bot.GetUsername(),
+			aiClient:                aiClient,
+			gpt:                     gptService,
+			cmds:                    gptCommandService,
+			history:                 historyService,
+			notifier:                notifier,
+			auth:                    auth,
+			registry:                registry,
+			defaultAutoReplyPersona: config.DefaultAutoReplyPersona,
+		}),
+		sender:   buildResponseSender(bot, notifier),
+		auth:     auth,
+		notifier: notifier,
 	}, nil
 }
 
@@ -212,27 +233,43 @@ func closeAll(chans []chan telegram.Update) {
 
 // --- wiring helpers (private to package app) ---
 
-func buildDecoder(files pipeline.FileResolver, botUsername string, aiClient ai.Client, gpt *service.GPTService, cmds *service.GPTCommandService, history *service.HistoryService, notifier *service.Notifier, auth *service.Auth, registry *commands.Registry, defaultAutoReplyPersona string) *decoder.Decoder {
-	d := decoder.NewDecoder()
+// decoderDeps bundles everything buildDecoder needs to construct the executor
+// chain. A struct keeps the wiring readable and lets new deps be added without
+// touching the call signature.
+type decoderDeps struct {
+	files                   pipeline.FileResolver
+	botUsername             string
+	aiClient                ai.Client
+	gpt                     *service.GPTService
+	cmds                    *service.GPTCommandService
+	history                 *service.HistoryService
+	notifier                *service.Notifier
+	auth                    *service.Auth
+	registry                *commands.Registry
+	defaultAutoReplyPersona string
+}
+
+func buildDecoder(d decoderDeps) *decoder.Decoder {
+	dec := decoder.NewDecoder()
 
 	textExec := &executor.TextExecutor{
-		BotUsername:             botUsername,
-		GPT:                     gpt,
-		Commands:                cmds,
-		AIClient:                aiClient,
-		History:                 history,
-		Notifier:                notifier,
-		Auth:                    auth,
-		DefaultAutoReplyPersona: defaultAutoReplyPersona,
+		BotUsername:             d.botUsername,
+		GPT:                     d.gpt,
+		Commands:                d.cmds,
+		AIClient:                d.aiClient,
+		History:                 d.history,
+		Notifier:                d.notifier,
+		Auth:                    d.auth,
+		DefaultAutoReplyPersona: d.defaultAutoReplyPersona,
 	}
 
-	d.Register(&executor.CommandExecutor{Registry: registry, Auth: auth, Notifier: notifier})
-	d.Register(&executor.VoiceExecutor{Files: files, AIClient: aiClient, Notifier: notifier, TextExecutor: textExec})
-	d.Register(&executor.ImageExecutor{Files: files, BotUsername: botUsername, Commands: cmds, History: history, Notifier: notifier})
-	d.Register(&executor.StickerExecutor{History: history, Notifier: notifier})
-	d.Register(textExec) // catch-all — must be last
+	dec.Register(&executor.CommandExecutor{Registry: d.registry, Auth: d.auth, Notifier: d.notifier})
+	dec.Register(&executor.VoiceExecutor{Files: d.files, AIClient: d.aiClient, Notifier: d.notifier, TextExecutor: textExec})
+	dec.Register(&executor.ImageExecutor{Files: d.files, BotUsername: d.botUsername, Commands: d.cmds, History: d.history, Notifier: d.notifier})
+	dec.Register(&executor.StickerExecutor{History: d.history, Notifier: d.notifier})
+	dec.Register(textExec) // catch-all — must be last
 
-	return d
+	return dec
 }
 
 func buildResponseSender(bot sender.MessageSender, notifier *service.Notifier) *sender.ResponseSender {

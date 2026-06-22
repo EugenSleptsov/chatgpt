@@ -88,7 +88,16 @@ func buildDeps(t *testing.T) (*testDeps, *fakeBot) {
 		&fakeLog{},
 	)
 	registry := commands.NewRegistry()
-	commands.RegisterAll(registry, cmdSvc, chatSvc, notifier, auth, history, memory, configService, nil)
+	commands.RegisterAll(commands.Deps{
+		Registry:      registry,
+		CmdService:    cmdSvc,
+		ChatService:   chatSvc,
+		Notifier:      notifier,
+		Auth:          auth,
+		History:       history,
+		Memory:        memory,
+		ConfigService: configService,
+	})
 	return &testDeps{
 		Registry:      registry,
 		Config:        config,

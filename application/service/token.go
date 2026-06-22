@@ -80,7 +80,6 @@ type TokenUsage struct {
 	OutputTokens int
 	TotalTokens  int
 	Cost         float64 // estimated cost in USD
-	upgradePhase string  // descriptive label for the upgrade step (internal, set by probeAndUpgrade)
 }
 
 // accumulate adds the usage snapshot from a single API call to the running
@@ -125,15 +124,8 @@ func (u TokenUsage) Summary() string {
 // Example output (simple call):
 //
 //	📎 prompt: 12, system: 350, memory: 120, history: 1500 (5 msgs), tools: 800
-//	  ▸ GPT [search_web, create_image, generate_voice]: 4536 tok (in: 4526, out: 10) · $0.0115
+//	  ▸ GPT [web_search, image_generation, generate_voice, update_memory]: 4536 tok (in: 4526, out: 10) · $0.0115
 //	📊 4536 tok (in: 4526, out: 10) · $0.0115
-//
-// Example output (proxy upgrade):
-//
-//	📎 prompt: 12, system: 350, memory: 120, history: 1500 (5 msgs), tools: 800
-//	  ▸ Probe (proxy tools): 200 tok (in: 190, out: 10) · $0.0001
-//	  ▸ GPT + web_search: 5000 tok (in: 4800, out: 200, cached: 190) · $0.0050
-//	📊 5200 tok (in: 4990, out: 210) · $0.0051
 func (u TokenUsage) String() string {
 	if len(u.Steps) == 0 && u.Input == nil {
 		return u.Summary()
@@ -177,13 +169,4 @@ func (u TokenUsage) String() string {
 	}
 	sb.WriteString(u.Summary())
 	return sb.String()
-}
-
-// prepend inserts other's steps BEFORE this usage's steps (for chronological order).
-func (u *TokenUsage) prepend(other TokenUsage) {
-	u.Steps = append(other.Steps, u.Steps...)
-	u.InputTokens += other.InputTokens
-	u.OutputTokens += other.OutputTokens
-	u.TotalTokens += other.TotalTokens
-	u.Cost += other.Cost
 }

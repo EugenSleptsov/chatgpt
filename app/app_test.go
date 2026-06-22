@@ -146,7 +146,16 @@ func buildTestDeps(bot *fakeBot) (*commands.Registry, *service.Auth, *service.No
 	registry := commands.NewRegistry()
 	config := &conf.Config{DataDir: "_var/data", LogDir: "_var/log"}
 	configService := service.NewConfigService(config, "")
-	commands.RegisterAll(registry, cmdSvc, chatSvc, notifier, auth, history, memory, configService, nil)
+	commands.RegisterAll(commands.Deps{
+		Registry:      registry,
+		CmdService:    cmdSvc,
+		ChatService:   chatSvc,
+		Notifier:      notifier,
+		Auth:          auth,
+		History:       history,
+		Memory:        memory,
+		ConfigService: configService,
+	})
 	return registry, auth, notifier, gptSvc, mockClient
 }
 
@@ -409,7 +418,17 @@ func TestBuildDecoder_ReturnsDecoder(t *testing.T) {
 	bot := &fakeBot{}
 	registry, auth, notifier, gptSvc, aiClient := buildTestDeps(bot)
 	cmdSvc := &service.GPTCommandService{GptClient: aiClient}
-	d := buildDecoder(bot, bot.GetUsername(), aiClient, gptSvc, cmdSvc, gptSvc.History, notifier, auth, registry, "")
+	d := buildDecoder(decoderDeps{
+		files:       bot,
+		botUsername: bot.GetUsername(),
+		aiClient:    aiClient,
+		gpt:         gptSvc,
+		cmds:        cmdSvc,
+		history:     gptSvc.History,
+		notifier:    notifier,
+		auth:        auth,
+		registry:    registry,
+	})
 	if d == nil {
 		t.Fatal("buildDecoder returned nil")
 	}

@@ -120,29 +120,17 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 	messages := s.History.Messages(session)
 	instructions := s.buildInstructions(session, chat)
 
-	payload, err := s.GptClient.CallGPT(messages, session.Model, instructions, chatToolsLight...)
+	payload, err := s.GptClient.CallGPT(messages, session.Model, instructions, chatTools...)
 	if err != nil {
 		log.Printf("[Complete] GPT error: %v", err)
 		return s.failSession(session, fallbackResponse), err
 	}
 
-	payload, tools, preflight, err := s.probeAndUpgrade(payload, session.Model, instructions, chat, "Complete")
-	if err != nil {
-		result := s.failSession(session, fallbackResponse)
-		result.Usage = preflight
-		return result, err
-	}
-
-	initialPhase := "GPT"
-	if len(preflight.Steps) > 0 {
-		initialPhase = preflight.upgradePhase
-	}
-	result, err := s.toolLoop(payload, session.Model, instructions, chat, tools, initialPhase)
+	result, err := s.toolLoop(payload, session.Model, instructions, chat, chatTools, "GPT")
 	if result == nil {
 		result = &ChatResult{Text: fallbackResponse}
 	}
-	result.Usage.prepend(preflight)
-	result.Usage.Input = computeInputMetrics(session, s.Memory.BuildPrompt(chat), chatToolsLight)
+	result.Usage.Input = computeInputMetrics(session, s.Memory.BuildPrompt(chat), chatTools)
 
 	// Accumulate cost on the chat (daily rolling counter).
 	chat.AccumulateCost(result.Usage.Cost, result.Usage.InputTokens, result.Usage.OutputTokens)

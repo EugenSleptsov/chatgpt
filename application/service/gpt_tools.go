@@ -8,45 +8,14 @@ import (
 	"strings"
 )
 
-// --- Tool proxy constants ---
-
-const (
-	proxySearchWeb   = "search_web"
-	proxyCreateImage = "create_image"
-)
-
-var proxyBuiltinTools = []ai.Tool{
-	{
-		Type:        "function",
-		Name:        proxySearchWeb,
-		Description: "Search the internet for up-to-date information, recent events, real-time data, or any facts you are not sure about.",
-		Parameters: &ai.FunctionParameters{
-			Type: "object",
-			Properties: map[string]ai.ParameterProperty{
-				"query": {Type: "string", Description: "Search query"},
-			},
-			Required: []string{"query"},
-		},
-	},
-	{
-		Type:        "function",
-		Name:        proxyCreateImage,
-		Description: "Generate an image or picture from a text description. Use when the user asks to draw, create, imagine, or generate a visual.",
-		Parameters: &ai.FunctionParameters{
-			Type: "object",
-			Properties: map[string]ai.ParameterProperty{
-				"prompt": {Type: "string", Description: "Image description"},
-			},
-			Required: []string{"prompt"},
-		},
-	},
-}
-
-var realBuiltinTools = []ai.Tool{
+// builtinTools are executed server-side by OpenAI: web_search returns text,
+// image_generation returns base64 PNGs in the response output.
+var builtinTools = []ai.Tool{
 	{Type: "web_search"},
 	{Type: "image_generation"},
 }
 
+// functionTools are executed client-side by executeSingleToolCall.
 var functionTools = []ai.Tool{
 	{
 		Type:        "function",
@@ -74,10 +43,8 @@ var functionTools = []ai.Tool{
 	},
 }
 
-var (
-	chatToolsLight = concatTools(proxyBuiltinTools, functionTools)
-	chatToolsFull  = concatTools(realBuiltinTools, functionTools)
-)
+// chatTools is the single tool set sent on every chat completion.
+var chatTools = concatTools(builtinTools, functionTools)
 
 func concatTools(a, b []ai.Tool) []ai.Tool {
 	r := make([]ai.Tool, 0, len(a)+len(b))
@@ -91,75 +58,6 @@ func toolNamesFromTools(tools []ai.Tool) []string {
 			names = append(names, t.Name)
 		} else {
 			names = append(names, t.Type)
-		}
-	}
-	return names
-}
-
-func hasProxyToolCalls(resp *ai.Response) bool {
-	for _, tc := range resp.ToolCalls() {
-		if tc.Name == proxySearchWeb || tc.Name == proxyCreateImage {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *GPTService) upgradeProxyToBuiltin(resp *ai.Response, model, instructions string, chat *chatdomain.Chat) (*ai.Response, error) {
-	calls := resp.ToolCalls()
-	outputs := make([]ai.ToolCallOutput, 0, len(calls))
-	for _, tc := range calls {
-		switch tc.Name {
-		case proxySearchWeb, proxyCreateImage:
-			outputs = append(outputs, ai.NewToolCallOutput(tc.ID,
-				marshalToolResult(toolResult{Status: "proceed", Text: "Use the built-in tool to complete this request."})))
-		default:
-			output := s.executeSingleToolCall(tc, &ChatResult{}, chat)
-			outputs = append(outputs, ai.NewToolCallOutput(tc.ID, output))
-		}
-	}
-	return s.GptClient.ContinueWithToolOutputs(resp.ID, outputs, model, instructions, chatToolsFull...)
-}
-
-func (s *GPTService) probeAndUpgrade(
-	payload *ai.Response,
-	model, instructions string,
-	chat *chatdomain.Chat,
-	caller string,
-) (*ai.Response, []ai.Tool, TokenUsage, error) {
-	var preflight TokenUsage
-
-	if !hasProxyToolCalls(payload) {
-		return payload, chatToolsLight, preflight, nil
-	}
-
-	triggered := triggeredBuiltinNames(payload)
-	preflight.upgradePhase = "GPT + " + strings.Join(triggered, " + ")
-	preflight.accumulate(extractUsage(payload, model, s.CostFn), "Probe (proxy tools)", toolNamesFromTools(chatToolsLight)...)
-	log.Printf("[%s] proxy tool triggered (%s), upgrading to built-in tools", caller, strings.Join(triggered, ", "))
-
-	upgraded, err := s.upgradeProxyToBuiltin(payload, model, instructions, chat)
-	if err != nil {
-		log.Printf("[%s] GPT upgrade error: %v", caller, err)
-		return nil, chatToolsFull, preflight, err
-	}
-	return upgraded, chatToolsFull, preflight, nil
-}
-
-func triggeredBuiltinNames(resp *ai.Response) []string {
-	seen := map[string]bool{}
-	var names []string
-	for _, tc := range resp.ToolCalls() {
-		var realTool string
-		switch tc.Name {
-		case proxySearchWeb:
-			realTool = "web_search"
-		case proxyCreateImage:
-			realTool = "image_generation"
-		}
-		if realTool != "" && !seen[realTool] {
-			seen[realTool] = true
-			names = append(names, realTool)
 		}
 	}
 	return names
