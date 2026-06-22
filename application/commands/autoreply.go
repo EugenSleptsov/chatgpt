@@ -21,9 +21,11 @@ func (c *CommandAutoReply) IsAdmin() bool {
 }
 
 func (c *CommandAutoReply) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) []sender.Response {
-	chat.Settings.GroupAutoReply = !chat.Settings.GroupAutoReply
-	if chat.Settings.GroupAutoReply {
-		return reply("✅ Авто-ответ включён. Бот будет самостоятельно вступать в разговор.")
+	switch ctx.CommandArgs {
+	case "on":
+		chat.Settings.GroupAutoReply = true
+	case "off":
+		chat.Settings.GroupAutoReply = false
 	}
-	return reply("❌ Авто-ответ выключен. Бот отвечает только при упоминании.")
+	return boolView("autoreply", "Авто-ответ", chat.Settings.GroupAutoReply)
 }
