@@ -137,8 +137,10 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 
 	// Save real API input_tokens for next auto-compact threshold check.
 	// Claude Code's tokenCountWithEstimation prefers the last API response's
-	// usage.input_tokens over rough character-based estimates.
-	session.LastInputTokens = result.Usage.InputTokens
+	// usage.input_tokens over rough character-based estimates. Use the LAST
+	// call's input tokens (current context size), not the summed total — the
+	// sum inflates with each tool-loop iteration and would compact prematurely.
+	session.LastInputTokens = result.Usage.lastCallInputTokens
 
 	s.History.AttachResponse(session, chatdomain.Message{Role: "assistant", Content: buildHistoryContent(result)})
 	return result, err
