@@ -80,6 +80,12 @@ type TokenUsage struct {
 	OutputTokens int
 	TotalTokens  int
 	Cost         float64 // estimated cost in USD
+
+	// lastCallInputTokens is the input_tokens of the MOST RECENT API call, not
+	// the sum across the turn. The auto-compact threshold needs the real current
+	// context size; summing across tool-loop iterations would inflate it and
+	// trigger compaction prematurely. (Cost/InputTokens stay summed for billing.)
+	lastCallInputTokens int
 }
 
 // accumulate adds the usage snapshot from a single API call to the running
@@ -101,6 +107,7 @@ func (u *TokenUsage) accumulate(raw RawUsage, phase string, toolNames ...string)
 	u.OutputTokens += step.OutputTokens
 	u.TotalTokens += step.TotalTokens
 	u.Cost += step.Cost
+	u.lastCallInputTokens = raw.InputTokens // overwrite: tracks the latest call only
 }
 
 // addFixedCost records a fixed-price step (e.g. image generation) that has
