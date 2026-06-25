@@ -11,7 +11,7 @@ import (
 )
 
 type CommandTranslate struct {
-	Commands *service.GPTCommandService
+	Commands *service.GPTService
 	Notifier *service.Notifier
 }
 

@@ -7,9 +7,7 @@ import (
 	"GPTBot/pipeline/sender"
 )
 
-type CommandClear struct {
-	History *service.HistoryService
-}
+type CommandClear struct{}
 
 func (c *CommandClear) Name() string {
 	return "clear"
@@ -24,6 +22,6 @@ func (c *CommandClear) IsAdmin() bool {
 }
 
 func (c *CommandClear) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) []sender.Response {
-	c.History.Clear(chat.ActiveSession())
+	service.ClearHistory(chat.ActiveSession())
 	return reply("История разговоров была очищена.")
 }

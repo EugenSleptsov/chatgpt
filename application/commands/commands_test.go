@@ -80,17 +80,8 @@ func buildDeps(t *testing.T) (*testDeps, *fakeBot) {
 	config := &conf.Config{DataDir: t.TempDir(), LogDir: logDir, SummarizePrompt: "summarize"}
 	configService := service.NewConfigService(config, "")
 	notifier := &service.Notifier{Log: &fakeLog{}}
-	history := service.NewHistoryService()
-	memory := service.NewMemoryService()
 	mockClient := mock.NewClient()
-	gptSvc := &service.GPTService{
-		GptClient: mockClient,
-		History:   history,
-		Memory:    memory,
-	}
-	cmdSvc := &service.GPTCommandService{
-		GptClient: mockClient,
-	}
+	gptSvc := &service.GPTService{GptClient: mockClient}
 	chatSvc := service.NewChatService(
 		storage.NewMemoryStorage(),
 		service.ChatDefaults{LogDir: logDir},
@@ -99,12 +90,10 @@ func buildDeps(t *testing.T) (*testDeps, *fakeBot) {
 	registry := commands.NewRegistry()
 	commands.RegisterAll(commands.Deps{
 		Registry:      registry,
-		CmdService:    cmdSvc,
+		CmdService:    gptSvc,
 		ChatService:   chatSvc,
 		Notifier:      notifier,
 		Auth:          auth,
-		History:       history,
-		Memory:        memory,
 		ConfigService: configService,
 	})
 	return &testDeps{

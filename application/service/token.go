@@ -8,18 +8,6 @@ import (
 	"strings"
 )
 
-// RawUsage is a provider-agnostic snapshot of token consumption from a single
-// API call. GPTService populates it from provider-specific responses;
-// TokenUsage consumes it without knowing the provider.
-type RawUsage struct {
-	InputTokens     int
-	OutputTokens    int
-	TotalTokens     int
-	CachedTokens    int
-	ReasoningTokens int
-	Cost            float64
-}
-
 // UsageStep is one line in the per-call breakdown (e.g. "GPT", "Continue (web_search)").
 type UsageStep struct {
 	Phase           string
@@ -88,26 +76,14 @@ type TokenUsage struct {
 	lastCallInputTokens int
 }
 
-// accumulate adds the usage snapshot from a single API call to the running
-// total and records a new step with the given phase label.
-// toolNames lists the tools that were sent with this specific request (for reporting).
-func (u *TokenUsage) accumulate(raw RawUsage, phase string, toolNames ...string) {
-	step := UsageStep{
-		Phase:           phase,
-		InputTokens:     raw.InputTokens,
-		OutputTokens:    raw.OutputTokens,
-		TotalTokens:     raw.TotalTokens,
-		CachedTokens:    raw.CachedTokens,
-		ReasoningTokens: raw.ReasoningTokens,
-		Cost:            raw.Cost,
-		ToolNames:       toolNames,
-	}
+// add records one API call's usage step and updates the running grand totals.
+func (u *TokenUsage) add(step UsageStep) {
 	u.Steps = append(u.Steps, step)
 	u.InputTokens += step.InputTokens
 	u.OutputTokens += step.OutputTokens
 	u.TotalTokens += step.TotalTokens
 	u.Cost += step.Cost
-	u.lastCallInputTokens = raw.InputTokens // overwrite: tracks the latest call only
+	u.lastCallInputTokens = step.InputTokens // overwrite: tracks the latest call only
 }
 
 // addFixedCost records a fixed-price step (e.g. image generation) that has

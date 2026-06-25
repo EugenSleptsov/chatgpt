@@ -11,7 +11,7 @@ import (
 )
 
 type CommandImagine struct {
-	Commands *service.GPTCommandService
+	Commands *service.GPTService
 	Notifier *service.Notifier
 	Auth     *service.Auth
 }

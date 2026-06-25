@@ -9,38 +9,30 @@ import (
 	"time"
 )
 
-// HistoryService manages conversation history within a session.
-// History belongs to sessions — each session has an independent conversation thread.
-type HistoryService struct{}
-
-func NewHistoryService() *HistoryService {
-	return &HistoryService{}
-}
-
-// Append adds a user message to the session history.
+// AppendHistory adds a user message to the session history.
 // No trimming is done here — context management is handled entirely by
 // CompactService.ShouldCompact / Compact, mirroring Claude Code's approach
 // where autoCompactIfNeeded replaces any hard message limit.
-func (h *HistoryService) Append(session *chatdomain.Session, prompt chatdomain.Message) {
+func AppendHistory(session *chatdomain.Session, prompt chatdomain.Message) {
 	entry := &chatdomain.ConversationEntry{Prompt: prompt}
 	session.History = append(session.History, entry)
 }
 
 // AttachResponse sets the assistant response on the last history entry.
-func (h *HistoryService) AttachResponse(session *chatdomain.Session, response chatdomain.Message) {
+func AttachResponse(session *chatdomain.Session, response chatdomain.Message) {
 	if len(session.History) == 0 {
 		return
 	}
 	session.History[len(session.History)-1].Response = response
 }
 
-// Clear removes all entries from the session history.
-func (h *HistoryService) Clear(session *chatdomain.Session) {
+// ClearHistory removes all entries from the session history.
+func ClearHistory(session *chatdomain.Session) {
 	session.History = nil
 }
 
-// Rollback removes the last n entries. Returns the actual number removed.
-func (h *HistoryService) Rollback(session *chatdomain.Session, n int) int {
+// RollbackHistory removes the last n entries. Returns the actual number removed.
+func RollbackHistory(session *chatdomain.Session, n int) int {
 	if n > len(session.History) {
 		n = len(session.History)
 	}
@@ -50,53 +42,43 @@ func (h *HistoryService) Rollback(session *chatdomain.Session, n int) int {
 	return n
 }
 
-// Messages converts the full session history to GPT API messages.
-func (h *HistoryService) Messages(session *chatdomain.Session) []ai.Message {
+// HistoryMessages converts the full session history to GPT API messages.
+func HistoryMessages(session *chatdomain.Session) []ai.Message {
 	return chatdomain.ToGPTMessages(session.History)
 }
 
-// LastN returns the last n history entries (or all if fewer exist).
-func (h *HistoryService) LastN(session *chatdomain.Session, n int) []*chatdomain.ConversationEntry {
-	history := session.History
-	if len(history) > n {
-		history = history[len(history)-n:]
-	}
-	return history
-}
-
 // LogGroupMessage stores a group participant's message in the active session history.
-func (h *HistoryService) LogGroupMessage(chat *chatdomain.Chat, author, text string) {
+func LogGroupMessage(chat *chatdomain.Chat, author, text string) {
 	session := chat.ActiveSession()
-	h.Append(session, chatdomain.Message{
+	AppendHistory(session, chatdomain.Message{
 		Role:    "user",
 		Content: fmt.Sprintf("%s: %s", author, text),
 	})
 }
 
 // LogGroupPhoto stores a photo placeholder in the active session history.
-func (h *HistoryService) LogGroupPhoto(chat *chatdomain.Chat, author, description string) {
-	h.LogGroupMessage(chat, author, fmt.Sprintf("[Фото] %s", description))
+func LogGroupPhoto(chat *chatdomain.Chat, author, description string) {
+	LogGroupMessage(chat, author, fmt.Sprintf("[Фото] %s", description))
 }
 
 // LogGroupSticker stores a sticker placeholder in the active session history.
-func (h *HistoryService) LogGroupSticker(chat *chatdomain.Chat, author, emoji string) {
+func LogGroupSticker(chat *chatdomain.Chat, author, emoji string) {
 	text := "[Стикер]"
 	if emoji != "" {
 		text = fmt.Sprintf("[Стикер: %s]", emoji)
 	}
-	h.LogGroupMessage(chat, author, text)
+	LogGroupMessage(chat, author, text)
 }
 
 // LogBotResponse attaches the bot's reply to the last entry of the active session.
-func (h *HistoryService) LogBotResponse(chat *chatdomain.Chat, text string) {
-	session := chat.ActiveSession()
-	h.AttachResponse(session, chatdomain.Message{Role: "assistant", Content: text})
+func LogBotResponse(chat *chatdomain.Chat, text string) {
+	AttachResponse(chat.ActiveSession(), chatdomain.Message{Role: "assistant", Content: text})
 }
 
-// FormatPage returns a paginated slice of formatted history chunks.
+// FormatHistoryPage returns a paginated slice of formatted history chunks.
 // page=1 is the latest page, page=2 is the previous, etc.
-func (h *HistoryService) FormatPage(session *chatdomain.Session, page, pageSize int) ([]string, int) {
-	chunks := h.formatHistory(chatdomain.ToGPTMessages(session.History))
+func FormatHistoryPage(session *chatdomain.Session, page, pageSize int) ([]string, int) {
+	chunks := formatHistory(chatdomain.ToGPTMessages(session.History))
 	totalPages := (len(chunks) + pageSize - 1) / pageSize
 
 	if page > totalPages {
@@ -112,7 +94,7 @@ func (h *HistoryService) FormatPage(session *chatdomain.Session, page, pageSize 
 	return chunks[start:end], totalPages
 }
 
-func (h *HistoryService) formatHistory(history []ai.Message) []string {
+func formatHistory(history []ai.Message) []string {
 	if len(history) == 0 {
 		return []string{"История разговоров пуста."}
 	}
@@ -156,12 +138,7 @@ type PromptContext struct {
 //  3. Memory (persistent facts)
 //  4. Dynamic context (date/time, chat info)
 //  5. Response style guidelines
-func (h *HistoryService) BuildInstructions(session *chatdomain.Session, memoryPrompt string) string {
-	return h.BuildInstructionsWithContext(session, memoryPrompt, nil)
-}
-
-// BuildInstructionsWithContext is the full prompt builder with dynamic context.
-func (h *HistoryService) BuildInstructionsWithContext(session *chatdomain.Session, memoryPrompt string, ctx *PromptContext) string {
+func BuildInstructions(session *chatdomain.Session, memoryPrompt string, ctx *PromptContext) string {
 	var parts []string
 
 	// Section 1: Persona / Role (static, cacheable)

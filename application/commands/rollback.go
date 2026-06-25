@@ -10,9 +10,7 @@ import (
 	"strconv"
 )
 
-type CommandRollback struct {
-	History *service.HistoryService
-}
+type CommandRollback struct{}
 
 func (c *CommandRollback) Name() string {
 	return "rollback"
@@ -41,6 +39,6 @@ func (c *CommandRollback) Execute(ctx *pipeline.RequestContext, chat *chat.Chat)
 		return reply("История разговоров пуста.")
 	}
 
-	removed := c.History.Rollback(session, number)
+	removed := service.RollbackHistory(session, number)
 	return reply(fmt.Sprintf("Удалено %d %s.", removed, util.Pluralize(removed, [3]string{"сообщение", "сообщения", "сообщений"})))
 }

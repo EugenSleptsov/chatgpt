@@ -14,8 +14,7 @@ import (
 type ImageExecutor struct {
 	Files       pipeline.FileResolver
 	BotUsername string
-	Commands    *service.GPTCommandService
-	History     *service.HistoryService
+	GPT         *service.GPTService
 	Notifier    *service.Notifier
 }
 
@@ -42,7 +41,7 @@ func (e *ImageExecutor) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) [
 			caption = strings.TrimSpace(strings.ReplaceAll(caption, "@"+e.BotUsername, ""))
 		}
 
-		e.History.LogGroupPhoto(chat, ctx.SenderName, ctx.Caption)
+		service.LogGroupPhoto(chat, ctx.SenderName, ctx.Caption)
 		e.Notifier.Logf("[Group] %s → фото, botAddressed=%v", ctx.SenderName, botAddressed)
 
 		if !botAddressed {
@@ -55,15 +54,15 @@ func (e *ImageExecutor) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) [
 		prompt = "Пожалуйста, опишите изображение"
 	}
 
-	response, err := e.Commands.AnalyzeImage(imageURL, prompt)
+	response, err := e.GPT.AnalyzeImage(imageURL, prompt)
 	if err != nil {
 		e.Notifier.LogError(err)
 		return []sender.Response{{Text: "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"}}
 	}
 
 	if ctx.IsGroup {
-		e.History.LogGroupMessage(chat, ctx.SenderName, fmt.Sprintf("[Фото] %s", caption))
-		e.History.LogBotResponse(chat, response)
+		service.LogGroupMessage(chat, ctx.SenderName, fmt.Sprintf("[Фото] %s", caption))
+		service.LogBotResponse(chat, response)
 	}
 
 	return []sender.Response{{Text: response, Markdown: chat.Settings.UseMarkdown}}

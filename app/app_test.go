@@ -146,23 +146,18 @@ func buildTestDeps(bot *fakeBot) (*commands.Registry, *service.Auth, *service.No
 	log := &fakeLog{}
 	auth := service.NewAuth(100, []int64{100, 200})
 	notifier := &service.Notifier{Log: log}
-	history := service.NewHistoryService()
-	memory := service.NewMemoryService()
 	mockClient := mock.NewClient()
-	gptSvc := &service.GPTService{GptClient: mockClient, History: history, Memory: memory}
-	cmdSvc := &service.GPTCommandService{GptClient: mockClient}
+	gptSvc := &service.GPTService{GptClient: mockClient}
 	chatSvc := fakeChatService()
 	registry := commands.NewRegistry()
 	config := &conf.Config{DataDir: "_var/data", LogDir: "_var/log"}
 	configService := service.NewConfigService(config, "")
 	commands.RegisterAll(commands.Deps{
 		Registry:      registry,
-		CmdService:    cmdSvc,
+		CmdService:    gptSvc,
 		ChatService:   chatSvc,
 		Notifier:      notifier,
 		Auth:          auth,
-		History:       history,
-		Memory:        memory,
 		ConfigService: configService,
 	})
 	return registry, auth, notifier, gptSvc, mockClient
@@ -426,14 +421,11 @@ func TestWorker_ProcessUpdate_SavesAfter(t *testing.T) {
 func TestBuildDecoder_ReturnsDecoder(t *testing.T) {
 	bot := &fakeBot{}
 	registry, auth, notifier, gptSvc, aiClient := buildTestDeps(bot)
-	cmdSvc := &service.GPTCommandService{GptClient: aiClient}
 	d := buildDecoder(decoderDeps{
 		files:       bot,
 		botUsername: bot.GetUsername(),
 		aiClient:    aiClient,
 		gpt:         gptSvc,
-		cmds:        cmdSvc,
-		history:     gptSvc.History,
 		notifier:    notifier,
 		auth:        auth,
 		registry:    registry,
@@ -483,13 +475,10 @@ func TestTextExecutor_PrivateChat(t *testing.T) {
 	bot := &fakeBot{}
 	_, auth, notifier, gptSvc, aiClient := buildTestDeps(bot)
 
-	cmdSvc := &service.GPTCommandService{GptClient: aiClient}
 	exec := &executor.TextExecutor{
 		BotUsername: "test_bot",
 		GPT:         gptSvc,
-		Commands:    cmdSvc,
 		AIClient:    aiClient,
-		History:     gptSvc.History,
 		Notifier:    notifier,
 		Auth:        auth,
 	}

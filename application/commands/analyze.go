@@ -10,7 +10,7 @@ import (
 )
 
 type CommandAnalyze struct {
-	Commands    *service.GPTCommandService
+	Commands    *service.GPTService
 	ChatService *service.ChatService
 	Notifier    *service.Notifier
 }

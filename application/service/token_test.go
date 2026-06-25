@@ -13,9 +13,9 @@ func TestTokenUsage_LastCallInputTokens(t *testing.T) {
 
 	// Simulate a turn with three API calls (initial + two tool continuations),
 	// each re-sending roughly the same 5k-token context.
-	u.accumulate(RawUsage{InputTokens: 5000, OutputTokens: 100, TotalTokens: 5100}, "GPT")
-	u.accumulate(RawUsage{InputTokens: 5200, OutputTokens: 80, TotalTokens: 5280}, "Continue (web_search)")
-	u.accumulate(RawUsage{InputTokens: 5400, OutputTokens: 60, TotalTokens: 5460}, "Continue (generate_voice)")
+	u.add(UsageStep{Phase: "GPT", InputTokens: 5000, OutputTokens: 100, TotalTokens: 5100})
+	u.add(UsageStep{Phase: "Continue (web_search)", InputTokens: 5200, OutputTokens: 80, TotalTokens: 5280})
+	u.add(UsageStep{Phase: "Continue (generate_voice)", InputTokens: 5400, OutputTokens: 60, TotalTokens: 5460})
 
 	// Billing total: summed across the whole turn.
 	if want := 5000 + 5200 + 5400; u.InputTokens != want {

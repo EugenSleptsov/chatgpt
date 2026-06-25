@@ -100,7 +100,7 @@ func (s *GPTService) executeUpdateMemory(tc ai.ToolCall, chat *chatdomain.Chat) 
 	if fact == "" {
 		return marshalToolResult(toolResult{Status: "error", Error: "empty fact"})
 	}
-	s.Memory.Add(chat, fact)
+	AddMemory(chat, fact)
 	return marshalToolResult(toolResult{Status: "success", Text: "Fact saved"})
 }
 
