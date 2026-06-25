@@ -72,7 +72,7 @@ func NewApp(configFile string) (*App, error) {
 		CostLimitUSD:    config.CostLimitUSD,
 	}
 
-	botStorage, err := storage.NewStorage(config.StorageType, config.DataDir, config.StorageDSN)
+	botStorage, err := storage.NewStorage(config.StorageType, config.DataDir)
 	if err != nil {
 		return nil, err
 	}

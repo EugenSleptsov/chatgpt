@@ -20,8 +20,7 @@ type Config struct {
 	TelegramTokenLogBot     string   `yaml:"telegram_token_log_bot"`
 	DataDir                 string   `yaml:"data_dir"`
 	LogDir                  string   `yaml:"log_dir"`
-	StorageType             string   `yaml:"storage_type"`              // "file" (default), "sqlite", "memory"
-	StorageDSN              string   `yaml:"storage_dsn"`               // DSN for sqlite (path to db file); ignored for file/memory
+	StorageType             string   `yaml:"storage_type"`              // "file" (default), "memory"
 	DefaultAutoReplyPersona string   `yaml:"default_autoreply_persona"` // default role/persona for auto-reply decision prompt
 	CostLimitUSD            float64  `yaml:"cost_limit_usd"`            // default daily cost limit per chat in USD (0 = unlimited)
 }
