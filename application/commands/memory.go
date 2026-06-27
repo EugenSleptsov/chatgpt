@@ -9,9 +9,7 @@ import (
 	"strings"
 )
 
-type CommandMemory struct {
-	Memory *service.MemoryService
-}
+type CommandMemory struct{}
 
 func (c *CommandMemory) Name() string {
 	return "memory"
@@ -29,9 +27,9 @@ func (c *CommandMemory) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) [
 	args := strings.TrimSpace(ctx.CommandArgs)
 
 	if args == "clear" {
-		count := c.Memory.Clear(chat)
+		count := service.ClearMemory(chat)
 		return reply(fmt.Sprintf("Память очищена (%d фактов удалено).", count))
 	}
 
-	return reply(c.Memory.FormatDisplay(chat))
+	return reply(service.FormatMemory(chat))
 }

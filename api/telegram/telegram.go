@@ -3,8 +3,6 @@ package telegram
 import (
 	"GPTBot/infrastructure/logger"
 	"GPTBot/pipeline/sender"
-	"io"
-	"net/http"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -209,29 +207,6 @@ func isNotModified(err error) bool {
 }
 
 // --- File operations ---
-
-func (botInstance *Bot) SendImage(chatID int64, imageUrl string, caption string) error {
-	response, err := http.Get(imageUrl)
-	if err != nil {
-		return err
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			return
-		}
-	}(response.Body)
-
-	imageData, err := io.ReadAll(response.Body)
-	if err != nil {
-		return err
-	}
-
-	photoMsg := tgbotapi.NewPhoto(chatID, tgbotapi.FileBytes{Name: "image.png", Bytes: imageData})
-	photoMsg.Caption = caption
-	_, err = botInstance.transport.Send(photoMsg)
-	return err
-}
 
 func (botInstance *Bot) AudioUpload(chatID int64, bytes []byte) error {
 	audioMsg := tgbotapi.NewAudio(chatID, tgbotapi.FileBytes{Name: "audio.ogg", Bytes: bytes})

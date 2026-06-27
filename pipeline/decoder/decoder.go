@@ -21,11 +21,6 @@ func (d *Decoder) Register(e executor.Executor) {
 	d.executors = append(d.executors, e)
 }
 
-// RegisterAll adds multiple executors in order.
-func (d *Decoder) RegisterAll(executors []executor.Executor) {
-	d.executors = append(d.executors, executors...)
-}
-
 // Decode returns the first executor whose Match returns true, or nil.
 func (d *Decoder) Decode(ctx *pipeline.RequestContext) executor.Executor {
 	for _, e := range d.executors {

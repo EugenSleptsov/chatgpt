@@ -55,8 +55,8 @@ func (m *Client) ContinueWithToolOutputs(_ string, outputs []ai.ToolCallOutput, 
 	}, nil
 }
 
-func (m *Client) GenerateImage(prompt string, size string) (string, error) {
-	return fmt.Sprintf("https://mock.example.com/image?prompt=%s&size=%s", prompt, size), nil
+func (m *Client) GenerateImage(prompt string, size string) ([]byte, error) {
+	return []byte("mock-image:" + prompt + ":" + size), nil
 }
 
 func (m *Client) GenerateVoice(inputText string, _ string, _ string) ([]byte, error) {

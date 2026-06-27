@@ -26,7 +26,7 @@ func (s *stubCompactClient) CallGPT(_ []ai.Message, model string, _ string, _ ..
 func (s *stubCompactClient) ContinueWithToolOutputs(_ string, _ []ai.ToolCallOutput, _ string, _ string, _ ...ai.Tool) (*ai.Response, error) {
 	return nil, nil
 }
-func (s *stubCompactClient) GenerateImage(_ string, _ string) (string, error) { return "", nil }
+func (s *stubCompactClient) GenerateImage(_ string, _ string) ([]byte, error) { return nil, nil }
 func (s *stubCompactClient) GenerateVoice(_ string, _ string, _ string) ([]byte, error) {
 	return nil, nil
 }

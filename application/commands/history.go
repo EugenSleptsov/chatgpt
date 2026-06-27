@@ -12,9 +12,7 @@ import (
 
 const historyPageSize = 5
 
-type CommandHistory struct {
-	History *service.HistoryService
-}
+type CommandHistory struct{}
 
 func (c *CommandHistory) Name() string {
 	return "history"
@@ -37,7 +35,7 @@ func (c *CommandHistory) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) 
 		}
 	}
 
-	pageChunks, totalPages := c.History.FormatPage(chat.ActiveSession(), page, historyPageSize)
+	pageChunks, totalPages := service.FormatHistoryPage(chat.ActiveSession(), page, historyPageSize)
 
 	var responses []sender.Response
 	for _, message := range pageChunks {

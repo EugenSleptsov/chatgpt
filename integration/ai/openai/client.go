@@ -11,11 +11,12 @@ import (
 
 // RequestResponsesPayload is the OpenAI Responses API request body.
 type RequestResponsesPayload struct {
-	Model        string       `json:"model"`
-	Instructions string       `json:"instructions,omitempty"`
-	Input        []ai.Message `json:"input"`
-	Tools        []ai.Tool    `json:"tools,omitempty"`
-	Store        bool         `json:"store"`
+	Model        string        `json:"model"`
+	Instructions string        `json:"instructions,omitempty"`
+	Input        []ai.Message  `json:"input"`
+	Tools        []ai.Tool     `json:"tools,omitempty"`
+	Reasoning    *ai.Reasoning `json:"reasoning,omitempty"`
+	Store        bool          `json:"store"`
 }
 
 // ContinueResponsesPayload continues a previous response with tool-call outputs.
@@ -25,6 +26,7 @@ type ContinueResponsesPayload struct {
 	PreviousResponseID string              `json:"previous_response_id"`
 	Input              []ai.ToolCallOutput `json:"input"`
 	Tools              []ai.Tool           `json:"tools,omitempty"`
+	Reasoning          *ai.Reasoning       `json:"reasoning,omitempty"`
 	Store              bool                `json:"store"`
 }
 
@@ -57,6 +59,7 @@ func (c *Client) CallGPT(chatConversation []ai.Message, aimodel string, instruct
 		Instructions: instructions,
 		Input:        chatConversation,
 		Tools:        allTools,
+		Reasoning:    ReasoningForTier(aimodel),
 		Store:        true,
 	})
 }
@@ -74,6 +77,7 @@ func (c *Client) ContinueWithToolOutputs(previousResponseID string, outputs []ai
 		PreviousResponseID: previousResponseID,
 		Input:              outputs,
 		Tools:              allTools,
+		Reasoning:          ReasoningForTier(aimodel),
 		Store:              true,
 	})
 }

@@ -181,15 +181,7 @@ func (cs *CompactService) Compact(session *chatdomain.Session, memoryPrompt stri
 
 	// Track compaction cost
 	var usage TokenUsage
-	raw := RawUsage{
-		InputTokens:  resp.Usage.InputTokens,
-		OutputTokens: resp.Usage.OutputTokens,
-		TotalTokens:  resp.Usage.TotalTokens,
-	}
-	if cs.CostFn != nil {
-		raw.Cost = cs.CostFn(session.Model, resp.Usage.InputTokens, resp.Usage.OutputTokens)
-	}
-	usage.accumulate(raw, "Compact")
+	usage.add(extractUsage(resp, session.Model, "Compact", cs.CostFn))
 
 	// Replace old entries with a single summary entry.
 	// This is our equivalent of Claude Code's:

@@ -63,9 +63,6 @@ func NewApp(configFile string) (*App, error) {
 	auth := service.NewAuth(config.AdminId, config.AuthorizedUserIds)
 	configService := service.NewConfigService(config, configFile)
 
-	historyService := service.NewHistoryService()
-	memoryService := service.NewMemoryService()
-
 	aiClient := openai.NewClient(config.GPTToken, logSystem)
 
 	chatDefaults := service.ChatDefaults{
@@ -75,29 +72,21 @@ func NewApp(configFile string) (*App, error) {
 		CostLimitUSD:    config.CostLimitUSD,
 	}
 
-	botStorage, err := storage.NewStorage(config.StorageType, config.DataDir, config.StorageDSN)
+	botStorage, err := storage.NewStorage(config.StorageType, config.DataDir)
 	if err != nil {
 		return nil, err
 	}
 	chatService := service.NewChatService(botStorage, chatDefaults, logSystem)
 
-	gptCommandService := &service.GPTCommandService{
-		GptClient: aiClient,
-		CostFn:    openai.CostForTokens,
-		ImageCost: openai.ImageGenerationCost,
-	}
-
-	compactService := &service.CompactService{
-		GptClient:       aiClient,
-		CostFn:          openai.CostForTokens,
-		ContextWindowFn: openai.ContextWindowForTier,
-	}
-
+	// GPTService is the single GPT entry point: stateful chat (Complete, with
+	// auto-compact) and stateless one-shot ops (commands, image, auto-reply).
 	gptService := &service.GPTService{
 		GptClient: aiClient,
-		History:   historyService,
-		Memory:    memoryService,
-		Compact:   compactService,
+		Compact: &service.CompactService{
+			GptClient:       aiClient,
+			CostFn:          openai.CostForTokens,
+			ContextWindowFn: openai.ContextWindowForTier,
+		},
 		CostFn:    openai.CostForTokens,
 		ImageCost: openai.ImageGenerationCost,
 	}
@@ -105,12 +94,10 @@ func NewApp(configFile string) (*App, error) {
 	registry := commands.NewRegistry()
 	commands.RegisterAll(commands.Deps{
 		Registry:        registry,
-		CmdService:      gptCommandService,
+		CmdService:      gptService,
 		ChatService:     chatService,
 		Notifier:        notifier,
 		Auth:            auth,
-		History:         historyService,
-		Memory:          memoryService,
 		ConfigService:   configService,
 		ContextWindowFn: openai.ContextWindowForTier,
 	})
@@ -123,8 +110,6 @@ func NewApp(configFile string) (*App, error) {
 			botUsername:             bot.GetUsername(),
 			aiClient:                aiClient,
 			gpt:                     gptService,
-			cmds:                    gptCommandService,
-			history:                 historyService,
 			notifier:                notifier,
 			auth:                    auth,
 			registry:                registry,
@@ -246,8 +231,6 @@ type decoderDeps struct {
 	botUsername             string
 	aiClient                ai.Client
 	gpt                     *service.GPTService
-	cmds                    *service.GPTCommandService
-	history                 *service.HistoryService
 	notifier                *service.Notifier
 	auth                    *service.Auth
 	registry                *commands.Registry
@@ -260,9 +243,7 @@ func buildDecoder(d decoderDeps) *decoder.Decoder {
 	textExec := &executor.TextExecutor{
 		BotUsername:             d.botUsername,
 		GPT:                     d.gpt,
-		Commands:                d.cmds,
 		AIClient:                d.aiClient,
-		History:                 d.history,
 		Notifier:                d.notifier,
 		Auth:                    d.auth,
 		DefaultAutoReplyPersona: d.defaultAutoReplyPersona,
@@ -270,8 +251,8 @@ func buildDecoder(d decoderDeps) *decoder.Decoder {
 
 	dec.Register(&executor.CommandExecutor{Registry: d.registry, Auth: d.auth, Notifier: d.notifier})
 	dec.Register(&executor.VoiceExecutor{Files: d.files, AIClient: d.aiClient, Notifier: d.notifier, TextExecutor: textExec})
-	dec.Register(&executor.ImageExecutor{Files: d.files, BotUsername: d.botUsername, Commands: d.cmds, History: d.history, Notifier: d.notifier})
-	dec.Register(&executor.StickerExecutor{History: d.history, Notifier: d.notifier})
+	dec.Register(&executor.ImageExecutor{Files: d.files, BotUsername: d.botUsername, GPT: d.gpt, Notifier: d.notifier})
+	dec.Register(&executor.StickerExecutor{Notifier: d.notifier})
 	dec.Register(textExec) // catch-all — must be last
 
 	return dec

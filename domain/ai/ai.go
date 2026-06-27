@@ -53,6 +53,16 @@ type Message struct {
 	Content interface{} `json:"content"`
 }
 
+// --- Reasoning types ---
+
+// Reasoning controls reasoning-model thinking depth on the Responses API.
+// Effort: "none" | "low" | "medium" | "high" | "xhigh". Summary: "auto" | "concise".
+// A nil *Reasoning omits the field entirely (for non-reasoning models).
+type Reasoning struct {
+	Effort  string `json:"effort,omitempty"`
+	Summary string `json:"summary,omitempty"`
+}
+
 // --- Tool types ---
 
 // Tool represents a tool available to the model.
@@ -210,7 +220,7 @@ type Client interface {
 	// so it can produce a final answer. previousResponseID links to the response
 	// that contained the original function_call items.
 	ContinueWithToolOutputs(previousResponseID string, outputs []ToolCallOutput, aimodel string, instructions string, tools ...Tool) (*Response, error)
-	GenerateImage(prompt string, size string) (string, error)
+	GenerateImage(prompt string, size string) ([]byte, error)
 	GenerateVoice(inputText string, voiceModel, voiceVoice string) ([]byte, error)
 	TranscribeAudio(audioContent []byte) (string, error)
 }

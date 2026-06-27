@@ -10,33 +10,30 @@ import (
 
 const fallbackResponse = "Произошла ошибка с получением ответа, пожалуйста, попробуйте позднее"
 
-func extractUsage(resp *ai.Response, tierID string, costFn func(string, int, int) float64) RawUsage {
+// extractUsage builds a usage step from an API response: token counts, cost
+// (via costFn), plus the phase label and the tools that were sent.
+func extractUsage(resp *ai.Response, tierID, phase string, costFn func(string, int, int) float64, toolNames ...string) UsageStep {
+	step := UsageStep{Phase: phase, ToolNames: toolNames}
 	if resp == nil {
-		return RawUsage{}
+		return step
 	}
-	var cost float64
 	if costFn != nil {
-		cost = costFn(tierID, resp.Usage.InputTokens, resp.Usage.OutputTokens)
+		step.Cost = costFn(tierID, resp.Usage.InputTokens, resp.Usage.OutputTokens)
 	}
-	raw := RawUsage{
-		InputTokens:  resp.Usage.InputTokens,
-		OutputTokens: resp.Usage.OutputTokens,
-		TotalTokens:  resp.Usage.TotalTokens,
-		Cost:         cost,
-	}
+	step.InputTokens = resp.Usage.InputTokens
+	step.OutputTokens = resp.Usage.OutputTokens
+	step.TotalTokens = resp.Usage.TotalTokens
 	if resp.Usage.InputTokensDetails != nil {
-		raw.CachedTokens = resp.Usage.InputTokensDetails.CachedTokens
+		step.CachedTokens = resp.Usage.InputTokensDetails.CachedTokens
 	}
 	if resp.Usage.OutputTokensDetails != nil {
-		raw.ReasoningTokens = resp.Usage.OutputTokensDetails.ReasoningTokens
+		step.ReasoningTokens = resp.Usage.OutputTokensDetails.ReasoningTokens
 	}
-	return raw
+	return step
 }
 
 type GPTService struct {
 	GptClient ai.Client
-	History   *HistoryService
-	Memory    *MemoryService
 	Compact   *CompactService                                            // auto-compact (may be nil)
 	CostFn    func(tierID string, inputTokens, outputTokens int) float64 // provider-specific token cost calculator
 	ImageCost float64                                                    // provider-specific per-image generation cost (USD)
@@ -69,7 +66,7 @@ func buildHistoryContent(r *ChatResult) string {
 	return strings.Join(parts, "\n")
 }
 func (s *GPTService) buildInstructions(session *chatdomain.Session, chat *chatdomain.Chat) string {
-	return s.History.BuildInstructionsWithContext(session, s.Memory.BuildPrompt(chat), &PromptContext{
+	return BuildInstructions(session, MemoryPrompt(chat), &PromptContext{
 		ChatTitle:   chat.Title,
 		IsGroup:     chat.ChatID < 0, // Telegram convention: group IDs are negative
 		UseMarkdown: chat.Settings.UseMarkdown,
@@ -79,7 +76,7 @@ func (s *GPTService) buildInstructions(session *chatdomain.Session, chat *chatdo
 // failSession records a fallback response in the session history and returns
 // a ChatResult with the given text. Used by completeSession on error paths.
 func (s *GPTService) failSession(session *chatdomain.Session, text string) *ChatResult {
-	s.History.AttachResponse(session, chatdomain.Message{Role: "assistant", Content: text})
+	AttachResponse(session, chatdomain.Message{Role: "assistant", Content: text})
 	return &ChatResult{Text: text}
 }
 
@@ -105,7 +102,7 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 	// old messages before sending. Uses real API token count from last
 	// response when available (like Claude Code's tokenCountWithEstimation).
 	if s.Compact != nil {
-		memPrompt := s.Memory.BuildPrompt(chat)
+		memPrompt := MemoryPrompt(chat)
 		if s.Compact.ShouldCompact(session, memPrompt, session.LastInputTokens) {
 			compactUsage, compactErr := s.Compact.Compact(session, memPrompt)
 			if compactErr != nil {
@@ -117,7 +114,7 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 		}
 	}
 
-	messages := s.History.Messages(session)
+	messages := HistoryMessages(session)
 	instructions := s.buildInstructions(session, chat)
 
 	payload, err := s.GptClient.CallGPT(messages, session.Model, instructions, chatTools...)
@@ -130,7 +127,7 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 	if result == nil {
 		result = &ChatResult{Text: fallbackResponse}
 	}
-	result.Usage.Input = computeInputMetrics(session, s.Memory.BuildPrompt(chat), chatTools)
+	result.Usage.Input = computeInputMetrics(session, MemoryPrompt(chat), chatTools)
 
 	// Accumulate cost on the chat (daily rolling counter).
 	chat.AccumulateCost(result.Usage.Cost, result.Usage.InputTokens, result.Usage.OutputTokens)
@@ -142,7 +139,7 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 	// sum inflates with each tool-loop iteration and would compact prematurely.
 	session.LastInputTokens = result.Usage.lastCallInputTokens
 
-	s.History.AttachResponse(session, chatdomain.Message{Role: "assistant", Content: buildHistoryContent(result)})
+	AttachResponse(session, chatdomain.Message{Role: "assistant", Content: buildHistoryContent(result)})
 	return result, err
 }
 
@@ -159,7 +156,7 @@ func (s *GPTService) collectImages(response *ai.Response, result *ChatResult) {
 func (s *GPTService) toolLoop(response *ai.Response, model, instructions string, chat *chatdomain.Chat, tools []ai.Tool, initialPhase string) (*ChatResult, error) {
 	result := &ChatResult{}
 	tNames := toolNamesFromTools(tools)
-	result.Usage.accumulate(extractUsage(response, model, s.CostFn), initialPhase, tNames...)
+	result.Usage.add(extractUsage(response, model, initialPhase, s.CostFn, tNames...))
 	for i := 0; i < maxToolIterations; i++ {
 		s.collectImages(response, result)
 		calls := response.ToolCalls()
@@ -189,7 +186,7 @@ func (s *GPTService) toolLoop(response *ai.Response, model, instructions string,
 		for _, tc := range calls {
 			calledNames = append(calledNames, tc.Name)
 		}
-		result.Usage.accumulate(extractUsage(response, model, s.CostFn), fmt.Sprintf("Continue (%s)", strings.Join(calledNames, ", ")), tNames...)
+		result.Usage.add(extractUsage(response, model, fmt.Sprintf("Continue (%s)", strings.Join(calledNames, ", ")), s.CostFn, tNames...))
 	}
 	log.Printf("[ToolLoop] max iterations (%d) reached", maxToolIterations)
 	s.collectImages(response, result)

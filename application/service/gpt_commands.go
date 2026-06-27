@@ -7,18 +7,16 @@ import (
 	"strings"
 )
 
-// GPTCommandService handles stateless one-shot GPT operations that do NOT
-// touch conversation history: text commands, image generation/analysis,
-// auto-reply decisions.
-type GPTCommandService struct {
-	GptClient ai.Client
-	CostFn    func(tierID string, inputTokens, outputTokens int) float64
-	ImageCost float64
-}
+// --- One-shot GPT operations ---
+//
+// The methods below are stateless: they do NOT touch conversation history
+// (text commands, image generation/analysis, auto-reply decisions). They live
+// on GPTService alongside the stateful chat pipeline (Complete) because both
+// share the same client and pricing config.
 
 // GPTCommand sends a one-shot system+user prompt pair to GPT and returns
 // the response text with token usage. Does not touch chat history.
-func (s *GPTCommandService) GPTCommand(model string, systemPrompt, userPrompt string) (string, TokenUsage, error) {
+func (s *GPTService) GPTCommand(model string, systemPrompt, userPrompt string) (string, TokenUsage, error) {
 	payload, err := s.GptClient.CallGPT([]ai.Message{
 		{Role: "user", Content: []ai.Content{{Type: ai.TypeInputText, Text: userPrompt}}},
 	}, model, systemPrompt)
@@ -28,7 +26,7 @@ func (s *GPTCommandService) GPTCommand(model string, systemPrompt, userPrompt st
 	}
 
 	var usage TokenUsage
-	usage.accumulate(extractUsage(payload, model, s.CostFn), "GPT")
+	usage.add(extractUsage(payload, model, "GPT", s.CostFn))
 
 	if text := strings.TrimSpace(payload.OutputText()); text != "" {
 		return text, usage, nil
@@ -36,31 +34,31 @@ func (s *GPTCommandService) GPTCommand(model string, systemPrompt, userPrompt st
 	return fallbackResponse, usage, nil
 }
 
-// GenerateImage creates an image from a prompt and returns the URL along
+// GenerateImage creates an image from a prompt and returns the PNG bytes along
 // with an AI-enhanced caption and accumulated usage/cost.
-func (s *GPTCommandService) GenerateImage(model string, prompt string) (imageURL, caption string, usage TokenUsage, err error) {
-	imageURL, err = s.GptClient.GenerateImage(prompt, ai.ImageSize1024)
+func (s *GPTService) GenerateImage(model string, prompt string) (imageData []byte, caption string, usage TokenUsage, err error) {
+	imageData, err = s.GptClient.GenerateImage(prompt, ai.ImageSize1024)
 	if err != nil {
-		return "", "", usage, err
+		return nil, "", usage, err
 	}
-	usage.addFixedCost("DALL-E (image)", s.ImageCost)
+	usage.addFixedCost("gpt-image (image)", s.ImageCost)
 
 	caption = prompt
 	payload, err := s.GptClient.CallGPT([]ai.Message{
 		{Role: "user", Content: fmt.Sprintf("Please improve this prompt: \"%s\". Answer with improved prompt only. Keep prompt at most 200 characters long. Your prompt must be in one sentence.", prompt)},
 	}, model, "You are an assistant that generates natural language description (prompt) for an artificial intelligence (AI) that generates images")
 	if err == nil {
-		usage.accumulate(extractUsage(payload, model, s.CostFn), "GPT (caption)")
+		usage.add(extractUsage(payload, model, "GPT (caption)", s.CostFn))
 		if text := strings.TrimSpace(payload.OutputText()); text != "" {
 			caption = text
 		}
 	}
 
-	return imageURL, caption, usage, nil
+	return imageData, caption, usage, nil
 }
 
 // AnalyzeImage sends an image URL with a prompt to GPT Vision and returns the response.
-func (s *GPTCommandService) AnalyzeImage(imageURL, prompt string) (string, error) {
+func (s *GPTService) AnalyzeImage(imageURL, prompt string) (string, error) {
 	messages := []ai.Message{
 		{Role: "user", Content: []ai.Content{
 			{Type: ai.TypeInputText, Text: prompt},
@@ -107,7 +105,7 @@ func buildAutoReplyPrompt(persona string) string {
 // ShouldAutoReply asks GPT whether the bot should proactively join the group conversation.
 // It looks at the last few history entries and asks for a YES/NO decision.
 // The persona parameter describes the bot's role/personality; if empty, the built-in default is used.
-func (s *GPTCommandService) ShouldAutoReply(chat *chatdomain.Chat, persona string) (bool, string, error) {
+func (s *GPTService) ShouldAutoReply(chat *chatdomain.Chat, persona string) (bool, string, error) {
 	session := chat.ActiveSession()
 
 	const lookback = 10

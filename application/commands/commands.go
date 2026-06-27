@@ -43,8 +43,8 @@ func boolView(cmd, title string, on bool) []sender.Response {
 	}}
 }
 
-// gptText is a convenience wrapper: calls GPTCommandService.GPTCommand and returns the response.
-func gptText(cmds *service.GPTCommandService, notifier *service.Notifier, chat *chat.Chat, systemPrompt, userPrompt string) []sender.Response {
+// gptText is a convenience wrapper: calls GPTService.GPTCommand and returns the response.
+func gptText(cmds *service.GPTService, notifier *service.Notifier, chat *chat.Chat, systemPrompt, userPrompt string) []sender.Response {
 	session := chat.ActiveSession()
 	response, usage, err := cmds.GPTCommand(session.Model, systemPrompt, userPrompt)
 	if err != nil {
@@ -57,7 +57,7 @@ func gptText(cmds *service.GPTCommandService, notifier *service.Notifier, chat *
 }
 
 // summarizeText reads chat log, then delegates to gptText.
-func summarizeText(cmds *service.GPTCommandService, chatService *service.ChatService, notifier *service.Notifier, chat *chat.Chat, systemPrompt string, messageCount int) []sender.Response {
+func summarizeText(cmds *service.GPTService, chatService *service.ChatService, notifier *service.Notifier, chat *chat.Chat, systemPrompt string, messageCount int) []sender.Response {
 	lines, err := chatService.ReadChatLog(chat.ChatID, messageCount)
 	if err != nil {
 		return reply("Произошла ошибка")

@@ -9,7 +9,7 @@ import (
 )
 
 type CommandEnhance struct {
-	Commands *service.GPTCommandService
+	Commands *service.GPTService
 	Notifier *service.Notifier
 }
 

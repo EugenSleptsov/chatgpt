@@ -2,6 +2,7 @@ package openai
 
 import (
 	"GPTBot/domain/ai"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,7 +17,7 @@ type RequestImagePayload struct {
 
 type ResponseImagePayload struct {
 	Data []struct {
-		URL string `json:"url"`
+		B64JSON string `json:"b64_json"`
 	} `json:"data"`
 	Error struct {
 		Code    string `json:"code"`
@@ -25,52 +26,58 @@ type ResponseImagePayload struct {
 	}
 }
 
-const ModelDalle3 = "dall-e-3"
+// ModelGptImage is OpenAI's current image-generation model. Unlike DALL·E it
+// returns base64-encoded PNG bytes (no hosted URL).
+const ModelGptImage = "gpt-image-2"
 
-func (c *Client) GenerateImage(prompt string, size string) (string, error) {
+// GenerateImage renders a prompt and returns the decoded PNG bytes.
+func (c *Client) GenerateImage(prompt string, size string) ([]byte, error) {
 	jsonPayload, err := json.Marshal(RequestImagePayload{
 		Prompt: prompt,
 		Size:   getImageSize(size),
-		Model:  ModelDalle3,
+		Model:  ModelGptImage,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	resp, err := c.Transport.Post("https://api.openai.com/v1/images/generations", "application/json", jsonPayload)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	c.Log.Logf("Image / HTTP status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var responseData ResponseImagePayload
-	err = json.Unmarshal(body, &responseData)
-	if err != nil {
-		return "", err
+	if err = json.Unmarshal(body, &responseData); err != nil {
+		return nil, err
 	}
 
-	if len(responseData.Data) == 0 {
+	if len(responseData.Data) == 0 || responseData.Data[0].B64JSON == "" {
 		c.Log.Logf("Empty data array in response: %s", string(body))
 
 		if responseData.Error.Message != "" && responseData.Error.Code == "content_policy_violation" {
-			return "", fmt.Errorf("content policy violation: %s", responseData.Error.Message)
+			return nil, fmt.Errorf("content policy violation: %s", responseData.Error.Message)
 		}
 
-		return "", fmt.Errorf("empty data array in response")
+		return nil, fmt.Errorf("empty data array in response")
 	}
 
-	return responseData.Data[0].URL, nil
+	imageData, err := base64.StdEncoding.DecodeString(responseData.Data[0].B64JSON)
+	if err != nil {
+		return nil, fmt.Errorf("decode base64 image: %w", err)
+	}
+	return imageData, nil
 }
 
 func getImageSize(size string) string {

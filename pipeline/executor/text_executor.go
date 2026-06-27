@@ -16,9 +16,7 @@ import (
 type TextExecutor struct {
 	BotUsername             string
 	GPT                     *service.GPTService
-	Commands                *service.GPTCommandService
 	AIClient                ai.Client
-	History                 *service.HistoryService
 	Notifier                *service.Notifier
 	Auth                    *service.Auth
 	DefaultAutoReplyPersona string // fallback persona from config; empty = built-in default
@@ -47,7 +45,7 @@ func (e *TextExecutor) ProcessText(ctx *pipeline.RequestContext, c *chat.Chat, t
 
 func (e *TextExecutor) privateChat(ctx *pipeline.RequestContext, c *chat.Chat, text string, isVoice bool) []sender.Response {
 	session := c.ActiveSession()
-	e.History.Append(session, chat.Message{Role: "user", Content: text})
+	service.AppendHistory(session, chat.Message{Role: "user", Content: text})
 
 	result, err := e.GPT.Complete(c)
 	e.Notifier.LogError(err)
@@ -88,7 +86,7 @@ func (e *TextExecutor) groupChat(ctx *pipeline.RequestContext, c *chat.Chat, tex
 	}
 
 	// Always log message for group context
-	e.History.LogGroupMessage(c, ctx.SenderName, cleanText)
+	service.LogGroupMessage(c, ctx.SenderName, cleanText)
 
 	// Edited messages: just updated context, nothing to process
 	if ctx.IsEdited {
@@ -109,7 +107,7 @@ func (e *TextExecutor) groupChat(ctx *pipeline.RequestContext, c *chat.Chat, tex
 		if persona == "" {
 			persona = e.DefaultAutoReplyPersona
 		}
-		should, reason, err := e.Commands.ShouldAutoReply(c, persona)
+		should, reason, err := e.GPT.ShouldAutoReply(c, persona)
 		e.Notifier.LogError(err)
 		if !should {
 			e.Notifier.Logf("[Group] Авто-ответ: НЕТ (%s)", reason)

@@ -10,6 +10,7 @@ import (
 	"GPTBot/integration/ai/mock"
 	"GPTBot/pipeline"
 	"GPTBot/pipeline/sender"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,17 +80,8 @@ func buildDeps(t *testing.T) (*testDeps, *fakeBot) {
 	config := &conf.Config{DataDir: t.TempDir(), LogDir: logDir, SummarizePrompt: "summarize"}
 	configService := service.NewConfigService(config, "")
 	notifier := &service.Notifier{Log: &fakeLog{}}
-	history := service.NewHistoryService()
-	memory := service.NewMemoryService()
 	mockClient := mock.NewClient()
-	gptSvc := &service.GPTService{
-		GptClient: mockClient,
-		History:   history,
-		Memory:    memory,
-	}
-	cmdSvc := &service.GPTCommandService{
-		GptClient: mockClient,
-	}
+	gptSvc := &service.GPTService{GptClient: mockClient}
 	chatSvc := service.NewChatService(
 		storage.NewMemoryStorage(),
 		service.ChatDefaults{LogDir: logDir},
@@ -98,12 +90,10 @@ func buildDeps(t *testing.T) (*testDeps, *fakeBot) {
 	registry := commands.NewRegistry()
 	commands.RegisterAll(commands.Deps{
 		Registry:      registry,
-		CmdService:    cmdSvc,
+		CmdService:    gptSvc,
 		ChatService:   chatSvc,
 		Notifier:      notifier,
 		Auth:          auth,
-		History:       history,
-		Memory:        memory,
 		ConfigService: configService,
 	})
 	return &testDeps{
@@ -684,8 +674,8 @@ func TestCommandImagine_AdminBypassesCooldown(t *testing.T) {
 		t.Fatalf("expected 1 response, got %d", len(responses))
 	}
 	// admin should bypass cooldown and get image response
-	if responses[0].ImageURL == "" {
-		t.Error("admin should receive an image URL")
+	if len(responses[0].ImageData) == 0 {
+		t.Error("admin should receive image data")
 	}
 }
 
@@ -702,6 +692,79 @@ func TestCommandSessionList(t *testing.T) {
 	}
 	if !strings.Contains(resp, "default") {
 		t.Errorf("should show topic 'default': %q", resp)
+	}
+}
+
+// addSessions appends n extra sessions (IDs 2..n+1) to force pagination.
+func addSessions(chat *domain.Chat, n int) {
+	for i := 0; i < n; i++ {
+		id := i + 2
+		chat.Sessions = append(chat.Sessions, &domain.Session{
+			ID:    id,
+			Topic: fmt.Sprintf("s%d", id),
+			Model: ai.DefaultTierID,
+		})
+	}
+}
+
+func TestCommandSessionList_Pagination(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("list")
+	chat := newTestChat()
+	addSessions(chat, 7) // 8 sessions total → 2 pages of 6
+
+	// Page 1: 6 session rows + 1 nav row.
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/list"), chat)
+	rows := responses[0].Buttons
+	if len(rows) != 7 {
+		t.Fatalf("page 1: expected 6 session rows + nav, got %d rows", len(rows))
+	}
+	nav := rows[len(rows)-1]
+	// First page: page indicator + forward arrow only (no back arrow).
+	if len(nav) != 2 {
+		t.Fatalf("page 1 nav: expected [indicator, ▶], got %v", nav)
+	}
+	if nav[len(nav)-1].Data != "list:1" {
+		t.Errorf("forward button should go to page 1, got %q", nav[len(nav)-1].Data)
+	}
+
+	// Page 2 (via "list:1"): 2 remaining sessions + nav.
+	responses = cmd.Execute(makeCmdCtx(1, 100, "/list 1"), chat)
+	rows = responses[0].Buttons
+	if len(rows) != 3 {
+		t.Fatalf("page 2: expected 2 session rows + nav, got %d rows", len(rows))
+	}
+	nav = rows[len(rows)-1]
+	if nav[0].Data != "list:0" {
+		t.Errorf("back button should go to page 0, got %q", nav[0].Data)
+	}
+}
+
+func TestCommandSessionList_SelectButton(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("list")
+	chat := newTestChat()
+	addSessions(chat, 7)
+
+	// Simulate tapping session #8's button: callback data "list:use:8".
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/list use:8"), chat)
+	if chat.ActiveSessionID != 8 {
+		t.Fatalf("active session = %d, want 8", chat.ActiveSessionID)
+	}
+	// The view must jump to the page holding #8 (page 1) and mark it active.
+	if !strings.Contains(responses[0].Text, "Активная: #8") {
+		t.Errorf("view should show active #8: %q", responses[0].Text)
+	}
+	var marked bool
+	for _, row := range responses[0].Buttons {
+		for _, b := range row {
+			if b.Data == "list:use:8" && strings.HasPrefix(b.Text, "▶") {
+				marked = true
+			}
+		}
+	}
+	if !marked {
+		t.Error("session #8 button should be marked active")
 	}
 }
 

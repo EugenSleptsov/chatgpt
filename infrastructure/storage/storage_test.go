@@ -362,156 +362,11 @@ func TestMemoryStorage_Overwrite(t *testing.T) {
 	}
 }
 
-// ===================== SQLiteStorage =====================
-
-func newTestSQLiteStorage(t *testing.T) *SQLiteStorage {
-	t.Helper()
-	dir := t.TempDir()
-	dsn := filepath.Join(dir, "test.db")
-	s, err := NewSQLiteStorage(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	return s
-}
-
-func TestSQLiteStorage_SetAndGet(t *testing.T) {
-	s := newTestSQLiteStorage(t)
-	chat := &chat.Chat{
-		ChatID: 42,
-		Title:  "sqlite test",
-		Sessions: []*chat.Session{
-			{ID: 1, Topic: "t", History: make([]*chat.ConversationEntry, 0), Model: "basic"},
-		},
-		ActiveSessionID: 1,
-		NextSessionID:   2,
-	}
-	if err := s.Set(42, chat); err != nil {
-		t.Fatal(err)
-	}
-
-	got, ok := s.Get(42)
-	if !ok || got.Title != "sqlite test" {
-		t.Fatalf("Get returned ok=%v, chat=%+v", ok, got)
-	}
-}
-
-func TestSQLiteStorage_GetNotFound(t *testing.T) {
-	s := newTestSQLiteStorage(t)
-	_, ok := s.Get(999)
-	if ok {
-		t.Fatal("expected not found")
-	}
-}
-
-func TestSQLiteStorage_Overwrite(t *testing.T) {
-	s := newTestSQLiteStorage(t)
-	s.Set(1, &chat.Chat{ChatID: 1, Title: "v1", Sessions: []*chat.Session{{ID: 1, Topic: "t", History: make([]*chat.ConversationEntry, 0), Model: "basic"}}, ActiveSessionID: 1, NextSessionID: 2})
-	s.Set(1, &chat.Chat{ChatID: 1, Title: "v2", Sessions: []*chat.Session{{ID: 1, Topic: "t", History: make([]*chat.ConversationEntry, 0), Model: "basic"}}, ActiveSessionID: 1, NextSessionID: 2})
-
-	got, _ := s.Get(1)
-	if got.Title != "v2" {
-		t.Errorf("Title = %q, want v2", got.Title)
-	}
-}
-
-func TestSQLiteStorage_PersistAcrossInstances(t *testing.T) {
-	dir := t.TempDir()
-	dsn := filepath.Join(dir, "persist.db")
-
-	s1, err := NewSQLiteStorage(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s1.Set(100, &chat.Chat{
-		ChatID: 100, Title: "persisted",
-		Sessions:        []*chat.Session{{ID: 1, Topic: "t", History: make([]*chat.ConversationEntry, 0), Model: "basic"}},
-		ActiveSessionID: 1, NextSessionID: 2,
-	})
-	s1.Close()
-
-	s2, err := NewSQLiteStorage(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s2.Close()
-
-	// Clear cache to force DB read
-	s2.cache = make(map[int64]*chat.Chat)
-
-	got, ok := s2.Get(100)
-	if !ok {
-		t.Fatal("not found after reopen")
-	}
-	if got.Title != "persisted" {
-		t.Errorf("Title = %q", got.Title)
-	}
-}
-
-func TestSQLiteStorage_MarkDirtyPersists(t *testing.T) {
-	dir := t.TempDir()
-	dsn := filepath.Join(dir, "dirty.db")
-
-	s, _ := NewSQLiteStorage(dsn)
-	defer s.Close()
-
-	chat := &chat.Chat{
-		ChatID: 55, Title: "before",
-		Sessions:        []*chat.Session{{ID: 1, Topic: "t", History: make([]*chat.ConversationEntry, 0), Model: "basic"}},
-		ActiveSessionID: 1, NextSessionID: 2,
-	}
-	s.Set(55, chat)
-
-	// Modify in place and mark dirty
-	chat.Title = "after"
-	s.MarkDirty(55)
-
-	// Reopen and check
-	s.Close()
-	s2, _ := NewSQLiteStorage(dsn)
-	defer s2.Close()
-
-	got, _ := s2.Get(55)
-	if got.Title != "after" {
-		t.Errorf("Title = %q, want 'after'", got.Title)
-	}
-}
-
-func TestSQLiteStorage_SaveAll(t *testing.T) {
-	s := newTestSQLiteStorage(t)
-	s.Set(1, &chat.Chat{ChatID: 1, Title: "a", Sessions: []*chat.Session{{ID: 1, Topic: "t", History: make([]*chat.ConversationEntry, 0), Model: "basic"}}, ActiveSessionID: 1, NextSessionID: 2})
-	s.Set(2, &chat.Chat{ChatID: 2, Title: "b", Sessions: []*chat.Session{{ID: 1, Topic: "t", History: make([]*chat.ConversationEntry, 0), Model: "basic"}}, ActiveSessionID: 1, NextSessionID: 2})
-
-	if !s.Save() {
-		t.Fatal("Save failed")
-	}
-}
-
-func TestSQLiteStorage_LegacyNoSessions(t *testing.T) {
-	s := newTestSQLiteStorage(t)
-
-	// Insert raw JSON with no sessions
-	s.db.Exec(`INSERT INTO chats (chat_id, payload) VALUES (?, ?)`, 77, `{"ChatID":77,"Title":"old"}`)
-
-	// Clear cache
-	delete(s.cache, 77)
-
-	got, ok := s.Get(77)
-	if !ok {
-		t.Fatal("not found")
-	}
-	sess := got.ActiveSession()
-	if sess.ID != chat.DefaultSessionID || sess.Topic != chat.DefaultSessionTopic {
-		t.Errorf("unexpected session: %+v", sess)
-	}
-}
-
 // ===================== Factory =====================
 
 func TestNewStorage_File(t *testing.T) {
 	dir := t.TempDir()
-	s, err := NewStorage("file", dir, "")
+	s, err := NewStorage("file", dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -522,7 +377,7 @@ func TestNewStorage_File(t *testing.T) {
 
 func TestNewStorage_FileDefault(t *testing.T) {
 	dir := t.TempDir()
-	s, err := NewStorage("", dir, "")
+	s, err := NewStorage("", dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -531,33 +386,8 @@ func TestNewStorage_FileDefault(t *testing.T) {
 	}
 }
 
-func TestNewStorage_SQLite(t *testing.T) {
-	dir := t.TempDir()
-	dsn := filepath.Join(dir, "test.db")
-	s, err := NewStorage("sqlite", dir, dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sq, ok := s.(*SQLiteStorage); ok {
-		defer sq.Close()
-	} else {
-		t.Errorf("expected *SQLiteStorage, got %T", s)
-	}
-}
-
-func TestNewStorage_SQLiteDefaultDSN(t *testing.T) {
-	dir := t.TempDir()
-	s, err := NewStorage("sqlite", dir, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sq, ok := s.(*SQLiteStorage); ok {
-		defer sq.Close()
-	}
-}
-
 func TestNewStorage_Memory(t *testing.T) {
-	s, err := NewStorage("memory", "", "")
+	s, err := NewStorage("memory", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,58 +397,8 @@ func TestNewStorage_Memory(t *testing.T) {
 }
 
 func TestNewStorage_Unknown(t *testing.T) {
-	_, err := NewStorage("redis", "", "")
+	_, err := NewStorage("redis", "")
 	if err == nil {
 		t.Fatal("expected error for unknown type")
-	}
-}
-
-// ===================== Migrator =====================
-
-func TestMigrateFileToSQLite(t *testing.T) {
-	// Prepare file storage with some chats
-	dir := t.TempDir()
-	fs, _ := NewFileStorage(dir)
-
-	for _, id := range []int64{10, 20} {
-		fs.Set(id, &chat.Chat{
-			ChatID: id, Title: "chat-" + filepath.Base(t.Name()),
-			Sessions:        []*chat.Session{{ID: 1, Topic: "t", History: make([]*chat.ConversationEntry, 0), Model: "basic"}},
-			ActiveSessionID: 1, NextSessionID: 2,
-		})
-	}
-	fs.Save()
-
-	// Migrate
-	dsn := filepath.Join(dir, "migrated.db")
-	if err := MigrateFileToSQLite(dir, dsn); err != nil {
-		t.Fatal(err)
-	}
-
-	// Verify
-	sq, err := NewSQLiteStorage(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sq.Close()
-
-	for _, id := range []int64{10, 20} {
-		got, ok := sq.Get(id)
-		if !ok {
-			t.Errorf("chat %d not found in sqlite", id)
-			continue
-		}
-		if got.ChatID != id {
-			t.Errorf("ChatID = %d, want %d", got.ChatID, id)
-		}
-	}
-}
-
-func TestMigrateFileToSQLite_EmptyDir(t *testing.T) {
-	dir := t.TempDir()
-	dsn := filepath.Join(dir, "empty.db")
-	err := MigrateFileToSQLite(dir, dsn)
-	if err == nil {
-		t.Fatal("expected error for empty directory")
 	}
 }

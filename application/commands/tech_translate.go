@@ -15,7 +15,7 @@ const AdditionalPrompt = `
 `
 
 type CommandTechTranslate struct {
-	Commands *service.GPTCommandService
+	Commands *service.GPTService
 	Notifier *service.Notifier
 }
 

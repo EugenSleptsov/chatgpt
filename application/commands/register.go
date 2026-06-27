@@ -9,12 +9,10 @@ import (
 // new dependency a non-breaking, field-only change.
 type Deps struct {
 	Registry        *Registry
-	CmdService      *service.GPTCommandService
+	CmdService      *service.GPTService
 	ChatService     *service.ChatService
 	Notifier        *service.Notifier
 	Auth            *service.Auth
-	History         *service.HistoryService
-	Memory          *service.MemoryService
 	ConfigService   *service.ConfigService
 	ContextWindowFn func(string) int
 }
@@ -26,15 +24,15 @@ func AllCommands(d Deps) []Command {
 		// --- zero-dep commands ---
 		&CommandHelp{Registry: d.Registry, Auth: d.Auth},
 		&CommandStart{},
-		&CommandClear{History: d.History},
-		&CommandHistory{History: d.History},
-		&CommandRollback{History: d.History},
+		&CommandClear{},
+		&CommandHistory{},
+		&CommandRollback{},
 		&CommandModel{},
 		&CommandSystem{},
 		&CommandMarkdown{},
 		&CommandAutoReply{},
 		&CommandAutoRole{},
-		&CommandMemory{Memory: d.Memory},
+		&CommandMemory{},
 		&CommandSummarizePrompt{},
 		&CommandUsage{},
 		&CommandContext{ContextWindowFn: d.ContextWindowFn},
