@@ -3,6 +3,7 @@ package openai
 import (
 	gpt "GPTBot/domain/ai"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -245,24 +246,24 @@ func TestGenerateImage_Success(t *testing.T) {
 	client, _ := newTestClient(func(url, contentType string, payload []byte) (*http.Response, error) {
 		var req RequestImagePayload
 		json.Unmarshal(payload, &req)
-		if req.Model != ModelDalle3 {
-			t.Errorf("model = %q, want %q", req.Model, ModelDalle3)
+		if req.Model != ModelGptImage {
+			t.Errorf("model = %q, want %q", req.Model, ModelGptImage)
 		}
 		if req.Prompt != "a cat" {
 			t.Errorf("prompt = %q", req.Prompt)
 		}
 		body := ResponseImagePayload{Data: []struct {
-			URL string `json:"url"`
-		}{{URL: "https://example.com/cat.png"}}}
+			B64JSON string `json:"b64_json"`
+		}{{B64JSON: base64.StdEncoding.EncodeToString([]byte("cat-png"))}}}
 		return jsonResponse(200, body), nil
 	})
 
-	url, err := client.GenerateImage("a cat", gpt.ImageSize1024)
+	data, err := client.GenerateImage("a cat", gpt.ImageSize1024)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
-	if url != "https://example.com/cat.png" {
-		t.Fatalf("url = %q", url)
+	if string(data) != "cat-png" {
+		t.Fatalf("data = %q", string(data))
 	}
 }
 
@@ -338,8 +339,8 @@ func TestGenerateImage_SizeMapping(t *testing.T) {
 					t.Errorf("size = %q, want %q", req.Size, tc.want)
 				}
 				body := ResponseImagePayload{Data: []struct {
-					URL string `json:"url"`
-				}{{URL: "https://x.com/img.png"}}}
+					B64JSON string `json:"b64_json"`
+				}{{B64JSON: base64.StdEncoding.EncodeToString([]byte("img"))}}}
 				return jsonResponse(200, body), nil
 			})
 
@@ -363,8 +364,8 @@ func TestTranscribeAudio_Success(t *testing.T) {
 		if !strings.Contains(body, "audio.ogg") {
 			t.Error("payload should contain filename audio.ogg")
 		}
-		if !strings.Contains(body, "whisper-1") {
-			t.Error("payload should contain model whisper-1")
+		if !strings.Contains(body, "gpt-4o-transcribe") {
+			t.Error("payload should contain model gpt-4o-transcribe")
 		}
 		resp := TranscriptionResponse{Text: "transcribed text"}
 		return jsonResponse(200, resp), nil

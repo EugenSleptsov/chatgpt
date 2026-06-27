@@ -45,10 +45,6 @@ func (b *fakeBot) ReplyMarkdown(chatID int64, replyTo int, text string, _ bool) 
 func (b *fakeBot) Message(message string, chatID int64, _ bool) {
 	b.sent = append(b.sent, fakeSent{chatID: chatID, text: message})
 }
-func (b *fakeBot) SendImage(chatID int64, imageUrl string, caption string) error {
-	b.sent = append(b.sent, fakeSent{chatID: chatID, imageURL: imageUrl, caption: caption})
-	return nil
-}
 func (b *fakeBot) SendImageData(chatID int64, data []byte, caption string) error {
 	b.sent = append(b.sent, fakeSent{chatID: chatID, imageData: data, caption: caption})
 	return nil
@@ -290,15 +286,6 @@ func TestResponseSender_Text(t *testing.T) {
 	s := &sender.ResponseSender{Bot: bot}
 	s.Send(42, 1, []sender.Response{{Text: "hello", Markdown: true}})
 	if len(bot.sent) != 1 || bot.sent[0].text != "hello" {
-		t.Fatalf("sent = %+v", bot.sent)
-	}
-}
-
-func TestResponseSender_ImageURL(t *testing.T) {
-	bot := &fakeBot{}
-	s := &sender.ResponseSender{Bot: bot}
-	s.Send(42, 1, []sender.Response{{ImageURL: "https://img.png", Caption: "cap"}})
-	if len(bot.sent) != 1 || bot.sent[0].imageURL != "https://img.png" {
 		t.Fatalf("sent = %+v", bot.sent)
 	}
 }

@@ -39,12 +39,12 @@ func TestContinueWithToolOutputs(t *testing.T) {
 
 func TestGenerateImage(t *testing.T) {
 	c := NewClient()
-	url, err := c.GenerateImage("a cat", ai.ImageSize256)
+	data, err := c.GenerateImage("a cat", ai.ImageSize256)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
-	if !strings.HasPrefix(url, "https://") {
-		t.Fatalf("expected URL, got %q", url)
+	if len(data) == 0 {
+		t.Fatalf("expected image bytes, got empty")
 	}
 }
 

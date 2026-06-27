@@ -12,8 +12,7 @@ type Button struct {
 // The worker inspects which fields are set and delivers accordingly.
 type Response struct {
 	Text      string     // text reply
-	ImageURL  string     // image URL to sender (legacy: /imagine command)
-	ImageData []byte     // image PNG bytes (built-in image_generation tool)
+	ImageData []byte     // image PNG bytes (/imagine command + built-in image_generation tool)
 	Caption   string     // image caption
 	Audio     []byte     // audio data to upload
 	Markdown  bool       // format text as markdown/HTML

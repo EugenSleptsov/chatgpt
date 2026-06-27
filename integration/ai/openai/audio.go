@@ -10,7 +10,7 @@ import (
 
 const audioEndpoint = "https://api.openai.com/v1/audio/transcriptions"
 const voiceEndpoint = "https://api.openai.com/v1/audio/speech"
-const audioModel = "whisper-1"
+const audioModel = "gpt-4o-transcribe"
 
 type TranscriptionResponse struct {
 	Text string `json:"text"`

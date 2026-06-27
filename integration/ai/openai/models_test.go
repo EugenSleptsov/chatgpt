@@ -4,7 +4,7 @@ import "testing"
 
 func TestResolveModel_KnownTier(t *testing.T) {
 	got := ResolveModel("premium")
-	want := "gpt-5.4"
+	want := "gpt-5.5"
 	if got != want {
 		t.Fatalf("ResolveModel(premium) = %q, want %q", got, want)
 	}
@@ -28,7 +28,7 @@ func TestResolveModel_Fast(t *testing.T) {
 
 func TestResolveModel_ByLabel(t *testing.T) {
 	got := ResolveModel("ai-premium")
-	want := "gpt-5.4"
+	want := "gpt-5.5"
 	if got != want {
 		t.Fatalf("ResolveModel(ai-premium) = %q, want %q", got, want)
 	}
@@ -54,7 +54,7 @@ func TestCostForTokens_Basic(t *testing.T) {
 
 func TestCostForTokens_Premium(t *testing.T) {
 	cost := CostForTokens("premium", 500_000, 200_000)
-	expected := 0.5*2.50 + 0.2*15.00
+	expected := 0.5*5.00 + 0.2*30.00
 	if diff := cost - expected; diff > 0.0001 || diff < -0.0001 {
 		t.Fatalf("CostForTokens(premium, 500K, 200K) = %f, want %f", cost, expected)
 	}

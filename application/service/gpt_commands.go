@@ -34,14 +34,14 @@ func (s *GPTService) GPTCommand(model string, systemPrompt, userPrompt string) (
 	return fallbackResponse, usage, nil
 }
 
-// GenerateImage creates an image from a prompt and returns the URL along
+// GenerateImage creates an image from a prompt and returns the PNG bytes along
 // with an AI-enhanced caption and accumulated usage/cost.
-func (s *GPTService) GenerateImage(model string, prompt string) (imageURL, caption string, usage TokenUsage, err error) {
-	imageURL, err = s.GptClient.GenerateImage(prompt, ai.ImageSize1024)
+func (s *GPTService) GenerateImage(model string, prompt string) (imageData []byte, caption string, usage TokenUsage, err error) {
+	imageData, err = s.GptClient.GenerateImage(prompt, ai.ImageSize1024)
 	if err != nil {
-		return "", "", usage, err
+		return nil, "", usage, err
 	}
-	usage.addFixedCost("DALL-E (image)", s.ImageCost)
+	usage.addFixedCost("gpt-image (image)", s.ImageCost)
 
 	caption = prompt
 	payload, err := s.GptClient.CallGPT([]ai.Message{
@@ -54,7 +54,7 @@ func (s *GPTService) GenerateImage(model string, prompt string) (imageURL, capti
 		}
 	}
 
-	return imageURL, caption, usage, nil
+	return imageData, caption, usage, nil
 }
 
 // AnalyzeImage sends an image URL with a prompt to GPT Vision and returns the response.

@@ -674,8 +674,8 @@ func TestCommandImagine_AdminBypassesCooldown(t *testing.T) {
 		t.Fatalf("expected 1 response, got %d", len(responses))
 	}
 	// admin should bypass cooldown and get image response
-	if responses[0].ImageURL == "" {
-		t.Error("admin should receive an image URL")
+	if len(responses[0].ImageData) == 0 {
+		t.Error("admin should receive image data")
 	}
 }
 

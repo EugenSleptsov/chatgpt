@@ -44,7 +44,7 @@ func (c *CommandImagine) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) 
 	aiModel := ai.ImageEnhanceTierID
 	prompt := ctx.CommandArgs
 
-	imageURL, caption, usage, err := c.Commands.GenerateImage(aiModel, prompt)
+	imageData, caption, usage, err := c.Commands.GenerateImage(aiModel, prompt)
 	if err != nil {
 		c.Notifier.Notify(fmt.Sprintf("[%d] Error generating image: %v", chat.ChatID, err))
 		return reply("Произошла ошибка при генерации изображения, попробуйте позже.")
@@ -52,5 +52,5 @@ func (c *CommandImagine) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) 
 
 	c.Notifier.Notify(fmt.Sprintf("[%s | %s] Image prompt: \"%s\"\n%s", chat.Title, aiModel, prompt, usage))
 
-	return []sender.Response{{ImageURL: imageURL, Caption: caption}}
+	return []sender.Response{{ImageData: imageData, Caption: caption}}
 }
