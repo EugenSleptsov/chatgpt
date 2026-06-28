@@ -14,6 +14,7 @@ import (
 type Worker struct {
 	Auth           *service.Auth
 	Bot            sender.MessageSender
+	BotUsername    string
 	Notifier       *service.Notifier
 	ChatService    *service.ChatService
 	Decoder        *decoder.Decoder
@@ -23,6 +24,7 @@ type Worker struct {
 func NewWorker(
 	auth *service.Auth,
 	bot sender.MessageSender,
+	botUsername string,
 	notifier *service.Notifier,
 	chatService *service.ChatService,
 	dec *decoder.Decoder,
@@ -31,6 +33,7 @@ func NewWorker(
 	return &Worker{
 		Auth:           auth,
 		Bot:            bot,
+		BotUsername:    botUsername,
 		Notifier:       notifier,
 		ChatService:    chatService,
 		Decoder:        dec,
@@ -57,6 +60,8 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 	if !ctx.IsCallback {
 		w.ChatService.LogMessage(ctx, chat)
 	}
+
+	w.consumePendingInput(ctx, chat)
 
 	if ctx.IsGroup {
 		if ctx.IsCommand && !w.Auth.IsAuthorized(ctx.SenderID) {
@@ -86,6 +91,23 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 		w.ResponseSender.Send(chat.ChatID, ctx.MessageID, responses)
 	}
 	w.ChatService.MarkDirty(chat.ChatID)
+}
+
+// consumePendingInput implements the button → free-text input flow. When a chat
+// is awaiting input (set by a command that issued a ForceReply prompt) and the
+// user replies to the bot with plain text, that text is routed to the awaited
+// command as its arguments. The pending flag is cleared after one cycle whether
+// it was consumed or abandoned (e.g. the user ran another command instead).
+func (w *Worker) consumePendingInput(ctx *pipeline.RequestContext, chat *chat.Chat) {
+	if chat.PendingInput == "" {
+		return
+	}
+	if !ctx.IsCommand && !ctx.IsCallback && ctx.Text != "" && ctx.ReplyToUsername == w.BotUsername {
+		ctx.IsCommand = true
+		ctx.CommandName = chat.PendingInput
+		ctx.CommandArgs = ctx.Text
+	}
+	chat.PendingInput = ""
 }
 
 func (w *Worker) handleUnauthorizedAccess(ctx *pipeline.RequestContext, chat *chat.Chat) {

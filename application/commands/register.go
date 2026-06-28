@@ -23,6 +23,8 @@ func AllCommands(d Deps) []Command {
 	return []Command{
 		// --- zero-dep commands ---
 		&CommandHelp{Registry: d.Registry, Auth: d.Auth},
+		&CommandMenu{},
+		&CommandSettings{Auth: d.Auth},
 		&CommandStart{},
 		&CommandClear{},
 		&CommandHistory{},

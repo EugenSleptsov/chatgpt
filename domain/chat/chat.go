@@ -43,6 +43,11 @@ type Chat struct {
 	Title            string
 	Memory           []string
 
+	// PendingInput holds the name of a command awaiting a free-text reply
+	// (button → ForceReply flow). The next text the user replies to the bot is
+	// routed to this command as its args. Transient — not persisted.
+	PendingInput string `json:"-"`
+
 	// Persisted across restarts so the admin can monitor per-chat spend.
 	TotalCostUSD      float64   // accumulated USD cost
 	TotalInputTokens  int       // accumulated input tokens

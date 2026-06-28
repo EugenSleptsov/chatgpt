@@ -5,6 +5,9 @@ package sender
 type MessageSender interface {
 	Reply(chatID int64, replyTo int, text string)
 	ReplyMarkdown(chatID int64, replyTo int, text string, isMarkdown bool)
+	// SendForceReply posts a new message with a force-reply prompt so the user's
+	// next message replies to it (button → free-text input flow).
+	SendForceReply(chatID int64, text string) error
 	SendImageData(chatID int64, data []byte, caption string) error
 	AudioUpload(chatID int64, bytes []byte) error
 
@@ -29,6 +32,10 @@ type ResponseSender struct {
 func (s *ResponseSender) Send(chatID int64, messageID int, responses []Response) {
 	for _, r := range responses {
 		switch {
+		case r.ForceReply:
+			if err := s.Bot.SendForceReply(chatID, r.Text); err != nil && s.OnError != nil {
+				s.OnError(err)
+			}
 		case len(r.Audio) > 0:
 			if err := s.Bot.AudioUpload(chatID, r.Audio); err != nil && s.OnError != nil {
 				s.OnError(err)
@@ -57,6 +64,14 @@ func (s *ResponseSender) Edit(chatID int64, messageID int, callbackID string, re
 	_ = s.Bot.AnswerCallback(callbackID, "")
 	for _, r := range responses {
 		if r.Text == "" {
+			continue
+		}
+		// A force-reply prompt can't be an in-place edit (it needs a fresh
+		// message with reply markup), so send it as a new message instead.
+		if r.ForceReply {
+			if err := s.Bot.SendForceReply(chatID, r.Text); err != nil && s.OnError != nil {
+				s.OnError(err)
+			}
 			continue
 		}
 		if err := s.Bot.EditMessage(chatID, messageID, r.Text, r.Markdown, r.Buttons); err != nil && s.OnError != nil {
