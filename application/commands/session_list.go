@@ -149,5 +149,7 @@ func sessionListView(chat *chat.Chat, page int) []sender.Response {
 		rows = append(rows, nav)
 	}
 
+	rows = append(rows, []sender.Button{{Text: "⬅ Меню", Data: "menu:"}})
+
 	return []sender.Response{{Text: sb.String(), Buttons: rows}}
 }

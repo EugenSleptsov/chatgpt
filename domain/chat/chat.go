@@ -58,11 +58,12 @@ type Chat struct {
 
 // ChatSettings holds per-chat configuration.
 type ChatSettings struct {
-	UseMarkdown      bool
-	SummarizePrompt  string
-	GroupAutoReply   bool    // bot proactively joins group conversations
-	AutoReplyPersona string  // configurable role/persona for the auto-reply decision prompt (empty = use global default)
-	CostLimitUSD     float64 // daily cost limit in USD, 0 = unlimited
+	UseMarkdown       bool
+	SummarizePrompt   string
+	GroupAutoReply    bool    // bot proactively joins group conversations
+	AutoReplyPersona  string  // configurable role/persona for the auto-reply decision prompt (empty = use global default)
+	CostLimitUSD      float64 // daily cost limit in USD, 0 = unlimited
+	SkipDeleteConfirm bool    // delete sessions immediately, without a confirmation step
 }
 
 // ConversationEntry stores one prompt/response pair in the session history.

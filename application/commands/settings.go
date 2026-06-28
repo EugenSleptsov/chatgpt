@@ -40,6 +40,8 @@ func (c *CommandSettings) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) [
 	switch {
 	case args == "md":
 		ch.Settings.UseMarkdown = !ch.Settings.UseMarkdown
+	case args == "delconfirm":
+		ch.Settings.SkipDeleteConfirm = !ch.Settings.SkipDeleteConfirm
 	case args == "ar" && isAdmin:
 		ch.Settings.GroupAutoReply = !ch.Settings.GroupAutoReply
 	case args == "model":
@@ -105,6 +107,7 @@ func settingsHubView(ch *chat.Chat, isAdmin bool) []sender.Response {
 	rows := [][]sender.Button{
 		{{Text: "Модель: " + modelLabel, Data: "settings:model"}},
 		{{Text: "Markdown " + onOff(ch.Settings.UseMarkdown), Data: "settings:md"}},
+		{{Text: "Удалять сессии без подтверждения " + onOff(ch.Settings.SkipDeleteConfirm), Data: "settings:delconfirm"}},
 		{{Text: "📝 Системный промпт", Data: "settings:system"}},
 		{{Text: "Промпт суммаризации", Data: "settings:sprompt"}},
 		{{Text: "🧠 Память", Data: "settings:memory"}},
@@ -115,6 +118,7 @@ func settingsHubView(ch *chat.Chat, isAdmin bool) []sender.Response {
 			[]sender.Button{{Text: "Роль авто-ответа", Data: "settings:role"}},
 		)
 	}
+	rows = append(rows, []sender.Button{{Text: "⬅ Меню", Data: "menu:"}})
 
 	return []sender.Response{{Text: "⚙️ Настройки чата", Buttons: rows}}
 }

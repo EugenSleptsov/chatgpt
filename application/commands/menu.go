@@ -27,6 +27,24 @@ func (c *CommandMenu) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []sen
 	case "imagine":
 		ch.PendingInput = "imagine"
 		return forceReplyPrompt("Опишите картинку для генерации:")
+	case "translate":
+		ch.PendingInput = "translate"
+		return forceReplyPrompt("Пришлите: <язык> <текст>\nНапример: en Привет, как дела")
+	case "tech_translate":
+		ch.PendingInput = "tech_translate"
+		return forceReplyPrompt("Пришлите текст для перевода на технический английский:")
+	case "enhance":
+		ch.PendingInput = "enhance"
+		return forceReplyPrompt("Пришлите текст для улучшения:")
+	case "grammar":
+		ch.PendingInput = "grammar"
+		return forceReplyPrompt("Пришлите текст для проверки грамматики:")
+	case "analyze":
+		ch.PendingInput = "analyze"
+		return forceReplyPrompt("Пришлите: <число сообщений> <промпт>")
+	case "summarize":
+		ch.PendingInput = "summarize"
+		return forceReplyPrompt("Пришлите число сообщений для суммаризации (по умолчанию 50):")
 	case "info":
 		return []sender.Response{{
 			Text: "ℹ️ Инфо",
@@ -40,16 +58,15 @@ func (c *CommandMenu) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []sen
 		}}
 	case "tools":
 		return []sender.Response{{
-			Text: "🛠 Инструменты\n\nГенерация картинки — по кнопке ниже.\n" +
-				"Текстовые (отправьте команду с текстом):\n" +
-				"/translate <язык> <текст>\n" +
-				"/techtranslate <язык> <текст>\n" +
-				"/enhance <текст>\n" +
-				"/grammar <текст>\n" +
-				"/analyze <текст>\n" +
-				"/summarize [N]",
+			Text: "🛠 Инструменты\n\nВыберите — бот попросит ввод.",
 			Buttons: [][]sender.Button{
-				{{Text: "🎨 Сгенерировать картинку", Data: "menu:imagine"}},
+				{{Text: "🎨 Картинка", Data: "menu:imagine"}},
+				{{Text: "🌐 Перевод", Data: "menu:translate"}},
+				{{Text: "💻 Тех. перевод", Data: "menu:tech_translate"}},
+				{{Text: "✨ Улучшить текст", Data: "menu:enhance"}},
+				{{Text: "📝 Грамматика", Data: "menu:grammar"}},
+				{{Text: "🔍 Анализ", Data: "menu:analyze"}},
+				{{Text: "📄 Суммаризация", Data: "menu:summarize"}},
 				{{Text: "⬅ Назад", Data: "menu:"}},
 			},
 		}}
