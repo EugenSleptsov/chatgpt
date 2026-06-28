@@ -54,6 +54,10 @@ func (c *CommandSessionRemove) Execute(ctx *pipeline.RequestContext, chat *chat.
 		return reply(fmt.Sprintf("Сессия #%d не найдена.", id))
 	}
 
+	if chat.Settings.SkipDeleteConfirm {
+		return c.performRemove(chat, id)
+	}
+
 	return []sender.Response{{
 		Text: fmt.Sprintf("Удалить сессию #%d (%s)?", id, s.Topic),
 		Buttons: [][]sender.Button{{

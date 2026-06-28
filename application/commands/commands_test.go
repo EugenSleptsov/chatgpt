@@ -838,13 +838,13 @@ func TestCommandSessionList_Pagination(t *testing.T) {
 	chat := newTestChat()
 	addSessions(chat, 7) // 8 sessions total → 2 pages of 6
 
-	// Page 1: 6 session rows + 1 new-session row + 1 nav row.
+	// Page 1: 6 session rows + 1 new-session row + 1 nav row + 1 menu row.
 	responses := cmd.Execute(makeCmdCtx(1, 100, "/list"), chat)
 	rows := responses[0].Buttons
-	if len(rows) != 8 {
-		t.Fatalf("page 1: expected 6 session rows + new + nav, got %d rows", len(rows))
+	if len(rows) != 9 {
+		t.Fatalf("page 1: expected 6 session rows + new + nav + menu, got %d rows", len(rows))
 	}
-	nav := rows[len(rows)-1]
+	nav := rows[len(rows)-2] // nav is second-to-last; menu row is last.
 	// First page: page indicator + forward arrow only (no back arrow).
 	if len(nav) != 2 {
 		t.Fatalf("page 1 nav: expected [indicator, ▶], got %v", nav)
@@ -853,13 +853,13 @@ func TestCommandSessionList_Pagination(t *testing.T) {
 		t.Errorf("forward button should go to page 1, got %q", nav[len(nav)-1].Data)
 	}
 
-	// Page 2 (via "list:1"): 2 remaining sessions + new-session row + nav.
+	// Page 2 (via "list:1"): 2 remaining sessions + new-session row + nav + menu.
 	responses = cmd.Execute(makeCmdCtx(1, 100, "/list 1"), chat)
 	rows = responses[0].Buttons
-	if len(rows) != 4 {
-		t.Fatalf("page 2: expected 2 session rows + new + nav, got %d rows", len(rows))
+	if len(rows) != 5 {
+		t.Fatalf("page 2: expected 2 session rows + new + nav + menu, got %d rows", len(rows))
 	}
-	nav = rows[len(rows)-1]
+	nav = rows[len(rows)-2]
 	if nav[0].Data != "list:0" {
 		t.Errorf("back button should go to page 0, got %q", nav[0].Data)
 	}
