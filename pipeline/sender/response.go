@@ -17,4 +17,9 @@ type Response struct {
 	Audio     []byte     // audio data to upload
 	Markdown  bool       // format text as markdown/HTML
 	Buttons   [][]Button // optional inline keyboard (rows of buttons); attached to text replies
+
+	// ForceReply sends Text as a new message with a Telegram force-reply prompt,
+	// so the user's next message replies to it. Used by the button → free-text
+	// input flow. Takes precedence over Buttons/Markdown.
+	ForceReply bool
 }

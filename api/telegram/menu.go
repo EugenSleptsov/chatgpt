@@ -6,6 +6,8 @@ import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 type Command string
 
 const (
+	CommandMenu      Command = "menu"
+	CommandSettings  Command = "settings"
 	CommandHelp      Command = "help"
 	CommandHistory   Command = "history"
 	CommandRollback  Command = "rollback"
@@ -15,6 +17,8 @@ const (
 
 // CommandDescriptions maps each command to a human-readable description.
 var CommandDescriptions = map[Command]string{
+	CommandMenu:      "Главное меню (кнопки)",
+	CommandSettings:  "Настройки чата (кнопки)",
 	CommandHelp:      "Справка по командам",
 	CommandHistory:   "Показать историю переписки",
 	CommandRollback:  "Отменить последнее сообщение",
@@ -24,6 +28,8 @@ var CommandDescriptions = map[Command]string{
 
 // DefaultCommandList is the fallback menu when config.CommandMenu is empty.
 var DefaultCommandList = []Command{
+	CommandMenu,
+	CommandSettings,
 	CommandHelp,
 	CommandHistory,
 	CommandRollback,

@@ -145,7 +145,7 @@ func (a *App) Run() {
 	for i := 0; i < numWorkers; i++ {
 		workerChans[i] = make(chan telegram.Update, updateBufferSize)
 		wg.Add(1)
-		w := NewWorker(a.auth, a.bot, a.notifier, a.chatService, a.decoder, a.sender)
+		w := NewWorker(a.auth, a.bot, a.bot.GetUsername(), a.notifier, a.chatService, a.decoder, a.sender)
 		go func(ch <-chan telegram.Update) {
 			defer wg.Done()
 			w.Start(ch)

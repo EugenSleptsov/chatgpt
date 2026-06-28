@@ -38,6 +38,7 @@ func (b *fakeBot) ReplyMarkdown(chatID int64, replyTo int, text string, _ bool) 
 }
 func (b *fakeBot) Message(message string, chatID int64, _ bool)    {}
 func (b *fakeBot) SendImage(_ int64, _ string, _ string) error     { return nil }
+func (b *fakeBot) SendForceReply(_ int64, _ string) error          { return nil }
 func (b *fakeBot) SendImageData(_ int64, _ []byte, _ string) error { return nil }
 func (b *fakeBot) AudioUpload(_ int64, _ []byte) error             { return nil }
 func (b *fakeBot) ReplyWithButtons(chatID int64, replyTo int, text string, _ bool, _ [][]sender.Button) error {
@@ -179,6 +180,118 @@ func assertSingleReply(t *testing.T, responses []sender.Response) string {
 	return responses[0].Text
 }
 
+// hasButton reports whether any button across all rows has the given callback data.
+func hasButton(rows [][]sender.Button, data string) bool {
+	for _, row := range rows {
+		for _, b := range row {
+			if b.Data == data {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// buttonText returns the text of the first button with the given callback data.
+func buttonText(rows [][]sender.Button, data string) string {
+	for _, row := range rows {
+		for _, b := range row {
+			if b.Data == data {
+				return b.Text
+			}
+		}
+	}
+	return ""
+}
+
+// ======================== Settings / Menu hubs ========================
+
+func TestCommandSettings_HubTogglesAndModel(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("settings")
+	chat := newTestChat() // UseMarkdown = true, model = default
+
+	// Admin hub shows toggles + admin-only rows.
+	rows := cmd.Execute(makeCmdCtx(1, 100, "/settings"), chat)[0].Buttons
+	if !strings.Contains(buttonText(rows, "settings:md"), "✅") {
+		t.Errorf("markdown button should show ✅ when on: %q", buttonText(rows, "settings:md"))
+	}
+	if !hasButton(rows, "settings:ar") || !hasButton(rows, "settings:role") {
+		t.Error("admin hub should include auto-reply and role rows")
+	}
+
+	// Toggle markdown off → re-rendered hub reflects it.
+	rows = cmd.Execute(makeCmdCtx(1, 100, "/settings md"), chat)[0].Buttons
+	if chat.Settings.UseMarkdown {
+		t.Error("markdown should be toggled off")
+	}
+	if !strings.Contains(buttonText(rows, "settings:md"), "❌") {
+		t.Errorf("markdown button should show ❌ after toggle: %q", buttonText(rows, "settings:md"))
+	}
+
+	// Model picker has a back row, and selecting a tier sets it.
+	rows = cmd.Execute(makeCmdCtx(1, 100, "/settings model"), chat)[0].Buttons
+	if !hasButton(rows, "settings:") {
+		t.Error("model picker should have a back-to-hub button")
+	}
+	cmd.Execute(makeCmdCtx(1, 100, "/settings model:premium"), chat)
+	if chat.ActiveSession().Model != "premium" {
+		t.Errorf("model = %q, want premium", chat.ActiveSession().Model)
+	}
+}
+
+func TestCommandSettings_NonAdminHidesAdminRows(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("settings")
+	chat := newTestChat()
+
+	rows := cmd.Execute(makeCmdCtx(1, 200, "/settings"), chat)[0].Buttons // 200 = non-admin
+	if hasButton(rows, "settings:ar") || hasButton(rows, "settings:role") {
+		t.Error("non-admin hub must not expose admin-only rows")
+	}
+	// Non-admin toggling auto-reply is a no-op (falls through to hub render).
+	before := chat.Settings.GroupAutoReply
+	cmd.Execute(makeCmdCtx(1, 200, "/settings ar"), chat)
+	if chat.Settings.GroupAutoReply != before {
+		t.Error("non-admin must not toggle auto-reply")
+	}
+}
+
+func TestCommandSettings_EditStartsForceReply(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("settings")
+	chat := newTestChat()
+
+	// Tapping "edit" for the system prompt arms pending input + force-reply.
+	resp := cmd.Execute(makeCmdCtx(1, 100, "/settings system:edit"), chat)
+	if len(resp) != 1 || !resp[0].ForceReply {
+		t.Fatalf("expected a force-reply prompt, got %+v", resp)
+	}
+	if chat.PendingInput != "system" {
+		t.Errorf("PendingInput = %q, want system", chat.PendingInput)
+	}
+}
+
+func TestCommandMenu(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("menu")
+	chat := newTestChat()
+
+	rows := cmd.Execute(makeCmdCtx(1, 100, "/menu"), chat)[0].Buttons
+	for _, want := range []string{"list:", "settings:", "menu:tools", "menu:info"} {
+		if !hasButton(rows, want) {
+			t.Errorf("main menu missing button %q", want)
+		}
+	}
+
+	rows = cmd.Execute(makeCmdCtx(1, 100, "/menu info"), chat)[0].Buttons
+	for _, want := range []string{"usage:", "context:", "history:", "menu:"} {
+		if !hasButton(rows, want) {
+			t.Errorf("info menu missing button %q", want)
+		}
+	}
+}
+
 // ======================== Registry ========================
 
 func TestRegistry_AddAndGet(t *testing.T) {
@@ -245,26 +358,31 @@ func TestCommandStart(t *testing.T) {
 
 // ======================== /help ========================
 
+func TestCommandHelp_DefaultShowsLauncher(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("help")
+	rows := cmd.Execute(makeCmdCtx(1, 100, "/help"), newTestChat())[0].Buttons
+	if !hasButton(rows, "settings:") || !hasButton(rows, "list:") {
+		t.Error("/help should show the button launcher by default")
+	}
+}
+
 func TestCommandHelp_ListsCommands(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("help")
-	ctx := makeCtx(1, 100, "/help") // admin user
-	chat := newTestChat()
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
+	resp := assertSingleReply(t, cmd.Execute(makeCmdCtx(1, 100, "/help list"), newTestChat()))
 	if !strings.Contains(resp, "/start") {
-		t.Error("help should contain /start")
+		t.Error("help list should contain /start")
 	}
 	if !strings.Contains(resp, "/clear") {
-		t.Error("help should contain /clear")
+		t.Error("help list should contain /clear")
 	}
 }
 
 func TestCommandHelp_AdminSeesAdminCommands(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("help")
-	ctx := makeCtx(1, 100, "/help") // 100 = admin
-	chat := newTestChat()
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
+	resp := assertSingleReply(t, cmd.Execute(makeCmdCtx(1, 100, "/help list"), newTestChat())) // 100 = admin
 	if !strings.Contains(resp, "администратора") {
 		t.Error("admin should see admin commands section")
 	}
@@ -273,9 +391,7 @@ func TestCommandHelp_AdminSeesAdminCommands(t *testing.T) {
 func TestCommandHelp_NonAdminHidesAdminCommands(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("help")
-	ctx := makeCtx(1, 200, "/help") // 200 = not admin
-	chat := newTestChat()
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
+	resp := assertSingleReply(t, cmd.Execute(makeCmdCtx(1, 200, "/help list"), newTestChat())) // 200 = not admin
 	if strings.Contains(resp, "администратора") {
 		t.Error("non-admin should not see admin section")
 	}
@@ -290,8 +406,17 @@ func TestCommandClear(t *testing.T) {
 	chat.ActiveSession().History = []*domain.ConversationEntry{
 		{Prompt: domain.Message{Role: "user", Content: "hi"}},
 	}
-	ctx := makeCtx(1, 100, "/clear")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
+	// Bare /clear shows a confirmation, does NOT clear yet.
+	confirm := cmd.Execute(makeCmdCtx(1, 100, "/clear"), chat)
+	if !hasButton(confirm[0].Buttons, "clear:yes") {
+		t.Error("/clear should show a confirm button")
+	}
+	if len(chat.ActiveSession().History) != 1 {
+		t.Error("history must not be cleared before confirmation")
+	}
+
+	// clear:yes performs the clear.
+	resp := assertSingleReply(t, cmd.Execute(makeCmdCtx(1, 100, "/clear yes"), chat))
 	if !strings.Contains(resp, "очищена") {
 		t.Errorf("unexpected reply: %q", resp)
 	}
@@ -713,11 +838,11 @@ func TestCommandSessionList_Pagination(t *testing.T) {
 	chat := newTestChat()
 	addSessions(chat, 7) // 8 sessions total → 2 pages of 6
 
-	// Page 1: 6 session rows + 1 nav row.
+	// Page 1: 6 session rows + 1 new-session row + 1 nav row.
 	responses := cmd.Execute(makeCmdCtx(1, 100, "/list"), chat)
 	rows := responses[0].Buttons
-	if len(rows) != 7 {
-		t.Fatalf("page 1: expected 6 session rows + nav, got %d rows", len(rows))
+	if len(rows) != 8 {
+		t.Fatalf("page 1: expected 6 session rows + new + nav, got %d rows", len(rows))
 	}
 	nav := rows[len(rows)-1]
 	// First page: page indicator + forward arrow only (no back arrow).
@@ -728,11 +853,11 @@ func TestCommandSessionList_Pagination(t *testing.T) {
 		t.Errorf("forward button should go to page 1, got %q", nav[len(nav)-1].Data)
 	}
 
-	// Page 2 (via "list:1"): 2 remaining sessions + nav.
+	// Page 2 (via "list:1"): 2 remaining sessions + new-session row + nav.
 	responses = cmd.Execute(makeCmdCtx(1, 100, "/list 1"), chat)
 	rows = responses[0].Buttons
-	if len(rows) != 3 {
-		t.Fatalf("page 2: expected 2 session rows + nav, got %d rows", len(rows))
+	if len(rows) != 4 {
+		t.Fatalf("page 2: expected 2 session rows + new + nav, got %d rows", len(rows))
 	}
 	nav = rows[len(rows)-1]
 	if nav[0].Data != "list:0" {
@@ -765,6 +890,40 @@ func TestCommandSessionList_SelectButton(t *testing.T) {
 	}
 	if !marked {
 		t.Error("session #8 button should be marked active")
+	}
+}
+
+func TestCommandSessionList_NewButton(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("list")
+	chat := newTestChat()
+	addSessions(chat, 2) // 3 sessions total
+	before := len(chat.Sessions)
+
+	// Simulate tapping the "new session" button: callback data "list:new".
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/list new"), chat)
+
+	if len(chat.Sessions) != before+1 {
+		t.Fatalf("sessions count = %d, want %d", len(chat.Sessions), before+1)
+	}
+	newID := chat.Sessions[len(chat.Sessions)-1].ID
+	if chat.ActiveSessionID != newID {
+		t.Errorf("active session = %d, want new #%d", chat.ActiveSessionID, newID)
+	}
+	if !strings.Contains(responses[0].Text, fmt.Sprintf("Активная: #%d", newID)) {
+		t.Errorf("view should show new session active: %q", responses[0].Text)
+	}
+	// The new-session button itself must be present.
+	var hasNew bool
+	for _, row := range responses[0].Buttons {
+		for _, b := range row {
+			if b.Data == "list:new" {
+				hasNew = true
+			}
+		}
+	}
+	if !hasNew {
+		t.Error("view should include a 'list:new' button")
 	}
 }
 
@@ -843,10 +1002,20 @@ func TestCommandSessionRemove(t *testing.T) {
 	chat.AddSession("second")
 
 	cmd, _ := deps.Registry.Get("remove")
-	ctx := makeCmdCtx(1, 100, "/remove 2")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "удалена") {
-		t.Errorf("unexpected reply: %q", resp)
+
+	// /remove 2 shows a confirm; nothing deleted yet.
+	confirm := cmd.Execute(makeCmdCtx(1, 100, "/remove 2"), chat)
+	if !hasButton(confirm[0].Buttons, "remove:yes:2") {
+		t.Error("/remove <id> should show a confirm button")
+	}
+	if len(chat.Sessions) != 2 {
+		t.Error("session must not be removed before confirmation")
+	}
+
+	// remove:yes:2 performs the delete and re-renders the list.
+	resp := cmd.Execute(makeCmdCtx(1, 100, "/remove yes:2"), chat)
+	if !strings.Contains(resp[0].Text, "Сессии") {
+		t.Errorf("expected refreshed list, got: %q", resp[0].Text)
 	}
 	if len(chat.Sessions) != 1 {
 		t.Errorf("sessions = %d, want 1", len(chat.Sessions))
@@ -857,8 +1026,8 @@ func TestCommandSessionRemove_LastSession(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("remove")
 	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/remove 1")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
+	// Confirming deletion of the only session must be refused.
+	resp := assertSingleReply(t, cmd.Execute(makeCmdCtx(1, 100, "/remove yes:1"), chat))
 	if !strings.Contains(resp, "единственную") {
 		t.Errorf("unexpected reply: %q", resp)
 	}

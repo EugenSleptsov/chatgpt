@@ -45,6 +45,10 @@ func (b *fakeBot) ReplyMarkdown(chatID int64, replyTo int, text string, _ bool) 
 func (b *fakeBot) Message(message string, chatID int64, _ bool) {
 	b.sent = append(b.sent, fakeSent{chatID: chatID, text: message})
 }
+func (b *fakeBot) SendForceReply(chatID int64, text string) error {
+	b.sent = append(b.sent, fakeSent{chatID: chatID, text: text})
+	return nil
+}
 func (b *fakeBot) SendImageData(chatID int64, data []byte, caption string) error {
 	b.sent = append(b.sent, fakeSent{chatID: chatID, imageData: data, caption: caption})
 	return nil
@@ -334,8 +338,38 @@ func buildTestWorker(bot *fakeBot) (*Worker, *service.ChatService) {
 	dec.Register(&fakeExecutor{responses: []sender.Response{{Text: "ai-reply", Markdown: true}}})
 
 	sender := &sender.ResponseSender{Bot: bot}
-	w := NewWorker(auth, bot, notifier, cs, dec, sender)
+	w := NewWorker(auth, bot, "test_bot", notifier, cs, dec, sender)
 	return w, cs
+}
+
+func TestWorker_ConsumePendingInput_Routes(t *testing.T) {
+	w := &Worker{BotUsername: "mybot"}
+	c := &chat.Chat{PendingInput: "autorole"}
+	ctx := &pipeline.RequestContext{Text: "new persona", ReplyToUsername: "mybot"}
+
+	w.consumePendingInput(ctx, c)
+
+	if !ctx.IsCommand || ctx.CommandName != "autorole" || ctx.CommandArgs != "new persona" {
+		t.Fatalf("pending input not routed to command: %+v", ctx)
+	}
+	if c.PendingInput != "" {
+		t.Error("pending input should be cleared after consumption")
+	}
+}
+
+func TestWorker_ConsumePendingInput_NotReplyToBot(t *testing.T) {
+	w := &Worker{BotUsername: "mybot"}
+	c := &chat.Chat{PendingInput: "autorole"}
+	ctx := &pipeline.RequestContext{Text: "hi", ReplyToUsername: "someone_else"}
+
+	w.consumePendingInput(ctx, c)
+
+	if ctx.IsCommand {
+		t.Error("must not route a message that is not a reply to the bot")
+	}
+	if c.PendingInput != "" {
+		t.Error("pending input should be cleared even when abandoned")
+	}
 }
 
 func TestWorker_ProcessUpdate_Command(t *testing.T) {

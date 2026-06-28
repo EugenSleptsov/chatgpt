@@ -208,6 +208,15 @@ func isNotModified(err error) bool {
 
 // --- File operations ---
 
+// SendForceReply posts a message with a force-reply prompt so the user's next
+// message is a reply to it. Selective keeps the prompt targeted at the user.
+func (botInstance *Bot) SendForceReply(chatID int64, text string) error {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true, Selective: true}
+	_, err := botInstance.transport.Send(msg)
+	return err
+}
+
 func (botInstance *Bot) AudioUpload(chatID int64, bytes []byte) error {
 	audioMsg := tgbotapi.NewAudio(chatID, tgbotapi.FileBytes{Name: "audio.ogg", Bytes: bytes})
 	_, err := botInstance.transport.Send(audioMsg)
