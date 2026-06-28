@@ -62,6 +62,7 @@ func (s *ResponseSender) Send(chatID int64, messageID int, responses []Response)
 // responses are ignored (button-driven commands are expected to be text-only).
 func (s *ResponseSender) Edit(chatID int64, messageID int, callbackID string, responses []Response) {
 	_ = s.Bot.AnswerCallback(callbackID, "")
+	edited := false
 	for _, r := range responses {
 		if r.Text == "" {
 			continue
@@ -74,8 +75,16 @@ func (s *ResponseSender) Edit(chatID int64, messageID int, callbackID string, re
 			}
 			continue
 		}
-		if err := s.Bot.EditMessage(chatID, messageID, r.Text, r.Markdown, r.Buttons); err != nil && s.OnError != nil {
-			s.OnError(err)
+		// Only the first text response edits the tapped message in place; any
+		// further responses (e.g. paginated history chunks) are sent as new
+		// messages, otherwise they would overwrite each other.
+		if !edited {
+			if err := s.Bot.EditMessage(chatID, messageID, r.Text, r.Markdown, r.Buttons); err != nil && s.OnError != nil {
+				s.OnError(err)
+			}
+			edited = true
+			continue
 		}
+		s.Send(chatID, 0, []Response{r})
 	}
 }

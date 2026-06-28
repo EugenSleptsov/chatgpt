@@ -69,5 +69,5 @@ func (c *CommandContext) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []
 		sb.WriteString("\nℹ️ Контекст заполнен наполовину.")
 	}
 
-	return reply(sb.String())
+	return withInfoBack(ctx, reply(sb.String()))
 }

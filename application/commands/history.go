@@ -42,6 +42,10 @@ func (c *CommandHistory) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) 
 		responses = append(responses, sender.Response{Text: message})
 	}
 
+	if len(responses) == 0 {
+		responses = reply("История пуста.")
+	}
+
 	// navigation hint
 	if totalPages > 1 {
 		// Recalculate effective page for hint (FormatPage clamps it)
@@ -56,5 +60,5 @@ func (c *CommandHistory) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) 
 		responses = append(responses, sender.Response{Text: hint})
 	}
 
-	return responses
+	return withInfoBack(ctx, responses)
 }

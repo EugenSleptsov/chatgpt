@@ -25,7 +25,7 @@ func (c *CommandUsage) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []se
 
 	if ch.TotalRequests == 0 || !sameDay(ch.CostResetTime, time.Now()) {
 		sb.WriteString("Нет запросов за сегодня.")
-		return reply(sb.String())
+		return withInfoBack(ctx, reply(sb.String()))
 	}
 
 	sb.WriteString(fmt.Sprintf("Запросов: %d\n", ch.TotalRequests))
@@ -44,7 +44,7 @@ func (c *CommandUsage) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []se
 	sb.WriteString(fmt.Sprintf("\n\nСессия: %s (модель: %s, сообщений: %d)",
 		session.Topic, session.Model, len(session.History)))
 
-	return reply(sb.String())
+	return withInfoBack(ctx, reply(sb.String()))
 }
 
 // progressBar renders a text progress bar (10 segments).
