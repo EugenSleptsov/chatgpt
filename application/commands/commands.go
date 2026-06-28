@@ -21,6 +21,19 @@ func reply(text string) []sender.Response {
 	return []sender.Response{{Text: text}}
 }
 
+// withInfoBack appends a "back to info menu" button to the last response, but
+// only when the command was triggered by an inline-button tap (IsCallback).
+// Typed invocations stay plain. Used by the read-only info panels (usage,
+// context, history) reached from the menu's Info section.
+func withInfoBack(ctx *pipeline.RequestContext, responses []sender.Response) []sender.Response {
+	if !ctx.IsCallback || len(responses) == 0 {
+		return responses
+	}
+	last := &responses[len(responses)-1]
+	last.Buttons = append(last.Buttons, []sender.Button{{Text: "⬅ Назад", Data: "menu:info"}})
+	return responses
+}
+
 // boolView renders a boolean setting as a status line plus an On/Off inline
 // keyboard. The active state is marked with ✅. Buttons carry callback data
 // "<cmd>:on" / "<cmd>:off" so a tap is routed back through the command registry
