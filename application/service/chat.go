@@ -71,6 +71,16 @@ func (cs *ChatService) GetOrCreateChat(ctx *pipeline.RequestContext) *chat.Chat 
 	return c
 }
 
+// GetChat returns a chat by ID without creating it.
+func (cs *ChatService) GetChat(chatID int64) (*chat.Chat, bool) {
+	return cs.storage.Get(chatID)
+}
+
+// ChatIDs returns the IDs of every chat known to storage.
+func (cs *ChatService) ChatIDs() []int64 {
+	return cs.storage.IDs()
+}
+
 func (cs *ChatService) LogMessage(ctx *pipeline.RequestContext, c *chat.Chat) {
 	if ctx.SenderName == "" {
 		return

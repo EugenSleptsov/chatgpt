@@ -20,6 +20,9 @@ type Storage interface {
 	Set(chatID int64, chat *Chat) error
 	MarkDirty(chatID int64)
 	Save() bool
+	// IDs returns the ID of every chat known to the storage, including chats
+	// persisted on disk but not loaded into memory yet.
+	IDs() []int64
 }
 
 // Session represents an independent conversation thread inside a Telegram chat.
@@ -68,6 +71,7 @@ type ChatSettings struct {
 	AutoReplyPersona  string  // configurable role/persona for the auto-reply decision prompt (empty = use global default)
 	CostLimitUSD      float64 // daily cost limit in USD, 0 = unlimited
 	SkipDeleteConfirm bool    // delete sessions immediately, without a confirmation step
+	Verbose           bool    // announce every tool invocation in the chat (admin toggle)
 }
 
 // ConversationEntry stores one prompt/response pair in the session history.

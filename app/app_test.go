@@ -15,6 +15,7 @@ import (
 	"GPTBot/pipeline/sender"
 	"strings"
 	"testing"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -428,13 +429,57 @@ func TestWorker_ProcessUpdate_SavesAfter(t *testing.T) {
 	bot := &fakeBot{}
 	w, _ := buildTestWorker(bot)
 
-	ch := make(chan telegram.Update, 1)
-	ch <- makeUpdate(42, 100, "hi")
+	upd := makeUpdate(42, 100, "hi")
+	ch := make(chan Job, 1)
+	ch <- Job{Update: &upd}
 	close(ch)
 
-	// Save is called by Start after every update; with MemoryStorage it is
+	// Save is called by Start after every job; with MemoryStorage it is
 	// a no-op, so we just verify that Start completes without panic.
 	w.Start(ch)
+}
+
+func TestWorker_ProcessReminders(t *testing.T) {
+	bot := &fakeBot{}
+	w, cs := buildTestWorker(bot)
+	w.ProcessUpdate(makeUpdate(42, 100, "hi")) // creates the chat
+
+	c, ok := cs.GetChat(42)
+	if !ok {
+		t.Fatal("chat 42 must exist")
+	}
+	past := time.Now().Add(-time.Minute)
+	future := time.Now().Add(time.Hour)
+	topic, dueEntry := c.AddAdvisorNote("Налоги", "написать адвокату")
+	dueEntry.RemindAt = &past
+	_, laterEntry := c.AddAdvisorNote("Налоги", "еще рано")
+	laterEntry.RemindAt = &future
+
+	bot.sent = nil
+	w.ProcessReminders(42)
+
+	if len(bot.sent) != 1 {
+		t.Fatalf("expected 1 reminder message, got %d: %+v", len(bot.sent), bot.sent)
+	}
+	if !strings.Contains(bot.sent[0].text, "Напоминание") || !strings.Contains(bot.sent[0].text, "написать адвокату") {
+		t.Errorf("unexpected reminder text: %q", bot.sent[0].text)
+	}
+	if dueEntry.RemindAt != nil {
+		t.Error("fired reminder must be cleared")
+	}
+	if laterEntry.RemindAt == nil {
+		t.Error("future reminder must stay")
+	}
+	if topic.FindEntry(dueEntry.ID) == nil {
+		t.Error("entry itself must survive firing")
+	}
+
+	// Second pass: nothing due anymore.
+	bot.sent = nil
+	w.ProcessReminders(42)
+	if len(bot.sent) != 0 {
+		t.Fatalf("expected no messages on second pass, got %+v", bot.sent)
+	}
 }
 
 // ===================== buildDecoder / buildResponseSender =====================
@@ -475,10 +520,13 @@ func TestWorker_StartProcessesChannel(t *testing.T) {
 	bot := &fakeBot{}
 	w, _ := buildTestWorker(bot)
 
-	ch := make(chan telegram.Update, 3)
-	ch <- makeUpdate(1, 100, "msg1")
-	ch <- makeUpdate(1, 100, "msg2")
-	ch <- makeCommandUpdate(1, 100, "ping")
+	u1 := makeUpdate(1, 100, "msg1")
+	u2 := makeUpdate(1, 100, "msg2")
+	u3 := makeCommandUpdate(1, 100, "ping")
+	ch := make(chan Job, 3)
+	ch <- Job{Update: &u1}
+	ch <- Job{Update: &u2}
+	ch <- Job{Update: &u3}
 	close(ch)
 
 	w.Start(ch)

@@ -257,6 +257,36 @@ func TestCommandSettings_NonAdminHidesAdminRows(t *testing.T) {
 	}
 }
 
+func TestCommandSettings_VerboseToggle(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("settings")
+	chat := newTestChat()
+
+	// Admin hub shows the toggle; taps flip the flag both ways.
+	rows := cmd.Execute(makeCmdCtx(1, 100, "/settings"), chat)[0].Buttons
+	if !hasButton(rows, "settings:verbose") {
+		t.Error("admin hub must show settings:verbose")
+	}
+	cmd.Execute(makeCmdCtx(1, 100, "/settings verbose"), chat)
+	if !chat.Settings.Verbose {
+		t.Error("verbose should be on after first toggle")
+	}
+	cmd.Execute(makeCmdCtx(1, 100, "/settings verbose"), chat)
+	if chat.Settings.Verbose {
+		t.Error("verbose should be off after second toggle")
+	}
+
+	// Non-admin: row hidden, toggle is a no-op.
+	rows = cmd.Execute(makeCmdCtx(1, 200, "/settings"), chat)[0].Buttons
+	if hasButton(rows, "settings:verbose") {
+		t.Error("non-admin hub must hide settings:verbose")
+	}
+	cmd.Execute(makeCmdCtx(1, 200, "/settings verbose"), chat)
+	if chat.Settings.Verbose {
+		t.Error("non-admin must not toggle verbose")
+	}
+}
+
 func TestCommandSettings_EditStartsForceReply(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("settings")
@@ -945,6 +975,74 @@ func TestCommandAdvisor_Merge(t *testing.T) {
 	}
 	if len(dst.Entries) != 3 {
 		t.Errorf("expected 3 entries in destination, got %d", len(dst.Entries))
+	}
+}
+
+func TestCommandAdvisor_ReminderDone(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("advisor")
+	chat := newTestChat()
+	topic := addNotes(chat, "Налоги", "написать адвокату", "декларация")
+	eid := topic.Entries[0].ID
+
+	responses := cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor done:%d:%d", topic.ID, eid)), chat)
+	if !strings.Contains(responses[0].Text, "Готово") {
+		t.Errorf("unexpected done text: %q", responses[0].Text)
+	}
+	if topic.FindEntry(eid) != nil {
+		t.Error("done must delete the entry")
+	}
+
+	// Tapping done again on the same (stale) message is harmless.
+	responses = cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor done:%d:%d", topic.ID, eid)), chat)
+	if !strings.Contains(responses[0].Text, "уже удалена") {
+		t.Errorf("stale done should report already deleted, got: %q", responses[0].Text)
+	}
+}
+
+func TestCommandAdvisor_ReminderSnooze(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("advisor")
+	chat := newTestChat()
+	topic := addNotes(chat, "Налоги", "написать адвокату")
+	e := topic.Entries[0]
+
+	// +1 hour.
+	before := time.Now()
+	responses := cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor snooze:%d:%d:1h", topic.ID, e.ID)), chat)
+	if e.RemindAt == nil {
+		t.Fatal("snooze must set RemindAt")
+	}
+	if e.RemindAt.Before(before.Add(59*time.Minute)) || e.RemindAt.After(before.Add(61*time.Minute)) {
+		t.Errorf("1h snooze landed at %v", e.RemindAt)
+	}
+	if !strings.Contains(responses[0].Text, "Перенесено") {
+		t.Errorf("unexpected snooze text: %q", responses[0].Text)
+	}
+	// Snoozed message keeps its controls for another round.
+	if !hasButton(responses[0].Buttons, fmt.Sprintf("advisor:snooze:%d:%d:1d", topic.ID, e.ID)) {
+		t.Error("snoozed message must keep snooze buttons")
+	}
+
+	// Tomorrow morning.
+	cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor snooze:%d:%d:1d", topic.ID, e.ID)), chat)
+	tomorrow := time.Now().AddDate(0, 0, 1)
+	if e.RemindAt.Day() != tomorrow.Day() || e.RemindAt.Hour() != 9 {
+		t.Errorf("1d snooze must land tomorrow at 9:00, got %v", e.RemindAt)
+	}
+}
+
+func TestCommandAdvisor_TopicViewShowsReminder(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("advisor")
+	chat := newTestChat()
+	topic := addNotes(chat, "Налоги", "написать адвокату")
+	at := time.Date(2026, 7, 10, 16, 0, 0, 0, time.Local)
+	topic.Entries[0].RemindAt = &at
+
+	responses := cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor topic:%d", topic.ID)), chat)
+	if !strings.Contains(responses[0].Text, "⏰ 10.07 16:00") {
+		t.Errorf("topic view must show reminder time, got: %q", responses[0].Text)
 	}
 }
 

@@ -171,6 +171,25 @@ func (r *Response) ToolCalls() []ToolCall {
 	return calls
 }
 
+// BuiltinCalls returns the names of server-side tool invocations present in
+// the output (e.g. "web_search", "image_generation"). Unlike ToolCalls these
+// are already executed by the provider; the names are for reporting only.
+func (r *Response) BuiltinCalls() []string {
+	if r == nil {
+		return nil
+	}
+	var names []string
+	for _, item := range r.Output {
+		switch item.Type {
+		case "web_search_call":
+			names = append(names, "web_search")
+		case "image_generation_call":
+			names = append(names, "image_generation")
+		}
+	}
+	return names
+}
+
 // ImageResults returns decoded PNG data for every image_generation_call in the output.
 func (r *Response) ImageResults() [][]byte {
 	if r == nil {

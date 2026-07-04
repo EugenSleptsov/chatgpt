@@ -18,6 +18,7 @@ type VoiceExecutor struct {
 	AIClient     ai.Client
 	Notifier     *service.Notifier
 	TextExecutor *TextExecutor
+	Progress     service.ProgressReporter // transient "Идет…" statuses (may be nil)
 }
 
 func (e *VoiceExecutor) Match(ctx *pipeline.RequestContext) bool {
@@ -25,7 +26,9 @@ func (e *VoiceExecutor) Match(ctx *pipeline.RequestContext) bool {
 }
 
 func (e *VoiceExecutor) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) []sender.Response {
+	done := service.StartProgress(e.Progress, ctx.ChatID, "🎙 Идет расшифровка голосового…")
 	transcription, err := e.transcribe(ctx.VoiceFileID)
+	done()
 	if err != nil {
 		e.Notifier.LogError(err)
 		return []sender.Response{{Text: "Не удалось обработать голосовое сообщение."}}

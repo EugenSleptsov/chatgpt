@@ -106,6 +106,31 @@ func TestToolCalls_SkipsNonFunctionItems(t *testing.T) {
 	}
 }
 
+// --- BuiltinCalls ---
+
+func TestBuiltinCalls_ReturnsNamesInOrder(t *testing.T) {
+	r := &Response{
+		Output: []ResponseOutputItem{
+			{Type: "web_search_call"},
+			{Type: "message", Content: []ResponseOutputContent{{Text: "hi"}}},
+			{Type: "image_generation_call", Result: "aGk="},
+			{Type: "function_call", CallID: "c1", Name: "fn"},
+		},
+	}
+	got := r.BuiltinCalls()
+	want := []string{"web_search", "image_generation"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("BuiltinCalls() = %v, want %v", got, want)
+	}
+}
+
+func TestBuiltinCalls_NilResponse(t *testing.T) {
+	var r *Response
+	if got := r.BuiltinCalls(); got != nil {
+		t.Fatalf("BuiltinCalls() on nil = %v, want nil", got)
+	}
+}
+
 // --- ImageResults ---
 
 func TestImageResults_DecodesBase64(t *testing.T) {

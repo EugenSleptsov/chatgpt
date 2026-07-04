@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // CommandAdvisor is the button hub for advisor notes — auto-captured notes the
@@ -26,6 +27,8 @@ import (
 //	"merge"                 → pick source topic
 //	"merge:<src>"           → pick destination topic
 //	"merge:<src>:<dst>"     → merge source into destination, back to list
+//	"done:<id>:<eid>"       → reminder "Готово": delete entry (fired reminder message)
+//	"snooze:<id>:<eid>:<c>" → reminder snooze: c = "1h" (+1 hour) or "1d" (tomorrow morning)
 type CommandAdvisor struct{}
 
 func (c *CommandAdvisor) Name() string { return "advisor" }
@@ -64,6 +67,10 @@ func (c *CommandAdvisor) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []
 		return advisorMergePickView(ch, 0)
 	case strings.HasPrefix(args, "merge:"):
 		return advisorMerge(ch, args[len("merge:"):])
+	case strings.HasPrefix(args, "done:"):
+		return advisorReminderDone(ch, args[len("done:"):])
+	case strings.HasPrefix(args, "snooze:"):
+		return advisorReminderSnooze(ch, args[len("snooze:"):])
 	case args != "":
 		if page, err := strconv.Atoi(args); err == nil {
 			return advisorTopicsView(ch, page)
@@ -140,7 +147,11 @@ func advisorTopicView(ch *chat.Chat, topicID int) []sender.Response {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("📒 %s (%d):\n\n", t.Name, len(t.Entries)))
 	for i, e := range t.Entries {
-		sb.WriteString(fmt.Sprintf("%d. %s — %s\n", i+1, e.Created.Format("02.01"), e.Text))
+		sb.WriteString(fmt.Sprintf("%d. %s — %s", i+1, e.Created.Format("02.01"), e.Text))
+		if e.RemindAt != nil {
+			sb.WriteString(" ⏰ " + e.RemindAt.Format("02.01 15:04"))
+		}
+		sb.WriteString("\n")
 	}
 
 	return []sender.Response{{
@@ -267,6 +278,101 @@ func advisorMerge(ch *chat.Chat, arg string) []sender.Response {
 		Text:    fmt.Sprintf("Куда перенести записи из «%s»?", srcTopic.Name),
 		Buttons: rows,
 	}}
+}
+
+// snoozeMorningHour is when a "tomorrow" snooze fires.
+const snoozeMorningHour = 9
+
+// AdvisorReminderResponse renders the message sent when a note's reminder
+// fires: the note text plus done/snooze controls. Used by the reminder
+// scheduler (app package), hence exported.
+func AdvisorReminderResponse(t *chat.AdvisorTopic, e *chat.AdvisorEntry) sender.Response {
+	return sender.Response{
+		Text:    fmt.Sprintf("⏰ Напоминание (%s):\n%s", t.Name, e.Text),
+		Buttons: reminderButtons(t.ID, e.ID),
+	}
+}
+
+// reminderButtons is the done/snooze row attached to reminder messages.
+func reminderButtons(tid, eid int) [][]sender.Button {
+	return [][]sender.Button{{
+		{Text: "✅ Готово", Data: fmt.Sprintf("advisor:done:%d:%d", tid, eid)},
+		{Text: "+1 час", Data: fmt.Sprintf("advisor:snooze:%d:%d:1h", tid, eid)},
+		{Text: "Завтра", Data: fmt.Sprintf("advisor:snooze:%d:%d:1d", tid, eid)},
+	}}
+}
+
+// advisorReminderDone handles "done:<tid>:<eid>": deletes the entry and turns
+// the fired reminder message into a short confirmation.
+func advisorReminderDone(ch *chat.Chat, arg string) []sender.Response {
+	tid, eid, ok := parseIDPair(arg)
+	if !ok {
+		return advisorTopicsView(ch, 0)
+	}
+	t := ch.FindAdvisorTopic(tid)
+	if t == nil {
+		return []sender.Response{{Text: "Запись уже удалена."}}
+	}
+	e := t.FindEntry(eid)
+	if e == nil {
+		return []sender.Response{{Text: "Запись уже удалена."}}
+	}
+	text := e.Text
+	ch.RemoveAdvisorEntry(tid, eid)
+	return []sender.Response{{Text: fmt.Sprintf("✅ Готово, запись удалена:\n%s", text)}}
+}
+
+// advisorReminderSnooze handles "snooze:<tid>:<eid>:<code>": moves the
+// reminder forward ("1h" = +1 hour, "1d" = tomorrow morning) and rewrites the
+// fired reminder message with the new time.
+func advisorReminderSnooze(ch *chat.Chat, arg string) []sender.Response {
+	parts := strings.Split(arg, ":")
+	if len(parts) != 3 {
+		return advisorTopicsView(ch, 0)
+	}
+	tid, err1 := strconv.Atoi(parts[0])
+	eid, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil {
+		return advisorTopicsView(ch, 0)
+	}
+
+	t := ch.FindAdvisorTopic(tid)
+	if t == nil || t.FindEntry(eid) == nil {
+		return []sender.Response{{Text: "Запись уже удалена."}}
+	}
+
+	now := time.Now()
+	var at time.Time
+	switch parts[2] {
+	case "1h":
+		at = now.Add(time.Hour)
+	case "1d":
+		tomorrow := now.AddDate(0, 0, 1)
+		at = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), snoozeMorningHour, 0, 0, 0, now.Location())
+	default:
+		return advisorTopicsView(ch, 0)
+	}
+
+	ch.SetAdvisorReminder(tid, eid, &at)
+	e := t.FindEntry(eid)
+	return []sender.Response{{
+		Text:    fmt.Sprintf("⏰ Перенесено на %s:\n%s", at.Format("02.01 15:04"), e.Text),
+		Buttons: reminderButtons(tid, eid),
+	}}
+}
+
+// parseIDPair splits "<topicID>:<entryID>" into its numeric parts.
+func parseIDPair(arg string) (tid, eid int, ok bool) {
+	tidStr, eidStr, found := strings.Cut(arg, ":")
+	if !found {
+		return 0, 0, false
+	}
+	t, err1 := strconv.Atoi(tidStr)
+	e, err2 := strconv.Atoi(eidStr)
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return t, e, true
 }
 
 // truncate shortens s to max runes, appending an ellipsis when cut.

@@ -14,6 +14,7 @@ type CommandImagine struct {
 	Commands *service.GPTService
 	Notifier *service.Notifier
 	Auth     *service.Auth
+	Progress service.ProgressReporter // transient "Идет…" statuses (may be nil)
 }
 
 func (c *CommandImagine) Name() string {
@@ -44,7 +45,9 @@ func (c *CommandImagine) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) 
 	aiModel := ai.ImageEnhanceTierID
 	prompt := ctx.CommandArgs
 
+	done := service.StartProgress(c.Progress, chat.ChatID, "🎨 Идет генерация изображения…")
 	imageData, caption, usage, err := c.Commands.GenerateImage(aiModel, prompt)
+	done()
 	if err != nil {
 		c.Notifier.Notify(fmt.Sprintf("[%d] Error generating image: %v", chat.ChatID, err))
 		return reply("Произошла ошибка при генерации изображения, попробуйте позже.")

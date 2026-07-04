@@ -7,9 +7,10 @@ import (
 
 // AdvisorEntry is a single saved note inside a topic.
 type AdvisorEntry struct {
-	ID      int
-	Text    string
-	Created time.Time
+	ID       int
+	Text     string
+	Created  time.Time
+	RemindAt *time.Time `json:",omitempty"` // when set, a reminder fires at this time
 }
 
 // AdvisorTopic groups advisor entries under a model-chosen name
@@ -27,6 +28,16 @@ func (c *Chat) FindAdvisorTopic(id int) *AdvisorTopic {
 	for _, t := range c.AdvisorTopics {
 		if t.ID == id {
 			return t
+		}
+	}
+	return nil
+}
+
+// FindEntry looks up an entry by ID inside the topic. Returns nil if not found.
+func (t *AdvisorTopic) FindEntry(id int) *AdvisorEntry {
+	for _, e := range t.Entries {
+		if e.ID == id {
+			return e
 		}
 	}
 	return nil
@@ -120,12 +131,47 @@ func (c *Chat) MergeAdvisorTopics(srcID, dstID int) bool {
 	}
 	for _, e := range src.Entries {
 		dst.Entries = append(dst.Entries, &AdvisorEntry{
-			ID:      dst.NextEntryID,
-			Text:    e.Text,
-			Created: e.Created,
+			ID:       dst.NextEntryID,
+			Text:     e.Text,
+			Created:  e.Created,
+			RemindAt: e.RemindAt,
 		})
 		dst.NextEntryID++
 	}
 	c.RemoveAdvisorTopic(srcID)
 	return true
+}
+
+// SetAdvisorReminder sets or clears (at == nil) the reminder of one entry.
+// Returns false when the topic or entry is not found.
+func (c *Chat) SetAdvisorReminder(topicID, entryID int, at *time.Time) bool {
+	topic := c.FindAdvisorTopic(topicID)
+	if topic == nil {
+		return false
+	}
+	entry := topic.FindEntry(entryID)
+	if entry == nil {
+		return false
+	}
+	entry.RemindAt = at
+	return true
+}
+
+// AdvisorReminder pairs a due entry with the topic it belongs to.
+type AdvisorReminder struct {
+	Topic *AdvisorTopic
+	Entry *AdvisorEntry
+}
+
+// DueAdvisorReminders returns every entry whose reminder time has passed.
+func (c *Chat) DueAdvisorReminders(now time.Time) []AdvisorReminder {
+	var due []AdvisorReminder
+	for _, t := range c.AdvisorTopics {
+		for _, e := range t.Entries {
+			if e.RemindAt != nil && !e.RemindAt.After(now) {
+				due = append(due, AdvisorReminder{Topic: t, Entry: e})
+			}
+		}
+	}
+	return due
 }

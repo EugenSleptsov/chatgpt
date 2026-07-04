@@ -89,6 +89,7 @@ func NewApp(configFile string) (*App, error) {
 		},
 		CostFn:    openai.CostForTokens,
 		ImageCost: openai.ImageGenerationCost,
+		Progress:  bot,
 	}
 
 	registry := commands.NewRegistry()
@@ -100,6 +101,7 @@ func NewApp(configFile string) (*App, error) {
 		Auth:            auth,
 		ConfigService:   configService,
 		ContextWindowFn: openai.ContextWindowForTier,
+		Progress:        bot,
 	})
 
 	return &App{
@@ -114,6 +116,7 @@ func NewApp(configFile string) (*App, error) {
 			auth:                    auth,
 			registry:                registry,
 			defaultAutoReplyPersona: config.DefaultAutoReplyPersona,
+			progress:                bot,
 		}),
 		sender:   buildResponseSender(bot, notifier),
 		auth:     auth,
@@ -140,16 +143,27 @@ func (a *App) Run() {
 	updates := a.bot.GetUpdateChannel(60)
 
 	// Per-worker channels — hash-partitioned by chatID.
-	workerChans := make([]chan telegram.Update, numWorkers)
+	workerChans := make([]chan Job, numWorkers)
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
-		workerChans[i] = make(chan telegram.Update, updateBufferSize)
+		workerChans[i] = make(chan Job, updateBufferSize)
 		wg.Add(1)
 		w := NewWorker(a.auth, a.bot, a.bot.GetUsername(), a.notifier, a.chatService, a.decoder, a.sender)
-		go func(ch <-chan telegram.Update) {
+		go func(ch <-chan Job) {
 			defer wg.Done()
 			w.Start(ch)
 		}(workerChans[i])
+	}
+
+	// Reminder scheduler: fans reminder ticks into the same partitioned
+	// channels so due reminders fire on the chat's own worker goroutine.
+	// Must be stopped BEFORE the worker channels are closed.
+	schedStop := make(chan struct{})
+	schedDone := make(chan struct{})
+	go a.runReminderScheduler(workerChans, schedStop, schedDone)
+	stopScheduler := func() {
+		close(schedStop)
+		<-schedDone
 	}
 
 	sigChan := make(chan os.Signal, 2) // buffered for 2: graceful + force
@@ -159,14 +173,17 @@ func (a *App) Run() {
 		select {
 		case update, ok := <-updates:
 			if !ok {
+				stopScheduler()
 				closeAll(workerChans)
 				wg.Wait()
 				a.chatService.Save()
 				return
 			}
-			workerChans[partitionIndex(update, numWorkers)] <- update
+			u := update
+			workerChans[partitionFor(updateChatID(update), numWorkers)] <- Job{Update: &u}
 		case sig := <-sigChan:
 			log.Printf("Получен сигнал %v, начинаю graceful shutdown...", sig)
+			stopScheduler()
 			closeAll(workerChans)
 
 			// Drain workers with a timeout failsafe.
@@ -196,26 +213,56 @@ func (a *App) Run() {
 	}
 }
 
-// partitionIndex extracts the chat ID from an update and returns a
-// stable worker index in [0, n). Updates without a message go to worker 0.
-func partitionIndex(update telegram.Update, n int) int {
-	var id int64
+// reminderPollInterval is how often due advisor reminders are checked.
+const reminderPollInterval = 30 * time.Second
+
+// runReminderScheduler periodically dispatches a reminder tick for every
+// known chat into that chat's worker partition. The scheduler itself never
+// touches chat data — all reads and mutations happen on the worker goroutine,
+// preserving the no-mutex partitioning invariant. Exits when stop is closed;
+// done is closed on exit so shutdown can wait before closing worker channels.
+func (a *App) runReminderScheduler(chans []chan Job, stop <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+	ticker := time.NewTicker(reminderPollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			for _, chatID := range a.chatService.ChatIDs() {
+				select {
+				case chans[partitionFor(chatID, len(chans))] <- Job{ReminderChat: chatID}:
+				case <-stop:
+					return
+				}
+			}
+		}
+	}
+}
+
+// updateChatID extracts the chat ID from an update (0 when absent).
+func updateChatID(update telegram.Update) int64 {
 	switch {
 	case update.Msg() != nil && update.Msg().Chat != nil:
-		id = update.Msg().Chat.ID
+		return update.Msg().Chat.ID
 	case update.CallbackQuery != nil && update.CallbackQuery.Message != nil:
-		id = update.CallbackQuery.Message.Chat.ID
+		return update.CallbackQuery.Message.Chat.ID
 	default:
 		return 0
 	}
-	if id < 0 {
-		id = -id
+}
+
+// partitionFor maps a chat ID to a stable worker index in [0, n).
+func partitionFor(chatID int64, n int) int {
+	if chatID < 0 {
+		chatID = -chatID
 	}
-	return int(id % int64(n))
+	return int(chatID % int64(n))
 }
 
 // closeAll closes every channel in the slice.
-func closeAll(chans []chan telegram.Update) {
+func closeAll(chans []chan Job) {
 	for _, ch := range chans {
 		close(ch)
 	}
@@ -235,6 +282,7 @@ type decoderDeps struct {
 	auth                    *service.Auth
 	registry                *commands.Registry
 	defaultAutoReplyPersona string
+	progress                service.ProgressReporter
 }
 
 func buildDecoder(d decoderDeps) *decoder.Decoder {
@@ -247,10 +295,11 @@ func buildDecoder(d decoderDeps) *decoder.Decoder {
 		Notifier:                d.notifier,
 		Auth:                    d.auth,
 		DefaultAutoReplyPersona: d.defaultAutoReplyPersona,
+		Progress:                d.progress,
 	}
 
 	dec.Register(&executor.CommandExecutor{Registry: d.registry, Auth: d.auth, Notifier: d.notifier})
-	dec.Register(&executor.VoiceExecutor{Files: d.files, AIClient: d.aiClient, Notifier: d.notifier, TextExecutor: textExec})
+	dec.Register(&executor.VoiceExecutor{Files: d.files, AIClient: d.aiClient, Notifier: d.notifier, TextExecutor: textExec, Progress: d.progress})
 	dec.Register(&executor.ImageExecutor{Files: d.files, BotUsername: d.botUsername, GPT: d.gpt, Notifier: d.notifier})
 	dec.Register(&executor.StickerExecutor{Notifier: d.notifier})
 	dec.Register(textExec) // catch-all — must be last

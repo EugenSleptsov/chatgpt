@@ -152,7 +152,7 @@ func BuildInstructions(session *chatdomain.Session, memoryPrompt string, ctx *Pr
 - You can generate images from text descriptions
 - You can create voice/audio messages
 - You can remember facts about the user for future conversations
-- You can save the user's notes into topical lists (advisor) and read them back`)
+- You can save the user's notes into topical lists (advisor), read them back, and set/move reminders on them`)
 
 	// Section 3: Memory (semi-static, changes infrequently)
 	if memoryPrompt != "" {

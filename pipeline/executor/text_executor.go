@@ -19,7 +19,8 @@ type TextExecutor struct {
 	AIClient                ai.Client
 	Notifier                *service.Notifier
 	Auth                    *service.Auth
-	DefaultAutoReplyPersona string // fallback persona from config; empty = built-in default
+	DefaultAutoReplyPersona string                   // fallback persona from config; empty = built-in default
+	Progress                service.ProgressReporter // transient "Идет…" statuses (may be nil)
 }
 
 func (e *TextExecutor) Match(_ *pipeline.RequestContext) bool {
@@ -64,7 +65,9 @@ func (e *TextExecutor) privateChat(ctx *pipeline.RequestContext, c *chat.Chat, t
 	// Voice-input guarantee: if the user sent voice and GPT didn't call
 	// generate_voice, we synthesize audio from the text response.
 	if isVoice && result.Audio == nil {
+		done := service.StartProgress(e.Progress, c.ChatID, "🎙 Идет генерация аудио…")
 		audio, voiceErr := e.AIClient.GenerateVoice(result.Text, ai.VoiceModelHD, ai.VoiceOnyx)
+		done()
 		e.Notifier.LogError(voiceErr)
 		if audio != nil {
 			responses = append(responses, sender.Response{Audio: audio})

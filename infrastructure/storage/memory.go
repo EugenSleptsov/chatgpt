@@ -43,6 +43,18 @@ func (m *MemoryStorage) Save() bool {
 	return true
 }
 
+// IDs returns the ID of every chat in memory.
+func (m *MemoryStorage) IDs() []int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	ids := make([]int64, 0, len(m.chats))
+	for id := range m.chats {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // All returns a snapshot of every chat in memory. Used by the migrator.
 func (m *MemoryStorage) All() map[int64]*chat.Chat {
 	m.mu.RLock()

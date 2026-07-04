@@ -134,6 +134,38 @@ func (s *FileStorage) saveChatToFile(chatID int64, c *chat.Chat) error {
 	return os.WriteFile(filePath, data, 0644)
 }
 
+// IDs returns the ID of every known chat: loaded ones plus .chat files on
+// disk that have not been read yet.
+func (s *FileStorage) IDs() []int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	seen := make(map[int64]bool, len(s.chats))
+	ids := make([]int64, 0, len(s.chats))
+	for id := range s.chats {
+		seen[id] = true
+		ids = append(ids, id)
+	}
+
+	entries, err := os.ReadDir(s.dirPath)
+	if err != nil {
+		return ids
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".chat" {
+			continue
+		}
+		var chatID int64
+		if _, err := fmt.Sscanf(entry.Name(), "%d.chat", &chatID); err != nil {
+			continue
+		}
+		if !seen[chatID] {
+			ids = append(ids, chatID)
+		}
+	}
+	return ids
+}
+
 // All loads every .chat file from the directory and returns a map of chatID → *chat.Chat.
 // Used by the migrator.
 func (s *FileStorage) All() (map[int64]*chat.Chat, error) {

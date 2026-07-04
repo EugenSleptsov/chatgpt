@@ -206,6 +206,30 @@ func isNotModified(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "message is not modified")
 }
 
+// --- Progress / verbose reporting (service.ProgressReporter) ---
+
+// StartProgress posts a transient status message ("Идет …") and returns a
+// function that deletes it. Best-effort: send/delete failures are only logged,
+// the surrounding work must not depend on the status message.
+func (botInstance *Bot) StartProgress(chatID int64, text string) func() {
+	msg := tgbotapi.NewMessage(chatID, text)
+	sent, err := botInstance.transport.Send(msg)
+	if err != nil {
+		botInstance.LogClient.Logf("Error sending progress message: %v", err)
+		return func() {}
+	}
+	return func() {
+		if _, err := botInstance.transport.Request(tgbotapi.NewDeleteMessage(chatID, sent.MessageID)); err != nil {
+			botInstance.LogClient.Logf("Error deleting progress message: %v", err)
+		}
+	}
+}
+
+// Announce posts a permanent informational message (verbose tool logging).
+func (botInstance *Bot) Announce(chatID int64, text string) {
+	botInstance.Message(text, chatID, false)
+}
+
 // --- File operations ---
 
 // SendForceReply posts a message with a force-reply prompt so the user's next

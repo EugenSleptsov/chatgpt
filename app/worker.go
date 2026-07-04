@@ -2,6 +2,7 @@ package app
 
 import (
 	"GPTBot/api/telegram"
+	"GPTBot/application/commands"
 	"GPTBot/application/service"
 	"GPTBot/domain/chat"
 	"GPTBot/pipeline"
@@ -9,7 +10,17 @@ import (
 	"GPTBot/pipeline/sender"
 	"fmt"
 	"strings"
+	"time"
 )
+
+// Job is one unit of worker input: either a Telegram update or a reminder
+// tick asking the worker to fire due advisor reminders for a chat. Routing
+// both through the same per-chat partitioned channel keeps every mutation of
+// a Chat on its single worker goroutine (no mutexes needed).
+type Job struct {
+	Update       *telegram.Update
+	ReminderChat int64 // used when Update == nil
+}
 
 type Worker struct {
 	Auth           *service.Auth
@@ -41,11 +52,34 @@ func NewWorker(
 	}
 }
 
-func (w *Worker) Start(updateChan <-chan telegram.Update) {
-	for update := range updateChan {
-		w.ProcessUpdate(update)
+func (w *Worker) Start(jobs <-chan Job) {
+	for job := range jobs {
+		if job.Update != nil {
+			w.ProcessUpdate(*job.Update)
+		} else {
+			w.ProcessReminders(job.ReminderChat)
+		}
 		w.ChatService.Save()
 	}
+}
+
+// ProcessReminders fires every due advisor reminder of the chat: sends the
+// reminder message (with done/snooze buttons) and clears the entry's
+// RemindAt so it does not fire again.
+func (w *Worker) ProcessReminders(chatID int64) {
+	c, ok := w.ChatService.GetChat(chatID)
+	if !ok {
+		return
+	}
+	due := c.DueAdvisorReminders(time.Now())
+	if len(due) == 0 {
+		return
+	}
+	for _, r := range due {
+		r.Entry.RemindAt = nil
+		w.ResponseSender.Send(chatID, 0, []sender.Response{commands.AdvisorReminderResponse(r.Topic, r.Entry)})
+	}
+	w.ChatService.MarkDirty(chatID)
 }
 
 func (w *Worker) ProcessUpdate(update telegram.Update) {

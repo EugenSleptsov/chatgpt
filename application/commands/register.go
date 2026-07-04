@@ -15,6 +15,7 @@ type Deps struct {
 	Auth            *service.Auth
 	ConfigService   *service.ConfigService
 	ContextWindowFn func(string) int
+	Progress        service.ProgressReporter // transient "Идет…" statuses (may be nil)
 }
 
 // AllCommands returns every bot command, ready to use.
@@ -49,7 +50,7 @@ func AllCommands(d Deps) []Command {
 		&CommandAnalyze{Commands: d.CmdService, ChatService: d.ChatService, Notifier: d.Notifier},
 
 		// --- image ---
-		&CommandImagine{Commands: d.CmdService, Notifier: d.Notifier, Auth: d.Auth},
+		&CommandImagine{Commands: d.CmdService, Notifier: d.Notifier, Auth: d.Auth, Progress: d.Progress},
 
 		// --- admin ---
 		&CommandAdminReload{ConfigService: d.ConfigService, Auth: d.Auth},

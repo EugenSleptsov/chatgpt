@@ -37,6 +37,7 @@ type GPTService struct {
 	Compact   *CompactService                                            // auto-compact (may be nil)
 	CostFn    func(tierID string, inputTokens, outputTokens int) float64 // provider-specific token cost calculator
 	ImageCost float64                                                    // provider-specific per-image generation cost (USD)
+	Progress  ProgressReporter                                           // status/verbose messages (may be nil)
 }
 type ChatResult struct {
 	Text      string
@@ -160,6 +161,21 @@ func (s *GPTService) collectImages(response *ai.Response, result *ChatResult) {
 	}
 }
 
+// announceTools reports tool invocations into the chat when the verbose
+// setting is on: server-side builtin calls found in the response plus the
+// function calls the model requested. Messages are permanent (not deleted).
+func (s *GPTService) announceTools(chat *chatdomain.Chat, response *ai.Response, calls []ai.ToolCall) {
+	if !chat.Settings.Verbose {
+		return
+	}
+	for _, name := range response.BuiltinCalls() {
+		Announce(s.Progress, chat.ChatID, "🔧 Вызван "+name)
+	}
+	for _, tc := range calls {
+		Announce(s.Progress, chat.ChatID, "🔧 Вызван "+tc.Name)
+	}
+}
+
 func (s *GPTService) toolLoop(response *ai.Response, model, instructions string, chat *chatdomain.Chat, tools []ai.Tool, initialPhase string) (*ChatResult, error) {
 	result := &ChatResult{}
 	tNames := toolNamesFromTools(tools)
@@ -167,6 +183,7 @@ func (s *GPTService) toolLoop(response *ai.Response, model, instructions string,
 	for i := 0; i < maxToolIterations; i++ {
 		s.collectImages(response, result)
 		calls := response.ToolCalls()
+		s.announceTools(chat, response, calls)
 		if len(calls) == 0 {
 			result.Text = strings.TrimSpace(response.OutputText())
 			return result, nil
@@ -197,6 +214,7 @@ func (s *GPTService) toolLoop(response *ai.Response, model, instructions string,
 	}
 	log.Printf("[ToolLoop] max iterations (%d) reached", maxToolIterations)
 	s.collectImages(response, result)
+	s.announceTools(chat, response, nil)
 	result.Text = strings.TrimSpace(response.OutputText())
 	if result.Text == "" {
 		result.Text = fallbackResponse

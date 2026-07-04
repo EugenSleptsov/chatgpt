@@ -44,6 +44,8 @@ func (c *CommandSettings) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) [
 		ch.Settings.SkipDeleteConfirm = !ch.Settings.SkipDeleteConfirm
 	case args == "ar" && isAdmin:
 		ch.Settings.GroupAutoReply = !ch.Settings.GroupAutoReply
+	case args == "verbose" && isAdmin:
+		ch.Settings.Verbose = !ch.Settings.Verbose
 	case args == "model":
 		return settingsModelView(ch)
 	case strings.HasPrefix(args, "model:"):
@@ -119,6 +121,7 @@ func settingsHubView(ch *chat.Chat, isAdmin bool) []sender.Response {
 		rows = append(rows,
 			[]sender.Button{{Text: "Авто-ответ " + onOff(ch.Settings.GroupAutoReply), Data: "settings:ar"}},
 			[]sender.Button{{Text: "Роль авто-ответа", Data: "settings:role"}},
+			[]sender.Button{{Text: "Вербозность " + onOff(ch.Settings.Verbose), Data: "settings:verbose"}},
 		)
 	}
 	rows = append(rows, []sender.Button{{Text: "⬅ Меню", Data: "menu:"}})
