@@ -54,7 +54,7 @@ Do NOT use any tools. Respond with plain text only.`
 // CompactService handles automatic conversation compaction.
 type CompactService struct {
 	GptClient       ai.Client
-	CostFn          func(tierID string, inputTokens, outputTokens int) float64
+	CostFn          CostFunc
 	ContextWindowFn func(tierID string) int // returns max input tokens for a tier
 
 	// Circuit breaker state (per-process, not persisted).

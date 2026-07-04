@@ -27,6 +27,9 @@ type Config struct {
 
 // Defaults fills zero-valued fields with sensible defaults.
 func (c *Config) ApplyDefaults() {
+	if c.TimeoutValue <= 0 {
+		c.TimeoutValue = 1
+	}
 	if c.DataDir == "" {
 		c.DataDir = "_var/data"
 	}

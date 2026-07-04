@@ -17,7 +17,7 @@ var builtinTools = []ai.Tool{
 	{Type: "image_generation"},
 }
 
-// functionTools are executed client-side by executeSingleToolCall.
+// functionTools are executed client-side by ToolRunner.
 var functionTools = []ai.Tool{
 	{
 		Type:        "function",
@@ -105,27 +105,102 @@ func toolNamesFromTools(tools []ai.Tool) []string {
 	return names
 }
 
+type ToolRunner struct {
+	Client    ai.Client
+	CostFn    CostFunc
+	ImageCost float64
+	Progress  ProgressReporter
+}
+
+const maxToolIterations = 5
+
+func (r ToolRunner) Run(response *ai.Response, model, instructions string, chat *chatdomain.Chat, tools []ai.Tool, initialPhase string) (*ChatResult, error) {
+	result := &ChatResult{}
+	tNames := toolNamesFromTools(tools)
+	result.Usage.add(extractUsage(response, model, initialPhase, r.CostFn, tNames...))
+	for i := 0; i < maxToolIterations; i++ {
+		r.collectImages(response, result)
+		calls := response.ToolCalls()
+		r.announceTools(chat, response, calls)
+		if len(calls) == 0 {
+			result.Text = strings.TrimSpace(response.OutputText())
+			return result, nil
+		}
+		if text := strings.TrimSpace(response.OutputText()); text != "" {
+			result.Text = text
+		}
+		log.Printf("[ToolLoop] iteration %d: %d tool call(s)", i+1, len(calls))
+		outputs := make([]ai.ToolCallOutput, 0, len(calls))
+		for _, tc := range calls {
+			output := r.executeSingleToolCall(tc, result, chat)
+			outputs = append(outputs, ai.NewToolCallOutput(tc.ID, output))
+		}
+		var err error
+		response, err = r.Client.ContinueWithToolOutputs(response.ID, outputs, model, instructions, tools...)
+		if err != nil {
+			log.Printf("[ToolLoop] error continuing response: %v", err)
+			if result.Text == "" {
+				result.Text = fallbackResponse
+			}
+			return result, err
+		}
+		calledNames := make([]string, 0, len(calls))
+		for _, tc := range calls {
+			calledNames = append(calledNames, tc.Name)
+		}
+		result.Usage.add(extractUsage(response, model, fmt.Sprintf("Continue (%s)", strings.Join(calledNames, ", ")), r.CostFn, tNames...))
+	}
+	log.Printf("[ToolLoop] max iterations (%d) reached", maxToolIterations)
+	r.collectImages(response, result)
+	r.announceTools(chat, response, nil)
+	result.Text = strings.TrimSpace(response.OutputText())
+	if result.Text == "" {
+		result.Text = fallbackResponse
+	}
+	return result, nil
+}
+
+func (r ToolRunner) collectImages(response *ai.Response, result *ChatResult) {
+	for _, imgData := range response.ImageResults() {
+		result.Images = append(result.Images, ImageResult{Data: imgData})
+		result.Usage.addFixedCost("DALL-E (image)", r.ImageCost)
+	}
+}
+
+// announceTools reports tool invocations into the chat when verbose mode is on.
+func (r ToolRunner) announceTools(chat *chatdomain.Chat, response *ai.Response, calls []ai.ToolCall) {
+	if !chat.Settings.Verbose {
+		return
+	}
+	for _, name := range response.BuiltinCalls() {
+		Announce(r.Progress, chat.ChatID, "🔧 Вызван "+name)
+	}
+	for _, tc := range calls {
+		Announce(r.Progress, chat.ChatID, "🔧 Вызван "+tc.Name)
+	}
+}
+
 // executeSingleToolCall runs one tool call and returns the JSON output string.
-func (s *GPTService) executeSingleToolCall(tc ai.ToolCall, result *ChatResult, chat *chatdomain.Chat) string {
+func (r ToolRunner) executeSingleToolCall(tc ai.ToolCall, result *ChatResult, chat *chatdomain.Chat) string {
 	log.Printf("[ToolCall] %s(%v)", tc.Name, tc.Args)
 	switch tc.Name {
 	case "generate_voice":
-		return s.executeVoiceToolCall(tc, result, chat.ChatID)
+		return r.executeVoiceToolCall(tc, result, chat.ChatID)
 	case "update_memory":
-		return s.executeUpdateMemory(tc, chat)
+		return r.executeUpdateMemory(tc, chat)
 	case "save_note":
-		return s.executeSaveNote(tc, chat)
+		return r.executeSaveNote(tc, chat)
 	case "read_notes":
-		return s.executeReadNotes(tc, chat)
+		return r.executeReadNotes(tc, chat)
 	case "set_reminder":
-		return s.executeSetReminder(tc, chat)
+		return r.executeSetReminder(tc, chat)
 	default:
 		log.Printf("[ToolCall] unknown tool: %s", tc.Name)
 		return marshalToolResult(toolResult{Status: "error", Error: "unknown tool: " + tc.Name})
 	}
 }
 
-func (s *GPTService) executeVoiceToolCall(tc ai.ToolCall, result *ChatResult, chatID int64) string {
+func (r ToolRunner) executeVoiceToolCall(tc ai.ToolCall, result *ChatResult, chatID int64) string {
 	text := tc.Args["text"]
 	if text == "" {
 		text = result.Text
@@ -133,9 +208,9 @@ func (s *GPTService) executeVoiceToolCall(tc ai.ToolCall, result *ChatResult, ch
 	if text == "" {
 		return marshalToolResult(toolResult{Status: "error", Error: "no text available for voice synthesis"})
 	}
-	done := StartProgress(s.Progress, chatID, "🎙 Идет генерация аудио…")
+	done := StartProgress(r.Progress, chatID, "🎙 Идет генерация аудио…")
 	defer done()
-	audio, err := s.GptClient.GenerateVoice(text, ai.VoiceModelHD, ai.VoiceOnyx)
+	audio, err := r.Client.GenerateVoice(text, ai.VoiceModelHD, ai.VoiceOnyx)
 	if err != nil {
 		log.Printf("[ToolCall] generate_voice error: %v", err)
 		return marshalToolResult(toolResult{Status: "error", Error: err.Error()})
@@ -145,7 +220,7 @@ func (s *GPTService) executeVoiceToolCall(tc ai.ToolCall, result *ChatResult, ch
 	return marshalToolResult(toolResult{Status: "success", Text: text})
 }
 
-func (s *GPTService) executeUpdateMemory(tc ai.ToolCall, chat *chatdomain.Chat) string {
+func (r ToolRunner) executeUpdateMemory(tc ai.ToolCall, chat *chatdomain.Chat) string {
 	fact := strings.TrimSpace(tc.Args["fact"])
 	if fact == "" {
 		return marshalToolResult(toolResult{Status: "error", Error: "empty fact"})
@@ -154,7 +229,7 @@ func (s *GPTService) executeUpdateMemory(tc ai.ToolCall, chat *chatdomain.Chat) 
 	return marshalToolResult(toolResult{Status: "success", Text: "Fact saved"})
 }
 
-func (s *GPTService) executeSaveNote(tc ai.ToolCall, chat *chatdomain.Chat) string {
+func (r ToolRunner) executeSaveNote(tc ai.ToolCall, chat *chatdomain.Chat) string {
 	remindAt, err := ParseRemindAt(tc.Args["remind_at"])
 	if err != nil {
 		return marshalToolResult(toolResult{Status: "error", Error: err.Error()})
@@ -170,7 +245,7 @@ func (s *GPTService) executeSaveNote(tc ai.ToolCall, chat *chatdomain.Chat) stri
 	return marshalToolResult(toolResult{Status: "success", Text: text})
 }
 
-func (s *GPTService) executeSetReminder(tc ai.ToolCall, chat *chatdomain.Chat) string {
+func (r ToolRunner) executeSetReminder(tc ai.ToolCall, chat *chatdomain.Chat) string {
 	topic := chat.FindAdvisorTopicByName(tc.Args["topic"])
 	if topic == nil {
 		return marshalToolResult(toolResult{Status: "error", Error: "topic not found: " + tc.Args["topic"]})
@@ -192,7 +267,7 @@ func (s *GPTService) executeSetReminder(tc ai.ToolCall, chat *chatdomain.Chat) s
 	return marshalToolResult(toolResult{Status: "success", Text: fmt.Sprintf("Reminder on entry #%d set to %s", entryID, remindAt.Format("2006-01-02 15:04"))})
 }
 
-func (s *GPTService) executeReadNotes(tc ai.ToolCall, chat *chatdomain.Chat) string {
+func (r ToolRunner) executeReadNotes(tc ai.ToolCall, chat *chatdomain.Chat) string {
 	topic := chat.FindAdvisorTopicByName(tc.Args["topic"])
 	if topic == nil {
 		return marshalToolResult(toolResult{Status: "error", Error: "topic not found: " + tc.Args["topic"]})

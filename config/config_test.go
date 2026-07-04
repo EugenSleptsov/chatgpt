@@ -81,11 +81,17 @@ func TestReadConfig_InvalidYAML(t *testing.T) {
 func TestApplyDefaults_FillsEmpty(t *testing.T) {
 	cfg := &Config{}
 	cfg.ApplyDefaults()
+	if cfg.TimeoutValue != 1 {
+		t.Errorf("TimeoutValue = %d, want 1", cfg.TimeoutValue)
+	}
 	if cfg.DataDir != "_var/data" {
 		t.Errorf("DataDir = %q, want '_var/data'", cfg.DataDir)
 	}
 	if cfg.LogDir != "_var/log" {
 		t.Errorf("LogDir = %q, want '_var/log'", cfg.LogDir)
+	}
+	if cfg.StorageType != "file" {
+		t.Errorf("StorageType = %q, want 'file'", cfg.StorageType)
 	}
 }
 
@@ -112,6 +118,9 @@ func TestReadConfig_AppliesDefaults(t *testing.T) {
 	}
 	if cfg.DataDir != "_var/data" || cfg.LogDir != "_var/log" {
 		t.Errorf("defaults not applied: DataDir=%q LogDir=%q", cfg.DataDir, cfg.LogDir)
+	}
+	if cfg.TimeoutValue != 1 {
+		t.Errorf("TimeoutValue = %d, want 1", cfg.TimeoutValue)
 	}
 }
 

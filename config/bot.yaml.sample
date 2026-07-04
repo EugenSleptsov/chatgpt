@@ -37,16 +37,14 @@ default_system_prompt: "You are a helpful assistant."
 # Can be overridden per-chat via /autorole command.
 default_autoreply_persona: "You are an active participant in a group chat. Your name is the bot mentioned in the conversation."
 
-# Storage backend: "file" (default), "sqlite", or "memory"
+# Storage backend: "file" (default) or "memory"
 storage_type: "file"
 
-# DSN for sqlite storage (path to db file). Ignored for file/memory.
-# Defaults to "<data_dir>/chats.db" when empty.
-storage_dsn: ""
-
-# Directory for persistent data (chat storage files, sqlite db)
-data_dir: "var/data"
+# Directory for persistent data (chat storage files)
+data_dir: "_var/data"
 
 # Directory for log files
-log_dir: "var/log"
+log_dir: "_var/log"
 
+# Default daily GPT cost limit per chat in USD (0 = unlimited)
+cost_limit_usd: 0

@@ -29,12 +29,13 @@ const (
 // App is the top-level application object. It owns every dependency and
 // orchestrates startup, worker pool, and graceful shutdown.
 type App struct {
-	bot         *telegram.Bot
-	chatService *service.ChatService
-	decoder     *decoder.Decoder
-	sender      *sender.ResponseSender
-	auth        *service.Auth
-	notifier    *service.Notifier
+	bot           *telegram.Bot
+	chatService   *service.ChatService
+	decoder       *decoder.Decoder
+	sender        *sender.ResponseSender
+	auth          *service.Auth
+	notifier      *service.Notifier
+	updateTimeout int
 }
 
 // NewApp reads the config, creates all services and wires the handler pipeline.
@@ -78,19 +79,17 @@ func NewApp(configFile string) (*App, error) {
 	}
 	chatService := service.NewChatService(botStorage, chatDefaults, logSystem)
 
-	// GPTService is the single GPT entry point: stateful chat (Complete, with
-	// auto-compact) and stateless one-shot ops (commands, image, auto-reply).
-	gptService := &service.GPTService{
-		GptClient: aiClient,
-		Compact: &service.CompactService{
+	gptService := service.NewGPTService(
+		aiClient,
+		&service.CompactService{
 			GptClient:       aiClient,
 			CostFn:          openai.CostForTokens,
 			ContextWindowFn: openai.ContextWindowForTier,
 		},
-		CostFn:    openai.CostForTokens,
-		ImageCost: openai.ImageGenerationCost,
-		Progress:  bot,
-	}
+		openai.CostForTokens,
+		openai.ImageGenerationCost,
+		bot,
+	)
 
 	registry := commands.NewRegistry()
 	commands.RegisterAll(commands.Deps{
@@ -105,8 +104,9 @@ func NewApp(configFile string) (*App, error) {
 	})
 
 	return &App{
-		bot:         bot,
-		chatService: chatService,
+		bot:           bot,
+		chatService:   chatService,
+		updateTimeout: config.TimeoutValue,
 		decoder: buildDecoder(decoderDeps{
 			files:                   bot,
 			botUsername:             bot.GetUsername(),
@@ -140,7 +140,7 @@ const shutdownTimeout = 30 * time.Second
 // - Second SIGINT: force-quit immediately (double Ctrl+C pattern)
 // - Failsafe timer: exit after shutdownTimeout even if workers are stuck
 func (a *App) Run() {
-	updates := a.bot.GetUpdateChannel(60)
+	updates := a.bot.GetUpdateChannel(a.updateTimeout)
 
 	// Per-worker channels — hash-partitioned by chatID.
 	workerChans := make([]chan Job, numWorkers)

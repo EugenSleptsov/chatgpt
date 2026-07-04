@@ -7,17 +7,35 @@ import (
 	"strings"
 )
 
-// --- One-shot GPT operations ---
-//
-// The methods below are stateless: they do NOT touch conversation history
-// (text commands, image generation/analysis, auto-reply decisions). They live
-// on GPTService alongside the stateful chat pipeline (Complete) because both
-// share the same client and pricing config.
+// OneShotService owns stateless AI calls: slash-command prompts, image
+// generation/analysis, and auto-reply decisions. It does not mutate chat
+// history; GPTService keeps only thin wrappers for existing callers.
+type OneShotService struct {
+	Client    ai.Client
+	CostFn    CostFunc
+	ImageCost float64
+}
+
+func (s *GPTService) GPTCommand(model string, systemPrompt, userPrompt string) (string, TokenUsage, error) {
+	return s.oneShot().GPTCommand(model, systemPrompt, userPrompt)
+}
+
+func (s *GPTService) GenerateImage(model string, prompt string) (imageData []byte, caption string, usage TokenUsage, err error) {
+	return s.oneShot().GenerateImage(model, prompt)
+}
+
+func (s *GPTService) AnalyzeImage(imageURL, prompt string) (string, error) {
+	return s.oneShot().AnalyzeImage(imageURL, prompt)
+}
+
+func (s *GPTService) ShouldAutoReply(chat *chatdomain.Chat, persona string) (bool, string, error) {
+	return s.oneShot().ShouldAutoReply(chat, persona)
+}
 
 // GPTCommand sends a one-shot system+user prompt pair to GPT and returns
-// the response text with token usage. Does not touch chat history.
-func (s *GPTService) GPTCommand(model string, systemPrompt, userPrompt string) (string, TokenUsage, error) {
-	payload, err := s.GptClient.CallGPT([]ai.Message{
+// the response text with token usage.
+func (s OneShotService) GPTCommand(model string, systemPrompt, userPrompt string) (string, TokenUsage, error) {
+	payload, err := s.Client.CallGPT([]ai.Message{
 		{Role: "user", Content: []ai.Content{{Type: ai.TypeInputText, Text: userPrompt}}},
 	}, model, systemPrompt)
 
@@ -36,15 +54,15 @@ func (s *GPTService) GPTCommand(model string, systemPrompt, userPrompt string) (
 
 // GenerateImage creates an image from a prompt and returns the PNG bytes along
 // with an AI-enhanced caption and accumulated usage/cost.
-func (s *GPTService) GenerateImage(model string, prompt string) (imageData []byte, caption string, usage TokenUsage, err error) {
-	imageData, err = s.GptClient.GenerateImage(prompt, ai.ImageSize1024)
+func (s OneShotService) GenerateImage(model string, prompt string) (imageData []byte, caption string, usage TokenUsage, err error) {
+	imageData, err = s.Client.GenerateImage(prompt, ai.ImageSize1024)
 	if err != nil {
 		return nil, "", usage, err
 	}
 	usage.addFixedCost("gpt-image (image)", s.ImageCost)
 
 	caption = prompt
-	payload, err := s.GptClient.CallGPT([]ai.Message{
+	payload, err := s.Client.CallGPT([]ai.Message{
 		{Role: "user", Content: fmt.Sprintf("Please improve this prompt: \"%s\". Answer with improved prompt only. Keep prompt at most 200 characters long. Your prompt must be in one sentence.", prompt)},
 	}, model, "You are an assistant that generates natural language description (prompt) for an artificial intelligence (AI) that generates images")
 	if err == nil {
@@ -58,7 +76,7 @@ func (s *GPTService) GenerateImage(model string, prompt string) (imageData []byt
 }
 
 // AnalyzeImage sends an image URL with a prompt to GPT Vision and returns the response.
-func (s *GPTService) AnalyzeImage(imageURL, prompt string) (string, error) {
+func (s OneShotService) AnalyzeImage(imageURL, prompt string) (string, error) {
 	messages := []ai.Message{
 		{Role: "user", Content: []ai.Content{
 			{Type: ai.TypeInputText, Text: prompt},
@@ -66,7 +84,7 @@ func (s *GPTService) AnalyzeImage(imageURL, prompt string) (string, error) {
 		}},
 	}
 
-	payload, err := s.GptClient.CallGPT(messages, ai.VisionTierID, "")
+	payload, err := s.Client.CallGPT(messages, ai.VisionTierID, "")
 	if err != nil {
 		return "", err
 	}
@@ -103,9 +121,7 @@ func buildAutoReplyPrompt(persona string) string {
 }
 
 // ShouldAutoReply asks GPT whether the bot should proactively join the group conversation.
-// It looks at the last few history entries and asks for a YES/NO decision.
-// The persona parameter describes the bot's role/personality; if empty, the built-in default is used.
-func (s *GPTService) ShouldAutoReply(chat *chatdomain.Chat, persona string) (bool, string, error) {
+func (s OneShotService) ShouldAutoReply(chat *chatdomain.Chat, persona string) (bool, string, error) {
 	session := chat.ActiveSession()
 
 	const lookback = 10
@@ -120,7 +136,7 @@ func (s *GPTService) ShouldAutoReply(chat *chatdomain.Chat, persona string) (boo
 	}
 
 	systemPrompt := buildAutoReplyPrompt(persona)
-	payload, err := s.GptClient.CallGPT(messages, session.Model, systemPrompt)
+	payload, err := s.Client.CallGPT(messages, session.Model, systemPrompt)
 	if err != nil {
 		return false, "ошибка GPT", err
 	}

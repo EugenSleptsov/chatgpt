@@ -19,8 +19,7 @@ go build -o gptbot
 ```yaml
 telegram_token: YOUR_TG_TOKEN
 gpt_token: YOUR_OPENAI_TOKEN
-timeout_value: 60
-max_messages: 20
+timeout_value: 1
 admin_id: 0
 ```
 
@@ -33,7 +32,6 @@ See [`config/bot.yaml.sample`](config/bot.yaml.sample) for the full list of opti
 | `telegram_token` | Telegram Bot API token | *required*                       |
 | `gpt_token` | OpenAI API key | *required*                       |
 | `timeout_value` | Long-polling timeout (seconds) | `1`                              |
-| `max_messages` | Max conversation messages kept in context | `20`                             |
 | `admin_id` | Telegram user ID of the bot admin (`0` = disabled) | `0`                              |
 | `ignore_report_ids` | User IDs excluded from admin reports | `[]`                             |
 | `authorized_user_ids` | Authorized user IDs (empty = public bot) | `[]`                             |
@@ -42,10 +40,10 @@ See [`config/bot.yaml.sample`](config/bot.yaml.sample) for the full list of opti
 | `default_system_prompt` | Default system prompt for new sessions | `"You are a helpful assistant."` |
 | `default_autoreply_persona` | Default role/persona for auto-reply decision (overridable per-chat via `/autorole`) | *(built-in)*                     |
 | `telegram_token_log_bot` | Separate bot token for admin logging | `""`                             |
-| `storage_type` | Storage backend: `file`, `sqlite`, or `memory` | `"file"`                         |
-| `storage_dsn` | DSN for sqlite (path to db file) | `""`                             |
+| `storage_type` | Storage backend: `file` or `memory` | `"file"`                         |
 | `data_dir` | Directory for persistent data | `"_var/data"`                    |
 | `log_dir` | Directory for log files | `"_var/log"`                     |
+| `cost_limit_usd` | Default daily GPT cost limit per chat (`0` = unlimited) | `0`                              |
 
 ## Running the bot
 
@@ -67,7 +65,7 @@ In group chats the bot responds when mentioned via `@BotName`, replied to, or ca
 | `/clear` | Clears conversation history for the current session |
 | `/history [page]` | Shows conversation history (paginated) |
 | `/rollback [n]` | Removes last *n* messages from history (default 1) |
-| `/model [id]` | Shows or switches the AI model (`basic` / `advanced`) |
+| `/model [id]` | Shows or switches the AI model (`basic` / `fast` / `premium`) |
 | `/system [text]` | Shows or sets the system prompt for the current session |
 | `/markdown [on\|off]` | Toggles Markdown formatting in responses |
 | `/memory` | Shows the bot's long-term memory for this chat. `/memory clear` to wipe |
@@ -132,7 +130,7 @@ domain/
   chat/            Chat & session domain models, storage interface
 
 integration/ai/    OpenAI client implementation
-infrastructure/    Storage backends (file, sqlite, memory), logger, utilities
+infrastructure/    Storage backends (file, memory), logger, utilities
 api/telegram/      Telegram Bot API transport layer
 app/               Wiring, worker pool, graceful shutdown
 config/            YAML configuration
