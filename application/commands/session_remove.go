@@ -16,14 +16,14 @@ func (c *CommandSessionRemove) Name() string {
 }
 
 func (c *CommandSessionRemove) Description() string {
-	return "Удаляет сессию по ID. Нельзя удалить последнюю. Использование: /remove <id>"
+	return "Удаляет сессию (кнопка 🗑 в списке сессий). Нельзя удалить последнюю."
 }
 
 func (c *CommandSessionRemove) IsAdmin() bool {
 	return false
 }
 
-// Execute supports both typed use and the button flow:
+// Execute handles the button flow of the delete picker:
 //
 //	"<id>"      → show a delete confirmation for session <id>
 //	"yes:<id>"  → perform the delete, then re-render the session list
@@ -37,17 +37,14 @@ func (c *CommandSessionRemove) Execute(ctx *pipeline.RequestContext, chat *chat.
 	case strings.HasPrefix(arg, "yes:"):
 		id, err := strconv.Atoi(arg[len("yes:"):])
 		if err != nil {
-			return reply("ID должен быть числом.")
+			return sessionListView(chat, sessionPageOf(chat, chat.ActiveSessionID))
 		}
 		return c.performRemove(chat, id)
 	}
 
-	if arg == "" {
-		return reply("Укажите ID сессии. Использование: /remove <id>")
-	}
 	id, err := strconv.Atoi(arg)
 	if err != nil {
-		return reply("ID должен быть числом.")
+		return sessionListView(chat, sessionPageOf(chat, chat.ActiveSessionID))
 	}
 	s := chat.FindSession(id)
 	if s == nil {

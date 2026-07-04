@@ -42,6 +42,5 @@ func FormatMemory(chat *chatdomain.Chat) string {
 	for i, fact := range chat.Memory {
 		sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, fact))
 	}
-	sb.WriteString("\nДля очистки: /memory clear")
 	return sb.String()
 }

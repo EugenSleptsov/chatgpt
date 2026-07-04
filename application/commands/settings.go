@@ -52,7 +52,10 @@ func (c *CommandSettings) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) [
 		}
 		return settingsModelView(ch)
 	case args == "memory":
-		return backView(service.FormatMemory(ch))
+		return settingsMemoryView(ch)
+	case args == "memory:clear":
+		service.ClearMemory(ch)
+		return settingsMemoryView(ch)
 
 	case args == "system":
 		sp := ch.ActiveSession().SystemPrompt
@@ -71,7 +74,7 @@ func (c *CommandSettings) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) [
 		}
 		return editView("Промпт суммаризации:\n\n"+sp, "settings:sprompt:edit")
 	case args == "sprompt:edit":
-		ch.PendingInput = "summarizeprompt"
+		ch.PendingInput = "summarize_prompt"
 		return forceReplyPrompt("Пришлите новый промпт суммаризации:")
 
 	case args == "role" && isAdmin:
@@ -140,14 +143,19 @@ func settingsModelView(ch *chat.Chat) []sender.Response {
 	}}
 }
 
+// settingsMemoryView shows the chat memory with a clear button.
+func settingsMemoryView(ch *chat.Chat) []sender.Response {
+	rows := [][]sender.Button{}
+	if len(ch.Memory) > 0 {
+		rows = append(rows, []sender.Button{{Text: "🗑 Очистить", Data: "settings:memory:clear"}})
+	}
+	rows = append(rows, backRow())
+	return []sender.Response{{Text: service.FormatMemory(ch), Buttons: rows}}
+}
+
 // backRow is a single "back to settings hub" button row.
 func backRow() []sender.Button {
 	return []sender.Button{{Text: "⬅ Назад", Data: "settings:"}}
-}
-
-// backView wraps text with a single back-to-hub row.
-func backView(text string) []sender.Response {
-	return []sender.Response{{Text: text, Buttons: [][]sender.Button{backRow()}}}
 }
 
 // editView shows current value text with an "edit" button (which starts a

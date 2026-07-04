@@ -323,7 +323,7 @@ func TestRegistry_AllReturnsAllCommands(t *testing.T) {
 	for _, cmd := range all {
 		names[cmd.Name()] = true
 	}
-	for _, want := range []string{"help", "start", "clear", "model", "system", "markdown", "memory"} {
+	for _, want := range []string{"help", "start", "clear", "system", "advisor", "settings", "list"} {
 		if !names[want] {
 			t.Errorf("command %q not registered", want)
 		}
@@ -471,84 +471,6 @@ func TestCommandRollback_EmptyHistory(t *testing.T) {
 	}
 }
 
-// ======================== /model ========================
-
-func TestCommandModel_ShowsCurrent(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("model")
-	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/model")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "Текущая модель") {
-		t.Errorf("unexpected reply: %q", resp)
-	}
-}
-
-func TestCommandModel_SetValid(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("model")
-	chat := newTestChat()
-
-	if len(ai.Tiers) == 0 {
-		t.Skip("no tiers defined")
-	}
-	target := ai.Tiers[len(ai.Tiers)-1] // pick a non-default tier
-	ctx := makeCmdCtx(1, 100, "/model "+target.ID)
-	responses := cmd.Execute(ctx, chat)
-
-	if chat.ActiveSession().Model != target.ID {
-		t.Errorf("model = %q, want %q", chat.ActiveSession().Model, target.ID)
-	}
-	if len(responses) != 1 {
-		t.Fatalf("expected 1 response, got %d", len(responses))
-	}
-	// The picker must carry one button per tier, with the chosen tier marked.
-	rows := responses[0].Buttons
-	if len(rows) != 1 || len(rows[0]) != len(ai.Tiers) {
-		t.Fatalf("expected 1 row of %d buttons, got %v", len(ai.Tiers), rows)
-	}
-	var marked string
-	for _, b := range rows[0] {
-		if b.Data == "model:"+target.ID {
-			marked = b.Text
-		}
-	}
-	if !strings.HasPrefix(marked, "✅") {
-		t.Errorf("selected tier button not marked: %q", marked)
-	}
-}
-
-func TestCommandModel_ButtonCallback(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("model")
-	chat := newTestChat()
-
-	if len(ai.Tiers) < 2 {
-		t.Skip("need at least 2 tiers")
-	}
-	target := ai.Tiers[len(ai.Tiers)-1]
-
-	// Simulate a button tap: callback data "model:<id>" arrives as CommandArgs.
-	ctx := makeCmdCtx(1, 100, "/model")
-	ctx.CommandArgs = target.ID
-	cmd.Execute(ctx, chat)
-
-	if chat.ActiveSession().Model != target.ID {
-		t.Errorf("model = %q, want %q", chat.ActiveSession().Model, target.ID)
-	}
-}
-
-func TestCommandModel_InvalidName(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("model")
-	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/model nonexistent_model_xyz")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "не найдена") {
-		t.Errorf("unexpected reply: %q", resp)
-	}
-}
-
 // ======================== /system ========================
 
 func TestCommandSystem_ShowEmpty(t *testing.T) {
@@ -601,165 +523,30 @@ func TestCommandSystem_TruncatesLong(t *testing.T) {
 	}
 }
 
-// ======================== /markdown ========================
+// ======================== settings: memory ========================
 
-func TestCommandMarkdown_On(t *testing.T) {
+func TestCommandSettings_MemoryViewAndClear(t *testing.T) {
 	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("markdown")
-	chat := newTestChat()
-	chat.Settings.UseMarkdown = false
-	ctx := makeCmdCtx(1, 100, "/markdown on")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "включен") {
-		t.Errorf("unexpected reply: %q", resp)
-	}
-	if !chat.Settings.UseMarkdown {
-		t.Error("UseMarkdown should be true")
-	}
-}
-
-func TestCommandMarkdown_Off(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("markdown")
-	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/markdown off")
-	cmd.Execute(ctx, chat)
-	if chat.Settings.UseMarkdown {
-		t.Error("UseMarkdown should be false")
-	}
-}
-
-func TestCommandMarkdown_ShowStatus(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("markdown")
-	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/markdown")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "Markdown") {
-		t.Errorf("unexpected reply: %q", resp)
-	}
-}
-
-// ======================== /memory ========================
-
-func TestCommandMemory_Empty(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("memory")
-	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/memory")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "пуста") {
-		t.Errorf("unexpected reply: %q", resp)
-	}
-}
-
-func TestCommandMemory_ShowFacts(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("memory")
+	cmd, _ := deps.Registry.Get("settings")
 	chat := newTestChat()
 	chat.Memory = []string{"fact1", "fact2"}
-	ctx := makeCmdCtx(1, 100, "/memory")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "fact1") || !strings.Contains(resp, "fact2") {
-		t.Errorf("facts missing in: %q", resp)
-	}
-	if !strings.Contains(resp, "2 фактов") {
-		t.Errorf("fact count missing in: %q", resp)
-	}
-}
 
-func TestCommandMemory_Clear(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("memory")
-	chat := newTestChat()
-	chat.Memory = []string{"a", "b", "c"}
-	ctx := makeCmdCtx(1, 100, "/memory clear")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "очищена") {
-		t.Errorf("unexpected reply: %q", resp)
+	// Memory view shows facts and a clear button.
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/settings memory"), chat)
+	if !strings.Contains(responses[0].Text, "fact1") || !strings.Contains(responses[0].Text, "fact2") {
+		t.Errorf("facts missing in: %q", responses[0].Text)
 	}
+	if !hasButton(responses[0].Buttons, "settings:memory:clear") {
+		t.Error("memory view should have a clear button")
+	}
+
+	// Clear wipes memory and re-renders; the clear button disappears.
+	responses = cmd.Execute(makeCmdCtx(1, 100, "/settings memory:clear"), chat)
 	if len(chat.Memory) != 0 {
-		t.Error("memory should be empty")
+		t.Error("memory should be empty after clear")
 	}
-}
-
-// ======================== /autoreply ========================
-
-func TestCommandAutoReply_OnOff(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("autoreply")
-	chat := newTestChat()
-	chat.Settings.GroupAutoReply = false
-
-	// "on" arg (typed "/autoreply on" or button tap "autoreply:on") enables it.
-	onCtx := makeCmdCtx(1, 100, "/autoreply on")
-	responses := cmd.Execute(onCtx, chat)
-	if !chat.Settings.GroupAutoReply {
-		t.Error("GroupAutoReply should be true after 'on'")
-	}
-	assertBoolButtons(t, responses, "autoreply", true)
-
-	// "off" arg disables it.
-	offCtx := makeCmdCtx(1, 100, "/autoreply off")
-	responses = cmd.Execute(offCtx, chat)
-	if chat.Settings.GroupAutoReply {
-		t.Error("GroupAutoReply should be false after 'off'")
-	}
-	assertBoolButtons(t, responses, "autoreply", false)
-}
-
-func TestCommandAutoReply_ShowPanelNoArgs(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("autoreply")
-	chat := newTestChat()
-	chat.Settings.GroupAutoReply = true
-
-	// No args: show the panel without changing state.
-	responses := cmd.Execute(makeCmdCtx(1, 100, "/autoreply"), chat)
-	if !chat.Settings.GroupAutoReply {
-		t.Error("bare /autoreply must not change state")
-	}
-	assertBoolButtons(t, responses, "autoreply", true)
-}
-
-func TestCommandMarkdown_Buttons(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("markdown")
-	chat := newTestChat()
-	chat.Settings.UseMarkdown = false
-	responses := cmd.Execute(makeCmdCtx(1, 100, "/markdown"), chat)
-	assertBoolButtons(t, responses, "markdown", false)
-}
-
-// assertBoolButtons checks a boolean command's response: a single row with an
-// on/off pair carrying "<cmd>:on" / "<cmd>:off", and the active state marked ✅.
-func assertBoolButtons(t *testing.T, responses []sender.Response, cmd string, on bool) {
-	t.Helper()
-	if len(responses) != 1 {
-		t.Fatalf("expected 1 response, got %d", len(responses))
-	}
-	rows := responses[0].Buttons
-	if len(rows) != 1 || len(rows[0]) != 2 {
-		t.Fatalf("expected one row of 2 buttons, got %v", rows)
-	}
-	var onBtn, offBtn sender.Button
-	for _, b := range rows[0] {
-		switch b.Data {
-		case cmd + ":on":
-			onBtn = b
-		case cmd + ":off":
-			offBtn = b
-		}
-	}
-	if onBtn.Data == "" || offBtn.Data == "" {
-		t.Fatalf("missing on/off button: %v", rows[0])
-	}
-	marked := offBtn
-	if on {
-		marked = onBtn
-	}
-	if !strings.HasPrefix(marked.Text, "✅") {
-		t.Errorf("active state not marked: %q", marked.Text)
+	if hasButton(responses[0].Buttons, "settings:memory:clear") {
+		t.Error("empty memory view must not offer a clear button")
 	}
 }
 
@@ -893,37 +680,36 @@ func TestCommandSessionList_SelectButton(t *testing.T) {
 	}
 }
 
-func TestCommandSessionList_NewButton(t *testing.T) {
+func TestCommandSessionList_NewButtonStartsForceReply(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("list")
 	chat := newTestChat()
-	addSessions(chat, 2) // 3 sessions total
 	before := len(chat.Sessions)
 
-	// Simulate tapping the "new session" button: callback data "list:new".
+	// Tapping "list:new" arms pending input; no session created yet.
 	responses := cmd.Execute(makeCmdCtx(1, 100, "/list new"), chat)
+	if len(responses) != 1 || !responses[0].ForceReply {
+		t.Fatalf("expected a force-reply prompt, got %+v", responses)
+	}
+	if chat.PendingInput != "new" {
+		t.Errorf("PendingInput = %q, want new", chat.PendingInput)
+	}
+	if len(chat.Sessions) != before {
+		t.Error("session must not be created before the topic reply")
+	}
+}
 
-	if len(chat.Sessions) != before+1 {
-		t.Fatalf("sessions count = %d, want %d", len(chat.Sessions), before+1)
+func TestCommandSessionList_RenameButtonStartsForceReply(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("list")
+	chat := newTestChat()
+
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/list rename"), chat)
+	if len(responses) != 1 || !responses[0].ForceReply {
+		t.Fatalf("expected a force-reply prompt, got %+v", responses)
 	}
-	newID := chat.Sessions[len(chat.Sessions)-1].ID
-	if chat.ActiveSessionID != newID {
-		t.Errorf("active session = %d, want new #%d", chat.ActiveSessionID, newID)
-	}
-	if !strings.Contains(responses[0].Text, fmt.Sprintf("Активная: #%d", newID)) {
-		t.Errorf("view should show new session active: %q", responses[0].Text)
-	}
-	// The new-session button itself must be present.
-	var hasNew bool
-	for _, row := range responses[0].Buttons {
-		for _, b := range row {
-			if b.Data == "list:new" {
-				hasNew = true
-			}
-		}
-	}
-	if !hasNew {
-		t.Error("view should include a 'list:new' button")
+	if chat.PendingInput != "rename" {
+		t.Errorf("PendingInput = %q, want rename", chat.PendingInput)
 	}
 }
 
@@ -931,19 +717,19 @@ func TestCommandSessionNew(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("new")
 	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/new my topic")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "Создана") {
-		t.Errorf("unexpected reply: %q", resp)
-	}
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/new my topic"), chat)
 	if len(chat.Sessions) != 2 {
-		t.Errorf("sessions count = %d, want 2", len(chat.Sessions))
+		t.Fatalf("sessions count = %d, want 2", len(chat.Sessions))
 	}
 	if chat.Sessions[1].Topic != "my topic" {
 		t.Errorf("topic = %q, want 'my topic'", chat.Sessions[1].Topic)
 	}
 	if chat.ActiveSessionID != chat.Sessions[1].ID {
 		t.Error("new session should be active")
+	}
+	// The command re-renders the session list view.
+	if !strings.Contains(responses[0].Text, "my topic") {
+		t.Errorf("expected refreshed list with new session: %q", responses[0].Text)
 	}
 }
 
@@ -958,41 +744,22 @@ func TestCommandSessionNew_DefaultTopic(t *testing.T) {
 	}
 }
 
-func TestCommandSessionUse(t *testing.T) {
+func TestCommandSessionRename(t *testing.T) {
 	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("rename")
 	chat := newTestChat()
-	chat.AddSession("second")
-
-	cmd, _ := deps.Registry.Get("use")
-	ctx := makeCmdCtx(1, 100, "/use 2")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "Переключено") {
-		t.Errorf("unexpected reply: %q", resp)
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/rename shiny name"), chat)
+	if chat.ActiveSession().Topic != "shiny name" {
+		t.Errorf("topic = %q, want 'shiny name'", chat.ActiveSession().Topic)
 	}
-	if chat.ActiveSessionID != 2 {
-		t.Errorf("active = %d, want 2", chat.ActiveSessionID)
+	if !strings.Contains(responses[0].Text, "shiny name") {
+		t.Errorf("expected refreshed list: %q", responses[0].Text)
 	}
-}
 
-func TestCommandSessionUse_NoArg(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("use")
-	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/use")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "Укажите ID") {
-		t.Errorf("unexpected reply: %q", resp)
-	}
-}
-
-func TestCommandSessionUse_NotFound(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("use")
-	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/use 99")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "не найдена") {
-		t.Errorf("unexpected reply: %q", resp)
+	// Empty input keeps the old name.
+	cmd.Execute(makeCmdCtx(1, 100, "/rename"), chat)
+	if chat.ActiveSession().Topic != "shiny name" {
+		t.Error("empty rename must not change the topic")
 	}
 }
 
@@ -1033,42 +800,151 @@ func TestCommandSessionRemove_LastSession(t *testing.T) {
 	}
 }
 
-func TestCommandSessionUpdate(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("update")
-	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/update 1 new topic name")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "переименована") {
-		t.Errorf("unexpected reply: %q", resp)
+// ======================== /advisor ========================
+
+// addNotes seeds the chat with advisor topics/entries.
+func addNotes(chat *domain.Chat, topic string, notes ...string) *domain.AdvisorTopic {
+	var t *domain.AdvisorTopic
+	for _, n := range notes {
+		t, _ = chat.AddAdvisorNote(topic, n)
 	}
-	if chat.Sessions[0].Topic != "new topic name" {
-		t.Errorf("topic = %q", chat.Sessions[0].Topic)
+	return t
+}
+
+func TestCommandAdvisor_EmptyState(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("advisor")
+	chat := newTestChat()
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/advisor"), chat)
+	if !strings.Contains(responses[0].Text, "Заметок пока нет") {
+		t.Errorf("unexpected empty-state text: %q", responses[0].Text)
+	}
+	if !hasButton(responses[0].Buttons, "menu:") {
+		t.Error("empty state should link back to the menu")
 	}
 }
 
-func TestCommandSessionUpdate_NoArgs(t *testing.T) {
+func TestCommandAdvisor_TopicListAndView(t *testing.T) {
 	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("update")
+	cmd, _ := deps.Registry.Get("advisor")
 	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/update")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "Использование") {
-		t.Errorf("unexpected reply: %q", resp)
+	topic := addNotes(chat, "Налоги", "декларация до мая", "проверить вычеты")
+
+	// Topic list shows the topic with its count and a button into it.
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/advisor"), chat)
+	if !strings.Contains(responses[0].Text, "Налоги — 2") {
+		t.Errorf("topic list should show count: %q", responses[0].Text)
+	}
+	data := fmt.Sprintf("advisor:topic:%d", topic.ID)
+	if !hasButton(responses[0].Buttons, data) {
+		t.Errorf("missing topic button %q", data)
+	}
+
+	// Topic view lists entries and offers entry/topic delete.
+	responses = cmd.Execute(makeCmdCtx(1, 100, "/advisor topic:"+fmt.Sprint(topic.ID)), chat)
+	if !strings.Contains(responses[0].Text, "декларация до мая") {
+		t.Errorf("entries missing: %q", responses[0].Text)
+	}
+	if !hasButton(responses[0].Buttons, fmt.Sprintf("advisor:del:%d", topic.ID)) ||
+		!hasButton(responses[0].Buttons, fmt.Sprintf("advisor:deltopic:%d", topic.ID)) {
+		t.Error("topic view should offer entry delete and topic delete")
 	}
 }
 
-func TestCommandSessionCurrent(t *testing.T) {
+func TestCommandAdvisor_RemoveEntry(t *testing.T) {
 	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("current")
+	cmd, _ := deps.Registry.Get("advisor")
 	chat := newTestChat()
-	ctx := makeCtx(1, 100, "/current")
-	resp := assertSingleReply(t, cmd.Execute(ctx, chat))
-	if !strings.Contains(resp, "#1") {
-		t.Errorf("should show session #1: %q", resp)
+	topic := addNotes(chat, "ИКЕА", "полки", "стол")
+
+	// Delete picker: one 🗑 button per entry.
+	responses := cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor del:%d", topic.ID)), chat)
+	rm := fmt.Sprintf("advisor:rm:%d:%d", topic.ID, topic.Entries[0].ID)
+	if !hasButton(responses[0].Buttons, rm) {
+		t.Fatalf("missing delete button %q", rm)
 	}
-	if !strings.Contains(resp, "default") {
-		t.Errorf("should show topic: %q", resp)
+
+	// Deleting one entry keeps the topic with the remaining entry.
+	cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor rm:%d:%d", topic.ID, topic.Entries[0].ID)), chat)
+	if len(topic.Entries) != 1 || topic.Entries[0].Text != "стол" {
+		t.Fatalf("unexpected entries after delete: %+v", topic.Entries)
+	}
+
+	// Deleting the last entry drops the topic and falls back to the list.
+	responses = cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor rm:%d:%d", topic.ID, topic.Entries[0].ID)), chat)
+	if len(chat.AdvisorTopics) != 0 {
+		t.Error("topic should be removed with its last entry")
+	}
+	if !strings.Contains(responses[0].Text, "Заметок пока нет") {
+		t.Errorf("expected empty-state view: %q", responses[0].Text)
+	}
+}
+
+func TestCommandAdvisor_DeleteTopicConfirm(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("advisor")
+	chat := newTestChat()
+	topic := addNotes(chat, "Налоги", "декларация")
+
+	// First tap asks for confirmation.
+	responses := cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor deltopic:%d", topic.ID)), chat)
+	yes := fmt.Sprintf("advisor:deltopic:yes:%d", topic.ID)
+	if !hasButton(responses[0].Buttons, yes) {
+		t.Fatalf("expected confirm button %q", yes)
+	}
+	if len(chat.AdvisorTopics) != 1 {
+		t.Fatal("topic must not be deleted before confirmation")
+	}
+
+	// Confirmation deletes.
+	cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor deltopic:yes:%d", topic.ID)), chat)
+	if len(chat.AdvisorTopics) != 0 {
+		t.Error("topic should be deleted after confirmation")
+	}
+}
+
+func TestCommandAdvisor_DeleteTopicSkipConfirm(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("advisor")
+	chat := newTestChat()
+	chat.Settings.SkipDeleteConfirm = true
+	topic := addNotes(chat, "Налоги", "декларация")
+
+	cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor deltopic:%d", topic.ID)), chat)
+	if len(chat.AdvisorTopics) != 0 {
+		t.Error("SkipDeleteConfirm should delete immediately")
+	}
+}
+
+func TestCommandAdvisor_Merge(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("advisor")
+	chat := newTestChat()
+	src := addNotes(chat, "Покупки", "молоко")
+	dst := addNotes(chat, "ИКЕА", "полки", "стол")
+
+	// Source picker offers both topics.
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/advisor merge"), chat)
+	if !hasButton(responses[0].Buttons, fmt.Sprintf("advisor:merge:%d", src.ID)) {
+		t.Fatal("merge source picker missing topic button")
+	}
+
+	// Destination picker excludes the source.
+	responses = cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor merge:%d", src.ID)), chat)
+	if hasButton(responses[0].Buttons, fmt.Sprintf("advisor:merge:%d:%d", src.ID, src.ID)) {
+		t.Error("destination picker must not offer the source itself")
+	}
+	if !hasButton(responses[0].Buttons, fmt.Sprintf("advisor:merge:%d:%d", src.ID, dst.ID)) {
+		t.Fatal("destination picker missing target button")
+	}
+
+	// Performing the merge moves entries and drops the source.
+	cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/advisor merge:%d:%d", src.ID, dst.ID)), chat)
+	if len(chat.AdvisorTopics) != 1 {
+		t.Fatalf("expected 1 topic after merge, got %d", len(chat.AdvisorTopics))
+	}
+	if len(dst.Entries) != 3 {
+		t.Errorf("expected 3 entries in destination, got %d", len(dst.Entries))
 	}
 }
 

@@ -81,6 +81,7 @@ func mainMenuView() []sender.Response {
 		Text: "📋 Меню",
 		Buttons: [][]sender.Button{
 			{{Text: "🗂 Сессии", Data: "list:"}},
+			{{Text: "📒 Заметки", Data: "advisor:"}},
 			{{Text: "⚙️ Настройки", Data: "settings:"}},
 			{{Text: "🛠 Инструменты", Data: "menu:tools"}},
 			{{Text: "ℹ️ Инфо", Data: "menu:info"}},

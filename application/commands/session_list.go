@@ -33,7 +33,9 @@ const sessionsPerPage = 6
 //	""        → first page (or the page holding the active session)
 //	"<n>"     → navigate to page n (from a "list:<n>" nav button)
 //	"use:<id>"→ switch to session <id>, then show the page holding it
-//	"new"     → create a new session, switch to it, show the page holding it
+//	"new"     → ask for a topic (ForceReply), routed to /new
+//	"rename"  → ask for a new name of the active session (ForceReply), → /rename
+//	"del"     → per-session delete picker
 func (c *CommandSessionList) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) []sender.Response {
 	args := strings.TrimSpace(ctx.CommandArgs)
 
@@ -47,9 +49,11 @@ func (c *CommandSessionList) Execute(ctx *pipeline.RequestContext, chat *chat.Ch
 		}
 		page = sessionPageOf(chat, chat.ActiveSessionID)
 	case args == "new":
-		s := chat.AddSession("untitled")
-		chat.ActiveSessionID = s.ID
-		page = sessionPageOf(chat, chat.ActiveSessionID)
+		chat.PendingInput = "new"
+		return forceReplyPrompt("Название новой сессии:")
+	case args == "rename":
+		chat.PendingInput = "rename"
+		return forceReplyPrompt("Новое имя активной сессии:")
 	case args == "del":
 		return sessionDeleteView(chat)
 	case args != "":
@@ -131,7 +135,10 @@ func sessionListView(chat *chat.Chat, page int) []sender.Response {
 	}
 	sb.WriteString(fmt.Sprintf("\nАктивная: #%d", chat.ActiveSessionID))
 
-	actions := []sender.Button{{Text: "➕ Сессия", Data: "list:new"}}
+	actions := []sender.Button{
+		{Text: "➕ Сессия", Data: "list:new"},
+		{Text: "✏️ Имя", Data: "list:rename"},
+	}
 	if total > 1 {
 		actions = append(actions, sender.Button{Text: "🗑 Удалить", Data: "list:del"})
 	}

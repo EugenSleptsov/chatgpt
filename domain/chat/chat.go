@@ -43,6 +43,10 @@ type Chat struct {
 	Title            string
 	Memory           []string
 
+	// Advisor: auto-captured notes grouped into model-named topics.
+	AdvisorTopics      []*AdvisorTopic `json:",omitempty"`
+	NextAdvisorTopicID int             `json:",omitempty"`
+
 	// PendingInput holds the name of a command awaiting a free-text reply
 	// (button → ForceReply flow). The next text the user replies to the bot is
 	// routed to this command as its args. Transient — not persisted.

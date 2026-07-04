@@ -65,8 +65,15 @@ func buildHistoryContent(r *ChatResult) string {
 	}
 	return strings.Join(parts, "\n")
 }
+
+// memorySections combines the memory and advisor sections into the single
+// prompt string threaded through instructions, compaction and token metrics.
+func memorySections(chat *chatdomain.Chat) string {
+	return JoinPrompts(MemoryPrompt(chat), AdvisorPrompt(chat))
+}
+
 func (s *GPTService) buildInstructions(session *chatdomain.Session, chat *chatdomain.Chat) string {
-	return BuildInstructions(session, MemoryPrompt(chat), &PromptContext{
+	return BuildInstructions(session, memorySections(chat), &PromptContext{
 		ChatTitle:   chat.Title,
 		IsGroup:     chat.ChatID < 0, // Telegram convention: group IDs are negative
 		UseMarkdown: chat.Settings.UseMarkdown,
@@ -102,7 +109,7 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 	// old messages before sending. Uses real API token count from last
 	// response when available (like Claude Code's tokenCountWithEstimation).
 	if s.Compact != nil {
-		memPrompt := MemoryPrompt(chat)
+		memPrompt := memorySections(chat)
 		if s.Compact.ShouldCompact(session, memPrompt, session.LastInputTokens) {
 			compactUsage, compactErr := s.Compact.Compact(session, memPrompt)
 			if compactErr != nil {
@@ -127,7 +134,7 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 	if result == nil {
 		result = &ChatResult{Text: fallbackResponse}
 	}
-	result.Usage.Input = computeInputMetrics(session, MemoryPrompt(chat), chatTools)
+	result.Usage.Input = computeInputMetrics(session, memorySections(chat), chatTools)
 
 	// Accumulate cost on the chat (daily rolling counter).
 	chat.AccumulateCost(result.Usage.Cost, result.Usage.InputTokens, result.Usage.OutputTokens)
