@@ -119,12 +119,34 @@ func (w *Worker) ProcessUpdate(update telegram.Update) {
 
 	// 3. ResponseSender delivers responses to Telegram. Button taps edit the
 	//    originating message in place; everything else is a new message.
+	//    Keyboard (hub) messages are tracked per chat: opening a new hub
+	//    deletes the previous one so stale menus don't linger in history.
 	if ctx.IsCallback {
 		w.ResponseSender.Edit(chat.ChatID, ctx.MessageID, ctx.CallbackID, responses)
+		if responsesHaveButtons(responses) {
+			chat.LastHubMessageID = ctx.MessageID
+		}
 	} else {
-		w.ResponseSender.Send(chat.ChatID, ctx.MessageID, responses)
+		if responsesHaveButtons(responses) && chat.LastHubMessageID != 0 {
+			// Best-effort: fails for messages older than 48h or already deleted.
+			_ = w.Bot.DeleteMessage(chat.ChatID, chat.LastHubMessageID)
+			chat.LastHubMessageID = 0
+		}
+		if hubID := w.ResponseSender.Send(chat.ChatID, ctx.MessageID, responses); hubID != 0 {
+			chat.LastHubMessageID = hubID
+		}
 	}
 	w.ChatService.MarkDirty(chat.ChatID)
+}
+
+// responsesHaveButtons reports whether any response carries an inline keyboard.
+func responsesHaveButtons(responses []sender.Response) bool {
+	for _, r := range responses {
+		if len(r.Buttons) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // consumePendingInput implements the button → free-text input flow. When a chat

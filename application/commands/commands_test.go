@@ -41,10 +41,11 @@ func (b *fakeBot) SendImage(_ int64, _ string, _ string) error     { return nil 
 func (b *fakeBot) SendForceReply(_ int64, _ string) error          { return nil }
 func (b *fakeBot) SendImageData(_ int64, _ []byte, _ string) error { return nil }
 func (b *fakeBot) AudioUpload(_ int64, _ []byte) error             { return nil }
-func (b *fakeBot) ReplyWithButtons(chatID int64, replyTo int, text string, _ bool, _ [][]sender.Button) error {
+func (b *fakeBot) ReplyWithButtons(chatID int64, replyTo int, text string, _ bool, _ [][]sender.Button) (int, error) {
 	b.sent = append(b.sent, sentMsg{chatID: chatID, replyTo: replyTo, text: text})
-	return nil
+	return len(b.sent), nil // pseudo message ID
 }
+func (b *fakeBot) DeleteMessage(_ int64, _ int) error { return nil }
 func (b *fakeBot) EditMessage(_ int64, _ int, _ string, _ bool, _ [][]sender.Button) error {
 	return nil
 }

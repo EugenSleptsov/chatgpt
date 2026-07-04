@@ -144,9 +144,10 @@ func inlineKeyboard(rows [][]sender.Button) tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(kbRows...)
 }
 
-// ReplyWithButtons sends a (short) text reply with an inline keyboard attached.
-// Button messages are not split; they are expected to be small control panels.
-func (botInstance *Bot) ReplyWithButtons(chatID int64, replyTo int, text string, markdown bool, buttons [][]sender.Button) error {
+// ReplyWithButtons sends a (short) text reply with an inline keyboard attached
+// and returns the sent message's ID. Button messages are not split; they are
+// expected to be small control panels.
+func (botInstance *Bot) ReplyWithButtons(chatID int64, replyTo int, text string, markdown bool, buttons [][]sender.Button) (int, error) {
 	kb := inlineKeyboard(buttons)
 
 	if markdown {
@@ -156,8 +157,8 @@ func (botInstance *Bot) ReplyWithButtons(chatID int64, replyTo int, text string,
 		if replyTo != 0 {
 			msg.ReplyToMessageID = replyTo
 		}
-		if _, err := botInstance.transport.Send(msg); err == nil {
-			return nil
+		if sent, err := botInstance.transport.Send(msg); err == nil {
+			return sent.MessageID, nil
 		}
 		botInstance.LogClient.Logf("HTML formatting failed, falling back to plain text")
 	}
@@ -167,7 +168,17 @@ func (botInstance *Bot) ReplyWithButtons(chatID int64, replyTo int, text string,
 	if replyTo != 0 {
 		msg.ReplyToMessageID = replyTo
 	}
-	_, err := botInstance.transport.Send(msg)
+	sent, err := botInstance.transport.Send(msg)
+	if err != nil {
+		return 0, err
+	}
+	return sent.MessageID, nil
+}
+
+// DeleteMessage removes a bot message. Telegram only allows deleting messages
+// younger than 48 hours; older ones return an error the caller may ignore.
+func (botInstance *Bot) DeleteMessage(chatID int64, messageID int) error {
+	_, err := botInstance.transport.Request(tgbotapi.NewDeleteMessage(chatID, messageID))
 	return err
 }
 
@@ -219,7 +230,7 @@ func (botInstance *Bot) StartProgress(chatID int64, text string) func() {
 		return func() {}
 	}
 	return func() {
-		if _, err := botInstance.transport.Request(tgbotapi.NewDeleteMessage(chatID, sent.MessageID)); err != nil {
+		if err := botInstance.DeleteMessage(chatID, sent.MessageID); err != nil {
 			botInstance.LogClient.Logf("Error deleting progress message: %v", err)
 		}
 	}

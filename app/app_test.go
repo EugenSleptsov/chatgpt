@@ -24,7 +24,8 @@ import (
 
 // fakeBot implements sender.MessageSender + pipeline.FileResolver without touching the network.
 type fakeBot struct {
-	sent []fakeSent
+	sent    []fakeSent
+	deleted []int // message IDs passed to DeleteMessage
 }
 
 type fakeSent struct {
@@ -58,8 +59,12 @@ func (b *fakeBot) AudioUpload(chatID int64, bytes []byte) error {
 	b.sent = append(b.sent, fakeSent{chatID: chatID, audio: bytes})
 	return nil
 }
-func (b *fakeBot) ReplyWithButtons(chatID int64, replyTo int, text string, _ bool, _ [][]sender.Button) error {
+func (b *fakeBot) ReplyWithButtons(chatID int64, replyTo int, text string, _ bool, _ [][]sender.Button) (int, error) {
 	b.sent = append(b.sent, fakeSent{chatID: chatID, replyTo: replyTo, text: text})
+	return len(b.sent), nil // pseudo message ID
+}
+func (b *fakeBot) DeleteMessage(chatID int64, messageID int) error {
+	b.deleted = append(b.deleted, messageID)
 	return nil
 }
 func (b *fakeBot) EditMessage(chatID int64, messageID int, text string, _ bool, _ [][]sender.Button) error {
@@ -437,6 +442,38 @@ func TestWorker_ProcessUpdate_SavesAfter(t *testing.T) {
 	// Save is called by Start after every job; with MemoryStorage it is
 	// a no-op, so we just verify that Start completes without panic.
 	w.Start(ch)
+}
+
+func TestWorker_HubCleanup(t *testing.T) {
+	bot := &fakeBot{}
+	w, cs := buildTestWorker(bot)
+
+	// First hub: /menu sends a keyboard message and tracks it.
+	w.ProcessUpdate(makeCommandUpdate(42, 100, "menu"))
+	c, _ := cs.GetChat(42)
+	firstHub := c.LastHubMessageID
+	if firstHub == 0 {
+		t.Fatal("hub message must be tracked")
+	}
+	if len(bot.deleted) != 0 {
+		t.Fatalf("nothing should be deleted yet, got %v", bot.deleted)
+	}
+
+	// Second hub: the previous hub message is deleted, tracking moves on.
+	w.ProcessUpdate(makeCommandUpdate(42, 100, "menu"))
+	if len(bot.deleted) != 1 || bot.deleted[0] != firstHub {
+		t.Fatalf("expected first hub %d deleted, got %v", firstHub, bot.deleted)
+	}
+	if c.LastHubMessageID == 0 || c.LastHubMessageID == firstHub {
+		t.Fatalf("tracking must move to the new hub, got %d", c.LastHubMessageID)
+	}
+
+	// Plain text traffic (no buttons) must not delete or retrack the hub.
+	before := c.LastHubMessageID
+	w.ProcessUpdate(makeUpdate(42, 100, "hi"))
+	if len(bot.deleted) != 1 || c.LastHubMessageID != before {
+		t.Fatal("non-hub responses must not touch hub tracking")
+	}
 }
 
 func TestWorker_ProcessReminders(t *testing.T) {

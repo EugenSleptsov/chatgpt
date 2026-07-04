@@ -11,8 +11,12 @@ type MessageSender interface {
 	SendImageData(chatID int64, data []byte, caption string) error
 	AudioUpload(chatID int64, bytes []byte) error
 
-	// ReplyWithButtons sends a text reply carrying an inline keyboard.
-	ReplyWithButtons(chatID int64, replyTo int, text string, markdown bool, buttons [][]Button) error
+	// ReplyWithButtons sends a text reply carrying an inline keyboard and
+	// returns the sent message's ID (0 on failure).
+	ReplyWithButtons(chatID int64, replyTo int, text string, markdown bool, buttons [][]Button) (int, error)
+	// DeleteMessage removes a previously sent bot message. Telegram only
+	// allows this within 48 hours; older messages fail silently upstream.
+	DeleteMessage(chatID int64, messageID int) error
 	// EditMessage replaces the text and inline keyboard of an existing message
 	// (used when a button tap should update the message in place).
 	EditMessage(chatID int64, messageID int, text string, markdown bool, buttons [][]Button) error
@@ -28,8 +32,11 @@ type ResponseSender struct {
 	OnError func(error) // called when SendImageData / AudioUpload fails; may be nil
 }
 
-// Send delivers every response in order.
-func (s *ResponseSender) Send(chatID int64, messageID int, responses []Response) {
+// Send delivers every response in order. It returns the message ID of the
+// last sent keyboard (buttons) message, or 0 when none was sent — the worker
+// uses it to track the chat's current hub message.
+func (s *ResponseSender) Send(chatID int64, messageID int, responses []Response) int {
+	lastHubID := 0
 	for _, r := range responses {
 		switch {
 		case r.ForceReply:
@@ -46,14 +53,19 @@ func (s *ResponseSender) Send(chatID int64, messageID int, responses []Response)
 			}
 		case r.Text != "":
 			if len(r.Buttons) > 0 {
-				if err := s.Bot.ReplyWithButtons(chatID, messageID, r.Text, r.Markdown, r.Buttons); err != nil && s.OnError != nil {
+				id, err := s.Bot.ReplyWithButtons(chatID, messageID, r.Text, r.Markdown, r.Buttons)
+				if err != nil && s.OnError != nil {
 					s.OnError(err)
+				}
+				if id != 0 {
+					lastHubID = id
 				}
 			} else {
 				s.Bot.ReplyMarkdown(chatID, messageID, r.Text, r.Markdown)
 			}
 		}
 	}
+	return lastHubID
 }
 
 // Edit delivers responses produced by a button tap: it acknowledges the

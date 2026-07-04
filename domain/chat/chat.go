@@ -50,6 +50,11 @@ type Chat struct {
 	AdvisorTopics      []*AdvisorTopic `json:",omitempty"`
 	NextAdvisorTopicID int             `json:",omitempty"`
 
+	// LastHubMessageID is the message ID of the most recent button-hub message
+	// (menu, settings, session list, ...). Opening a new hub deletes the
+	// previous one so stale menus don't pile up in the chat history.
+	LastHubMessageID int `json:",omitempty"`
+
 	// PendingInput holds the name of a command awaiting a free-text reply
 	// (button → ForceReply flow). The next text the user replies to the bot is
 	// routed to this command as its args. Transient — not persisted.
