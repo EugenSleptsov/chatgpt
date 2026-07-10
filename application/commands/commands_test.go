@@ -554,30 +554,148 @@ func TestCommandSystem_TruncatesLong(t *testing.T) {
 	}
 }
 
-// ======================== settings: memory ========================
+// ======================== settings: supermemory ========================
 
-func TestCommandSettings_MemoryViewAndClear(t *testing.T) {
+func TestCommandSettings_SupermemoryToggle(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("settings")
 	chat := newTestChat()
-	chat.Memory = []string{"fact1", "fact2"}
 
-	// Memory view shows facts and a clear button.
-	responses := cmd.Execute(makeCmdCtx(1, 100, "/settings memory"), chat)
-	if !strings.Contains(responses[0].Text, "fact1") || !strings.Contains(responses[0].Text, "fact2") {
-		t.Errorf("facts missing in: %q", responses[0].Text)
+	if chat.Settings.Supermemory {
+		t.Fatal("supermemory must be off by default")
 	}
-	if !hasButton(responses[0].Buttons, "settings:memory:clear") {
-		t.Error("memory view should have a clear button")
+	cmd.Execute(makeCmdCtx(1, 100, "/settings sm"), chat)
+	if !chat.Settings.Supermemory {
+		t.Error("first toggle must enable supermemory")
+	}
+	cmd.Execute(makeCmdCtx(1, 100, "/settings sm"), chat)
+	if chat.Settings.Supermemory {
+		t.Error("second toggle must disable supermemory")
+	}
+}
+
+// ======================== /memory (supermemory hub) ========================
+
+func TestCommandMemory_EmptyIndex(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("memory")
+	chat := newTestChat()
+
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/memory"), chat)
+	if !strings.Contains(responses[0].Text, "Узлов пока нет") {
+		t.Errorf("unexpected empty view: %q", responses[0].Text)
+	}
+	if !hasButton(responses[0].Buttons, "memory:toggle") {
+		t.Error("empty view must offer the enable/disable toggle")
+	}
+}
+
+func TestCommandMemory_ToggleSetting(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("memory")
+	chat := newTestChat()
+
+	cmd.Execute(makeCmdCtx(1, 100, "/memory toggle"), chat)
+	if !chat.Settings.Supermemory {
+		t.Error("toggle must enable supermemory")
+	}
+	cmd.Execute(makeCmdCtx(1, 100, "/memory toggle"), chat)
+	if chat.Settings.Supermemory {
+		t.Error("second toggle must disable supermemory")
+	}
+}
+
+func TestCommandMemory_NodeViewAndPin(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("memory")
+	chat := newTestChat()
+	n := chat.AddMemoryNode("обсуждение налогов", "детали саммари", 0, 4, 1)
+
+	responses := cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/memory node:%d", n.ID)), chat)
+	if !strings.Contains(responses[0].Text, "обсуждение налогов") || !strings.Contains(responses[0].Text, "детали саммари") {
+		t.Errorf("node view missing content: %q", responses[0].Text)
+	}
+	if !hasButton(responses[0].Buttons, fmt.Sprintf("memory:src:%d", n.ID)) {
+		t.Error("node with a source range must offer the source button")
 	}
 
-	// Clear wipes memory and re-renders; the clear button disappears.
-	responses = cmd.Execute(makeCmdCtx(1, 100, "/settings memory:clear"), chat)
-	if len(chat.Memory) != 0 {
-		t.Error("memory should be empty after clear")
+	cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/memory pin:%d", n.ID)), chat)
+	if !n.Pinned {
+		t.Error("pin route must set Pinned")
 	}
-	if hasButton(responses[0].Buttons, "settings:memory:clear") {
-		t.Error("empty memory view must not offer a clear button")
+	cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/memory pin:%d", n.ID)), chat)
+	if n.Pinned {
+		t.Error("pin route must toggle Pinned off")
+	}
+}
+
+func TestCommandMemory_IndexShowsOnlyRoots(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("memory")
+	chat := newTestChat()
+	a := chat.AddMemoryNode("дочерний узел", "…", 0, 0, 1)
+	parent := chat.AddMemoryNode("родительский узел", "…", 0, 0, 1)
+	parent.Children = []int{a.ID}
+
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/memory"), chat)
+	if hasButton(responses[0].Buttons, fmt.Sprintf("memory:node:%d", a.ID)) {
+		t.Error("child node must not be listed in the root index")
+	}
+	if !hasButton(responses[0].Buttons, fmt.Sprintf("memory:node:%d", parent.ID)) {
+		t.Error("parent node must be listed in the root index")
+	}
+
+	// Node view of the parent exposes the child for descent.
+	responses = cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/memory node:%d", parent.ID)), chat)
+	if !hasButton(responses[0].Buttons, fmt.Sprintf("memory:node:%d", a.ID)) {
+		t.Error("parent view must list children buttons")
+	}
+}
+
+func TestCommandMemory_DeleteWithConfirm(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("memory")
+	chat := newTestChat()
+	child := chat.AddMemoryNode("дочерний", "…", 0, 0, 1)
+	parent := chat.AddMemoryNode("родитель", "…", 0, 0, 1)
+	parent.Children = []int{child.ID}
+
+	// First tap asks for confirmation, nothing deleted yet.
+	responses := cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/memory del:%d", parent.ID)), chat)
+	if !strings.Contains(responses[0].Text, "Удалить узел") {
+		t.Errorf("expected confirmation prompt, got: %q", responses[0].Text)
+	}
+	if !hasButton(responses[0].Buttons, fmt.Sprintf("memory:del:yes:%d", parent.ID)) {
+		t.Error("confirmation must offer the yes button")
+	}
+	if chat.FindMemoryNode(parent.ID) == nil {
+		t.Fatal("node must not be deleted before confirmation")
+	}
+
+	// Confirmation deletes the parent; the child is promoted back to a root.
+	cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/memory del:yes:%d", parent.ID)), chat)
+	if chat.FindMemoryNode(parent.ID) != nil {
+		t.Error("node must be deleted after confirmation")
+	}
+	if chat.FindMemoryNode(child.ID) == nil {
+		t.Error("children must survive parent deletion")
+	}
+	roots := chat.RootMemoryNodes()
+	if len(roots) != 1 || roots[0].ID != child.ID {
+		t.Errorf("child must become a root, got %+v", roots)
+	}
+}
+
+func TestCommandMemory_DeleteSkipConfirm(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("memory")
+	chat := newTestChat()
+	chat.Settings.SkipDeleteConfirm = true
+	n := chat.AddMemoryNode("узел", "…", 0, 0, 1)
+
+	cmd.Execute(makeCmdCtx(1, 100, fmt.Sprintf("/memory del:%d", n.ID)), chat)
+	if chat.FindMemoryNode(n.ID) != nil {
+		t.Error("SkipDeleteConfirm must delete immediately")
 	}
 }
 
@@ -1020,9 +1138,10 @@ func TestCommandAdvisor_ReminderSnooze(t *testing.T) {
 	if !strings.Contains(responses[0].Text, "Перенесено") {
 		t.Errorf("unexpected snooze text: %q", responses[0].Text)
 	}
-	// Snoozed message keeps its controls for another round.
-	if !hasButton(responses[0].Buttons, fmt.Sprintf("advisor:snooze:%d:%d:1d", topic.ID, e.ID)) {
-		t.Error("snoozed message must keep snooze buttons")
+	// Snoozed message must drop its controls — a live button row allowed
+	// double taps; the reminder fires again later with fresh buttons.
+	if len(responses[0].Buttons) != 0 {
+		t.Error("snoozed message must not keep buttons")
 	}
 
 	// Tomorrow morning.

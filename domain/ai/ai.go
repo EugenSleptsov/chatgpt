@@ -56,7 +56,7 @@ type Message struct {
 // --- Reasoning types ---
 
 // Reasoning controls reasoning-model thinking depth on the Responses API.
-// Effort: "none" | "low" | "medium" | "high" | "xhigh". Summary: "auto" | "concise".
+// Effort: "none" | "low" | "medium" | "high" | "xhigh" | "max". Summary: "auto" | "concise".
 // A nil *Reasoning omits the field entirely (for non-reasoning models).
 type Reasoning struct {
 	Effort  string `json:"effort,omitempty"`

@@ -8,6 +8,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // builtinTools are executed server-side by OpenAI: web_search returns text,
@@ -33,20 +34,8 @@ var functionTools = []ai.Tool{
 	},
 	{
 		Type:        "function",
-		Name:        "update_memory",
-		Description: "Save or update a fact about the user/chat for future conversations. Call when you learn something worth remembering (name, preferences, context) or when the user explicitly asks to remember something. Each call adds one fact. Existing memory is shown in the system prompt. For concrete notes/todo/list items ('запиши', 'напомни', shopping items, tasks) use save_note instead.",
-		Parameters: &ai.FunctionParameters{
-			Type: "object",
-			Properties: map[string]ai.ParameterProperty{
-				"fact": {Type: "string", Description: "A single fact to remember, e.g. 'User prefers dark mode' or 'User's name is Alex'"},
-			},
-			Required: []string{"fact"},
-		},
-	},
-	{
-		Type:        "function",
 		Name:        "save_note",
-		Description: "Save a concrete note into a topical list (advisor). Call when the user asks to write something down, note it, or keep it for later ('запиши', 'запомни этот пункт', 'напомни мне про...'). Pick an existing topic from the system prompt when one fits, otherwise invent a short topic name in the user's language (e.g. 'Налоги', 'Покупки в ИКЕА'). One call per note. When the user mentions a date or time ('завтра в 15', 'в пятницу'), resolve it against the current date from the system prompt and pass remind_at. Unlike update_memory (facts about the user), notes are list items the user will review and delete later.",
+		Description: "Save a concrete note into a topical list (advisor). Call when the user asks to write something down, note it, or keep it for later ('запиши', 'запомни этот пункт', 'напомни мне про...'). Pick an existing topic from the system prompt when one fits, otherwise invent a short topic name in the user's language (e.g. 'Налоги', 'Покупки в ИКЕА'). One call per note. When the user mentions a date or time ('завтра в 15', 'в пятницу'), resolve it against the current date from the system prompt and pass remind_at. Notes are list items the user will review and delete later.",
 		Parameters: &ai.FunctionParameters{
 			Type: "object",
 			Properties: map[string]ai.ParameterProperty{
@@ -85,8 +74,55 @@ var functionTools = []ai.Tool{
 	},
 }
 
-// chatTools is the single tool set sent on every chat completion.
-var chatTools = concatTools(builtinTools, functionTools)
+// supermemoryTools are exposed only when the chat's Supermemory setting is on.
+var supermemoryTools = []ai.Tool{
+	{
+		Type:        "function",
+		Name:        "search_memory",
+		Description: "Search the long-term memory (supermemory) of this chat by keyword: matches node hooks and summaries across all layers, including nodes not shown in the index. Call when the user refers to something from past conversations that is not in the current context ('мы это уже обсуждали', 'как я тогда говорил').",
+		Parameters: &ai.FunctionParameters{
+			Type: "object",
+			Properties: map[string]ai.ParameterProperty{
+				"query": {Type: "string", Description: "Keyword or phrase to search for, in the language of the conversation"},
+			},
+			Required: []string{"query"},
+		},
+	},
+	{
+		Type:        "function",
+		Name:        "read_memory",
+		Description: "Read one supermemory node: its full summary, child nodes (descend deeper by calling read_memory again) and whether a raw transcript is available. Node IDs come from the supermemory index in the system prompt or from search_memory.",
+		Parameters: &ai.FunctionParameters{
+			Type: "object",
+			Properties: map[string]ai.ParameterProperty{
+				"node_id": {Type: "string", Description: "Node ID (the #N number)"},
+			},
+			Required: []string{"node_id"},
+		},
+	},
+	{
+		Type:        "function",
+		Name:        "read_memory_source",
+		Description: "Read the raw archived transcript behind a supermemory node, verbatim. Use after read_memory when the summary is not detailed enough (exact wording, numbers, code). Output is capped; prefer summaries when they suffice.",
+		Parameters: &ai.FunctionParameters{
+			Type: "object",
+			Properties: map[string]ai.ParameterProperty{
+				"node_id": {Type: "string", Description: "Node ID (the #N number)"},
+			},
+			Required: []string{"node_id"},
+		},
+	},
+}
+
+// toolsForChat assembles the tool set for one completion: the base tools plus
+// the supermemory tools when the chat has the feature enabled.
+func toolsForChat(c *chatdomain.Chat) []ai.Tool {
+	tools := concatTools(builtinTools, functionTools)
+	if c.Settings.Supermemory {
+		tools = append(tools, supermemoryTools...)
+	}
+	return tools
+}
 
 func concatTools(a, b []ai.Tool) []ai.Tool {
 	r := make([]ai.Tool, 0, len(a)+len(b))
@@ -110,6 +146,7 @@ type ToolRunner struct {
 	CostFn    CostFunc
 	ImageCost float64
 	Progress  ProgressReporter
+	Archive   chatdomain.Archive // raw transcript store for read_memory_source (may be nil)
 }
 
 const maxToolIterations = 5
@@ -186,8 +223,12 @@ func (r ToolRunner) executeSingleToolCall(tc ai.ToolCall, result *ChatResult, ch
 	switch tc.Name {
 	case "generate_voice":
 		return r.executeVoiceToolCall(tc, result, chat.ChatID)
-	case "update_memory":
-		return r.executeUpdateMemory(tc, chat)
+	case "search_memory":
+		return r.executeSearchMemory(tc, chat)
+	case "read_memory":
+		return r.executeReadMemory(tc, chat)
+	case "read_memory_source":
+		return r.executeReadMemorySource(tc, chat)
 	case "save_note":
 		return r.executeSaveNote(tc, chat)
 	case "read_notes":
@@ -220,17 +261,71 @@ func (r ToolRunner) executeVoiceToolCall(tc ai.ToolCall, result *ChatResult, cha
 	return marshalToolResult(toolResult{Status: "success", Text: text})
 }
 
-func (r ToolRunner) executeUpdateMemory(tc ai.ToolCall, chat *chatdomain.Chat) string {
-	fact := strings.TrimSpace(tc.Args["fact"])
-	if fact == "" {
-		return marshalToolResult(toolResult{Status: "error", Error: "empty fact"})
+func (r ToolRunner) executeSearchMemory(tc ai.ToolCall, chat *chatdomain.Chat) string {
+	if !chat.Settings.Supermemory {
+		return marshalToolResult(toolResult{Status: "error", Error: "supermemory is disabled in this chat"})
 	}
-	AddMemory(chat, fact)
-	return marshalToolResult(toolResult{Status: "success", Text: "Fact saved"})
+	nodes := SearchMemoryNodes(chat, tc.Args["query"])
+	if len(nodes) == 0 {
+		return marshalToolResult(toolResult{Status: "success", Text: "No matches. Try a different keyword."})
+	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("%d node(s) matched (read_memory for details):\n", len(nodes)))
+	for _, n := range nodes {
+		sb.WriteString(fmt.Sprintf("#%d — %s\n", n.ID, n.Hook))
+	}
+	return marshalToolResult(toolResult{Status: "success", Text: sb.String()})
+}
+
+func (r ToolRunner) executeReadMemory(tc ai.ToolCall, chat *chatdomain.Chat) string {
+	if !chat.Settings.Supermemory {
+		return marshalToolResult(toolResult{Status: "error", Error: "supermemory is disabled in this chat"})
+	}
+	node, errText := findMemoryNodeArg(chat, tc.Args["node_id"])
+	if errText != "" {
+		return marshalToolResult(toolResult{Status: "error", Error: errText})
+	}
+	return marshalToolResult(toolResult{Status: "success", Text: MemoryNodeForTool(chat, node)})
+}
+
+func (r ToolRunner) executeReadMemorySource(tc ai.ToolCall, chat *chatdomain.Chat) string {
+	if !chat.Settings.Supermemory {
+		return marshalToolResult(toolResult{Status: "error", Error: "supermemory is disabled in this chat"})
+	}
+	node, errText := findMemoryNodeArg(chat, tc.Args["node_id"])
+	if errText != "" {
+		return marshalToolResult(toolResult{Status: "error", Error: errText})
+	}
+	if node.To <= node.From {
+		return marshalToolResult(toolResult{Status: "error", Error: fmt.Sprintf("node #%d has no raw transcript attached", node.ID)})
+	}
+	if r.Archive == nil {
+		return marshalToolResult(toolResult{Status: "error", Error: "raw archive is not available"})
+	}
+	msgs, err := r.Archive.ReadRange(chat.ChatID, node.From, node.To)
+	if err != nil {
+		log.Printf("[ToolCall] read_memory_source error: %v", err)
+		return marshalToolResult(toolResult{Status: "error", Error: "failed to read the archive"})
+	}
+	return marshalToolResult(toolResult{Status: "success", Text: MemorySourceForTool(chat, msgs)})
+}
+
+// findMemoryNodeArg resolves a "#N" / "N" tool argument into a node.
+func findMemoryNodeArg(chat *chatdomain.Chat, arg string) (*chatdomain.MemoryNode, string) {
+	id, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(arg), "#")))
+	if err != nil {
+		return nil, "invalid node_id: " + arg
+	}
+	node := chat.FindMemoryNode(id)
+	if node == nil {
+		return nil, fmt.Sprintf("node #%d not found", id)
+	}
+	return node, ""
 }
 
 func (r ToolRunner) executeSaveNote(tc ai.ToolCall, chat *chatdomain.Chat) string {
-	remindAt, err := ParseRemindAt(tc.Args["remind_at"])
+	loc := chat.Location()
+	remindAt, err := ParseRemindAt(tc.Args["remind_at"], loc, time.Now())
 	if err != nil {
 		return marshalToolResult(toolResult{Status: "error", Error: err.Error()})
 	}
@@ -240,7 +335,7 @@ func (r ToolRunner) executeSaveNote(tc ai.ToolCall, chat *chatdomain.Chat) strin
 	}
 	text := fmt.Sprintf("Note saved to topic %q (%d entries)", topic.Name, len(topic.Entries))
 	if remindAt != nil {
-		text += ", reminder at " + remindAt.Format("2006-01-02 15:04")
+		text += ", reminder at " + remindAt.In(loc).Format("2006-01-02 15:04")
 	}
 	return marshalToolResult(toolResult{Status: "success", Text: text})
 }
@@ -254,7 +349,8 @@ func (r ToolRunner) executeSetReminder(tc ai.ToolCall, chat *chatdomain.Chat) st
 	if err != nil {
 		return marshalToolResult(toolResult{Status: "error", Error: "invalid entry_id: " + tc.Args["entry_id"]})
 	}
-	remindAt, err := ParseRemindAt(tc.Args["remind_at"])
+	loc := chat.Location()
+	remindAt, err := ParseRemindAt(tc.Args["remind_at"], loc, time.Now())
 	if err != nil {
 		return marshalToolResult(toolResult{Status: "error", Error: err.Error()})
 	}
@@ -264,7 +360,7 @@ func (r ToolRunner) executeSetReminder(tc ai.ToolCall, chat *chatdomain.Chat) st
 	if remindAt == nil {
 		return marshalToolResult(toolResult{Status: "success", Text: fmt.Sprintf("Reminder cleared on entry #%d", entryID)})
 	}
-	return marshalToolResult(toolResult{Status: "success", Text: fmt.Sprintf("Reminder on entry #%d set to %s", entryID, remindAt.Format("2006-01-02 15:04"))})
+	return marshalToolResult(toolResult{Status: "success", Text: fmt.Sprintf("Reminder on entry #%d set to %s", entryID, remindAt.In(loc).Format("2006-01-02 15:04"))})
 }
 
 func (r ToolRunner) executeReadNotes(tc ai.ToolCall, chat *chatdomain.Chat) string {
@@ -272,7 +368,7 @@ func (r ToolRunner) executeReadNotes(tc ai.ToolCall, chat *chatdomain.Chat) stri
 	if topic == nil {
 		return marshalToolResult(toolResult{Status: "error", Error: "topic not found: " + tc.Args["topic"]})
 	}
-	return marshalToolResult(toolResult{Status: "success", Text: AdvisorNotesForTool(topic)})
+	return marshalToolResult(toolResult{Status: "success", Text: AdvisorNotesForTool(topic, chat.Location())})
 }
 
 // toolResult is the JSON structure returned by tool call handlers.

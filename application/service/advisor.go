@@ -29,37 +29,59 @@ func AddAdvisorNote(chat *chatdomain.Chat, topic, note string, remindAt *time.Ti
 	if topic == "" || note == "" {
 		return nil, fmt.Errorf("topic and note must be non-empty")
 	}
-	if len(topic) > maxAdvisorTopicLen {
-		topic = topic[:maxAdvisorTopicLen]
-	}
-	if len(note) > maxAdvisorNoteLen {
-		note = note[:maxAdvisorNoteLen]
-	}
+	topic = truncateRunes(topic, maxAdvisorTopicLen)
+	note = truncateRunes(note, maxAdvisorNoteLen)
 	t, entry := chat.AddAdvisorNote(topic, note)
 	entry.RemindAt = remindAt
 	log.Printf("[Advisor] note added to %q: %s (topic now %d entries, remind: %v)", t.Name, note, len(t.Entries), remindAt)
 	return t, nil
 }
 
-// ParseRemindAt parses a reminder time coming from the model:
-// "2006-01-02 15:04" (also with a 'T' separator) or a bare date "2006-01-02",
-// which defaults to defaultRemindHour local time. Empty input means "no
-// reminder" and yields nil without error.
-func ParseRemindAt(s string) (*time.Time, error) {
+// ParseRemindAt parses a reminder time coming from the model, interpreted in
+// the chat's timezone: "2006-01-02 15:04" (also with a 'T' separator) or a
+// bare date "2006-01-02", which defaults to defaultRemindHour. Empty input
+// means "no reminder" and yields nil without error. Times already in the past
+// (relative to now, with a minute of grace) are rejected so a model mistake
+// doesn't fire a reminder instantly.
+func ParseRemindAt(s string, loc *time.Location, now time.Time) (*time.Time, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil, nil
 	}
+	if loc == nil {
+		loc = time.Local
+	}
+	var t time.Time
+	parsed := false
 	for _, layout := range []string{"2006-01-02 15:04", "2006-01-02T15:04"} {
-		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
-			return &t, nil
+		if p, err := time.ParseInLocation(layout, s, loc); err == nil {
+			t, parsed = p, true
+			break
 		}
 	}
-	if d, err := time.ParseInLocation("2006-01-02", s, time.Local); err == nil {
-		t := time.Date(d.Year(), d.Month(), d.Day(), defaultRemindHour, 0, 0, 0, time.Local)
-		return &t, nil
+	if !parsed {
+		if d, err := time.ParseInLocation("2006-01-02", s, loc); err == nil {
+			t = time.Date(d.Year(), d.Month(), d.Day(), defaultRemindHour, 0, 0, 0, loc)
+			parsed = true
+		}
 	}
-	return nil, fmt.Errorf("invalid remind_at %q, expected YYYY-MM-DD or YYYY-MM-DD HH:MM", s)
+	if !parsed {
+		return nil, fmt.Errorf("invalid remind_at %q, expected YYYY-MM-DD or YYYY-MM-DD HH:MM", s)
+	}
+	if t.Before(now.Add(-time.Minute)) {
+		return nil, fmt.Errorf("remind_at %q is in the past (now is %s) — use a future time", s, now.In(loc).Format("2006-01-02 15:04"))
+	}
+	return &t, nil
+}
+
+// truncateRunes shortens s to max runes (byte slicing would cut multi-byte
+// characters — Cyrillic topics — in half).
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
 }
 
 // AdvisorPrompt returns the advisor section for the system prompt: topic
@@ -78,14 +100,18 @@ func AdvisorPrompt(chat *chatdomain.Chat) string {
 
 // AdvisorNotesForTool renders one topic's entries as plain text for the
 // read_notes tool output. Entry IDs are included so the model can reference
-// them in set_reminder.
-func AdvisorNotesForTool(topic *chatdomain.AdvisorTopic) string {
+// them in set_reminder. Times are rendered in the chat's timezone so the model
+// and the user talk about the same wall clock.
+func AdvisorNotesForTool(topic *chatdomain.AdvisorTopic, loc *time.Location) string {
+	if loc == nil {
+		loc = time.Local
+	}
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Topic %q, %d entries:\n", topic.Name, len(topic.Entries)))
 	for _, e := range topic.Entries {
-		sb.WriteString(fmt.Sprintf("- #%d [%s] %s", e.ID, e.Created.Format("2006-01-02"), e.Text))
+		sb.WriteString(fmt.Sprintf("- #%d [%s] %s", e.ID, e.Created.In(loc).Format("2006-01-02"), e.Text))
 		if e.RemindAt != nil {
-			sb.WriteString(fmt.Sprintf(" (reminder: %s)", e.RemindAt.Format("2006-01-02 15:04")))
+			sb.WriteString(fmt.Sprintf(" (reminder: %s)", e.RemindAt.In(loc).Format("2006-01-02 15:04")))
 		}
 		sb.WriteString("\n")
 	}

@@ -9,15 +9,17 @@ type modelSpec struct {
 	PriceIn       float64 // USD per 1 M input tokens
 	PriceOut      float64 // USD per 1 M output tokens
 	ContextWindow int     // max input tokens (used by auto-compact)
-	Effort        string  // reasoning effort: "medium" | "high" (empty = omit reasoning)
+	Effort        string  // reasoning effort: "none"|"low"|"medium"|"high"|"xhigh"|"max" (empty = omit reasoning)
 }
 
 // models maps abstract tier IDs to concrete OpenAI specs.
 // To upgrade models or pricing — change the values here, nothing else.
+// ContextWindow is deliberately capped below the model's real limit (1.05M)
+// to bound cost/latency via auto-compact; do not raise it when updating models.
 var models = map[string]modelSpec{
-	"basic":   {APIModel: "gpt-5.4-nano", PriceIn: 0.20, PriceOut: 1.25, ContextWindow: 128_000, Effort: "medium"},
-	"fast":    {APIModel: "gpt-5.4-mini", PriceIn: 0.75, PriceOut: 4.50, ContextWindow: 400_000, Effort: "medium"},
-	"premium": {APIModel: "gpt-5.5", PriceIn: 5.00, PriceOut: 30.00, ContextWindow: 1_000_000, Effort: "high"},
+	"basic":   {APIModel: "gpt-5.6-luna", PriceIn: 1.00, PriceOut: 6.00, ContextWindow: 200_000, Effort: "high"},
+	"fast":    {APIModel: "gpt-5.6-terra", PriceIn: 2.50, PriceOut: 15.00, ContextWindow: 200_000, Effort: "xhigh"},
+	"premium": {APIModel: "gpt-5.6-sol", PriceIn: 5.00, PriceOut: 30.00, ContextWindow: 200_000, Effort: "max"},
 }
 
 // ImageGenerationCost is the approximate per-image cost for DALL-E 3 1024×1024.

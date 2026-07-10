@@ -76,8 +76,12 @@ func (w *Worker) ProcessReminders(chatID int64) {
 		return
 	}
 	for _, r := range due {
-		r.Entry.RemindAt = nil
-		w.ResponseSender.Send(chatID, 0, []sender.Response{commands.AdvisorReminderResponse(r.Topic, r.Entry)})
+		// Clear RemindAt only after the message went out: Send returns the sent
+		// keyboard message's ID (reminders always carry buttons), 0 on failure —
+		// a failed send leaves the reminder due, retried on the next tick.
+		if id := w.ResponseSender.Send(chatID, 0, []sender.Response{commands.AdvisorReminderResponse(r.Topic, r.Entry)}); id != 0 {
+			r.Entry.RemindAt = nil
+		}
 	}
 	w.ChatService.MarkDirty(chatID)
 }

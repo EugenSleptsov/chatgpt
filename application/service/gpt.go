@@ -40,19 +40,21 @@ func extractUsage(resp *ai.Response, tierID, phase string, costFn CostFunc, tool
 // tool loop.
 type GPTService struct {
 	GptClient ai.Client
-	Compact   *CompactService  // auto-compact (may be nil)
-	CostFn    CostFunc         // provider-specific token cost calculator
-	ImageCost float64          // provider-specific per-image generation cost (USD)
-	Progress  ProgressReporter // status/verbose messages (may be nil)
+	Compact   *CompactService    // auto-compact (may be nil)
+	CostFn    CostFunc           // provider-specific token cost calculator
+	ImageCost float64            // provider-specific per-image generation cost (USD)
+	Progress  ProgressReporter   // status/verbose messages (may be nil)
+	Archive   chatdomain.Archive // supermemory raw transcript store (may be nil)
 }
 
-func NewGPTService(client ai.Client, compact *CompactService, costFn CostFunc, imageCost float64, progress ProgressReporter) *GPTService {
+func NewGPTService(client ai.Client, compact *CompactService, costFn CostFunc, imageCost float64, progress ProgressReporter, archive chatdomain.Archive) *GPTService {
 	return &GPTService{
 		GptClient: client,
 		Compact:   compact,
 		CostFn:    costFn,
 		ImageCost: imageCost,
 		Progress:  progress,
+		Archive:   archive,
 	}
 }
 
@@ -70,6 +72,7 @@ func (s *GPTService) toolRunner() ToolRunner {
 		CostFn:    s.CostFn,
 		ImageCost: s.ImageCost,
 		Progress:  s.Progress,
+		Archive:   s.Archive,
 	}
 }
 
@@ -102,10 +105,11 @@ func buildHistoryContent(r *ChatResult) string {
 	return strings.Join(parts, "\n")
 }
 
-// memorySections combines the memory and advisor sections into the single
-// prompt string threaded through instructions, compaction and token metrics.
+// memorySections combines the supermemory index and advisor sections into the
+// single prompt string threaded through instructions, compaction and token
+// metrics.
 func memorySections(chat *chatdomain.Chat) string {
-	return JoinPrompts(MemoryPrompt(chat), AdvisorPrompt(chat))
+	return JoinPrompts(SupermemoryPrompt(chat), AdvisorPrompt(chat))
 }
 
 func (s *GPTService) buildInstructions(session *chatdomain.Session, chat *chatdomain.Chat) string {
@@ -113,6 +117,8 @@ func (s *GPTService) buildInstructions(session *chatdomain.Session, chat *chatdo
 		ChatTitle:   chat.Title,
 		IsGroup:     chat.ChatID < 0, // Telegram convention: group IDs are negative
 		UseMarkdown: chat.Settings.UseMarkdown,
+		Location:    chat.Location(),
+		Supermemory: chat.Settings.Supermemory,
 	})
 }
 
@@ -138,10 +144,14 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 
 	session := chat.ActiveSession()
 
+	// Supermemory: archive new history lines before compaction so evicted
+	// entries carry their raw-source ranges. No-op when the feature is off.
+	ArchiveHistory(s.Archive, chat, session)
+
 	if s.Compact != nil {
 		memPrompt := memorySections(chat)
 		if s.Compact.ShouldCompact(session, memPrompt, session.LastInputTokens) {
-			compactUsage, compactErr := s.Compact.Compact(session, memPrompt)
+			compactUsage, compactErr := s.Compact.Compact(chat, session, memPrompt)
 			if compactErr != nil {
 				log.Printf("[Complete] auto-compact failed: %v (proceeding without compaction)", compactErr)
 			} else if compactUsage != nil {
@@ -149,22 +159,30 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 				session.LastInputTokens = 0
 			}
 		}
+		// Supermemory: fold the index into parent nodes when it outgrows the
+		// prompt budget (no-op unless enabled and over the limit).
+		if metaUsage, metaErr := s.Compact.MetaCompact(chat, session.Model); metaErr != nil {
+			log.Printf("[Complete] meta-compact failed: %v (proceeding)", metaErr)
+		} else if metaUsage != nil {
+			chat.AccumulateCost(metaUsage.Cost, metaUsage.InputTokens, metaUsage.OutputTokens)
+		}
 	}
 
 	messages := HistoryMessages(session)
 	instructions := s.buildInstructions(session, chat)
+	tools := toolsForChat(chat)
 
-	payload, err := s.GptClient.CallGPT(messages, session.Model, instructions, chatTools...)
+	payload, err := s.GptClient.CallGPT(messages, session.Model, instructions, tools...)
 	if err != nil {
 		log.Printf("[Complete] GPT error: %v", err)
 		return s.failSession(session, fallbackResponse), err
 	}
 
-	result, err := s.toolRunner().Run(payload, session.Model, instructions, chat, chatTools, "GPT")
+	result, err := s.toolRunner().Run(payload, session.Model, instructions, chat, tools, "GPT")
 	if result == nil {
 		result = &ChatResult{Text: fallbackResponse}
 	}
-	result.Usage.Input = computeInputMetrics(session, memorySections(chat), chatTools)
+	result.Usage.Input = computeInputMetrics(session, memorySections(chat), tools)
 
 	chat.AccumulateCost(result.Usage.Cost, result.Usage.InputTokens, result.Usage.OutputTokens)
 
@@ -174,6 +192,8 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 	session.LastInputTokens = result.Usage.lastCallInputTokens
 
 	AttachResponse(session, chatdomain.Message{Role: "assistant", Content: buildHistoryContent(result)})
+	// Archive the just-attached response line (extends the entry's range).
+	ArchiveHistory(s.Archive, chat, session)
 	return result, err
 }
 

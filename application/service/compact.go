@@ -3,6 +3,7 @@ package service
 import (
 	"GPTBot/domain/ai"
 	chatdomain "GPTBot/domain/chat"
+	"fmt"
 	"log"
 	"strings"
 )
@@ -49,6 +50,7 @@ Your summary must preserve:
 
 Be thorough but concise. The summary will replace the old messages, so nothing important should be lost.
 Write the summary in the same language the conversation is in.
+Format: the FIRST line of your reply must be a short hook — one line (max 80 chars) naming what this conversation was about, like a headline. Then an empty line, then the summary.
 Do NOT use any tools. Respond with plain text only.`
 
 // CompactService handles automatic conversation compaction.
@@ -60,6 +62,9 @@ type CompactService struct {
 	// Circuit breaker state (per-process, not persisted).
 	// Claude Code tracks this in AutoCompactTrackingState.
 	consecutiveFailures int
+	// Separate breaker for supermemory meta-compaction so its failures do not
+	// block regular history compaction (and vice versa).
+	metaFailures int
 }
 
 // estimateTokens provides a rough token count for a string (~4 chars per token).
@@ -130,7 +135,11 @@ func (cs *CompactService) ShouldCompact(session *chatdomain.Session, memoryPromp
 //   - Replaces old entries with one summary entry
 //   - Keeps recent entries verbatim for continuity
 //   - Updates circuit breaker state on success/failure
-func (cs *CompactService) Compact(session *chatdomain.Session, memoryPrompt string) (*TokenUsage, error) {
+//
+// When the chat has Supermemory enabled, compaction is lossless: the evicted
+// entries are already in the raw archive, so a MemoryNode is created linking
+// the summary to its underlying source range.
+func (cs *CompactService) Compact(chat *chatdomain.Chat, session *chatdomain.Session, memoryPrompt string) (*TokenUsage, error) {
 	if len(session.History) <= compactKeepRecent {
 		return nil, nil // nothing to compact
 	}
@@ -183,6 +192,17 @@ func (cs *CompactService) Compact(session *chatdomain.Session, memoryPrompt stri
 	var usage TokenUsage
 	usage.add(extractUsage(resp, session.Model, "Compact", cs.CostFn))
 
+	// Supermemory: link the summary to the archived raw source. The evicted
+	// entries were archived at ingest time, so nothing is lost — the summary
+	// entry inherits their archive range (which also keeps ArchiveHistory from
+	// re-archiving the synthetic entry).
+	srcFrom, srcTo := archiveRangeOfEntries(oldEntries)
+	if chat != nil && chat.Settings.Supermemory {
+		hook, body := splitHookSummary(summary)
+		node := chat.AddMemoryNode(hook, body, srcFrom, srcTo, session.ID)
+		log.Printf("[Supermemory] node #%d created from compaction: %q (source lines [%d,%d))", node.ID, hook, srcFrom, srcTo)
+	}
+
 	// Replace old entries with a single summary entry.
 	// This is our equivalent of Claude Code's:
 	//   this.mutableMessages.splice(0, mutableBoundaryIdx)
@@ -195,6 +215,8 @@ func (cs *CompactService) Compact(session *chatdomain.Session, memoryPrompt stri
 			Role:    "assistant",
 			Content: "Понял, продолжаю с учётом контекста.",
 		},
+		ArchiveFrom: srcFrom,
+		ArchiveTo:   srcTo,
 	}
 
 	// New history: summary + recent entries
@@ -206,5 +228,84 @@ func (cs *CompactService) Compact(session *chatdomain.Session, memoryPrompt stri
 	log.Printf("[Compact] done: %d old entries → 1 summary + %d recent = %d total",
 		splitIdx, compactKeepRecent, len(session.History))
 
+	return &usage, nil
+}
+
+// --- Supermemory meta-compaction ---
+
+// metaCompactBatch is how many of the oldest root nodes one meta-compaction
+// folds into a single parent node. LSM semantics: the coldest block is merged
+// and shifted down; clustering is deterministic (oldest first) rather than
+// model-chosen, which keeps the operation predictable — search still reaches
+// the children directly.
+const metaCompactBatch = 10
+
+// metaCompactPrompt asks the model to merge several node summaries into one
+// parent summary, hook-first like compactSystemPrompt.
+const metaCompactPrompt = `You are merging several long-term memory summaries into one parent summary.
+Preserve every distinct fact, decision and detail — the child summaries stay readable below this parent, so be a faithful table of contents rather than a replacement: name each covered topic explicitly.
+Write in the same language the summaries are in.
+Format: the FIRST line of your reply must be a short hook — one line (max 80 chars) naming what this group of memories covers. Then an empty line, then the merged summary.
+Do NOT use any tools. Respond with plain text only.`
+
+// MetaCompact folds the oldest non-pinned root nodes into one parent node when
+// the supermemory index outgrows its prompt budget. Children are linked, never
+// rewritten — the operation is lossless and reversible. No-op (nil, nil) when
+// the feature is off, the index fits, or the breaker is tripped.
+func (cs *CompactService) MetaCompact(chat *chatdomain.Chat, model string) (*TokenUsage, error) {
+	if chat == nil || !chat.Settings.Supermemory {
+		return nil, nil
+	}
+	if cs.metaFailures >= maxConsecutiveCompactFailures {
+		return nil, nil
+	}
+	roots := chat.RootMemoryNodes()
+	if len(roots) <= supermemoryIndexLimit {
+		return nil, nil
+	}
+
+	batch := make([]*chatdomain.MemoryNode, 0, metaCompactBatch)
+	for _, n := range roots {
+		if n.Pinned {
+			continue
+		}
+		batch = append(batch, n)
+		if len(batch) == metaCompactBatch {
+			break
+		}
+	}
+	if len(batch) < 2 {
+		return nil, nil // everything pinned — nothing to fold
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Merge these memory nodes:\n\n")
+	for _, n := range batch {
+		sb.WriteString(fmt.Sprintf("#%d — %s\n%s\n\n", n.ID, n.Hook, n.Summary))
+	}
+	resp, err := cs.GptClient.CallGPT([]ai.Message{{Role: "user", Content: sb.String()}}, model, metaCompactPrompt)
+	if err != nil {
+		log.Printf("[MetaCompact] GPT error: %v", err)
+		cs.metaFailures++
+		return nil, err
+	}
+	merged := strings.TrimSpace(resp.OutputText())
+	if merged == "" {
+		log.Printf("[MetaCompact] empty merge result, skipping")
+		cs.metaFailures++
+		return nil, nil
+	}
+	cs.metaFailures = 0
+
+	var usage TokenUsage
+	usage.add(extractUsage(resp, model, "MetaCompact", cs.CostFn))
+
+	hook, body := splitHookSummary(merged)
+	parent := chat.AddMemoryNode(hook, body, 0, 0, 0)
+	parent.Children = make([]int, 0, len(batch))
+	for _, n := range batch {
+		parent.Children = append(parent.Children, n.ID)
+	}
+	log.Printf("[MetaCompact] node #%d folds %d children: %q", parent.ID, len(batch), hook)
 	return &usage, nil
 }

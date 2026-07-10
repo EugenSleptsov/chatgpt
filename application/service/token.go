@@ -107,7 +107,7 @@ func (u TokenUsage) Summary() string {
 // Example output (simple call):
 //
 //	📎 prompt: 12, system: 350, memory: 120, history: 1500 (5 msgs), tools: 800
-//	  ▸ GPT [web_search, image_generation, generate_voice, update_memory]: 4536 tok (in: 4526, out: 10) · $0.0115
+//	  ▸ GPT [web_search, image_generation, generate_voice, save_note]: 4536 tok (in: 4526, out: 10) · $0.0115
 //	📊 4536 tok (in: 4526, out: 10) · $0.0115
 func (u TokenUsage) String() string {
 	if len(u.Steps) == 0 && u.Input == nil {

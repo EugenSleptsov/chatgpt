@@ -127,9 +127,11 @@ func formatHistory(history []ai.Message) []string {
 // PromptContext holds dynamic context injected into the system prompt.
 // which separates static cacheable sections from dynamic runtime context.
 type PromptContext struct {
-	ChatTitle   string // Telegram chat title
-	IsGroup     bool   // true for group chats
-	UseMarkdown bool   // whether markdown formatting is enabled
+	ChatTitle   string         // Telegram chat title
+	IsGroup     bool           // true for group chats
+	UseMarkdown bool           // whether markdown formatting is enabled
+	Location    *time.Location // chat timezone; nil = server local
+	Supermemory bool           // whether the supermemory tools are exposed
 }
 
 // BuildInstructions constructs a structured system prompt from multiple sections:
@@ -146,13 +148,16 @@ func BuildInstructions(session *chatdomain.Session, memoryPrompt string, ctx *Pr
 		parts = append(parts, session.SystemPrompt)
 	}
 
-	// Section 2: Capabilities (static, cacheable)
-	parts = append(parts, `Capabilities:
+	// Section 2: Capabilities (static per chat, cacheable)
+	caps := `Capabilities:
 - You can search the internet for up-to-date information
 - You can generate images from text descriptions
 - You can create voice/audio messages
-- You can remember facts about the user for future conversations
-- You can save the user's notes into topical lists (advisor), read them back, and set/move reminders on them`)
+- You can save the user's notes into topical lists (advisor), read them back, and set/move reminders on them`
+	if ctx != nil && ctx.Supermemory {
+		caps += "\n- You have layered long-term memory of all past conversations (supermemory): an index of hooks is in this prompt; drill down with search_memory, read_memory and read_memory_source when the user refers to something outside the current context"
+	}
+	parts = append(parts, caps)
 
 	// Section 3: Memory (semi-static, changes infrequently)
 	if memoryPrompt != "" {
@@ -161,7 +166,10 @@ func BuildInstructions(session *chatdomain.Session, memoryPrompt string, ctx *Pr
 
 	// Section 4: Dynamic context (changes every request)
 	now := time.Now()
-	dynamicCtx := fmt.Sprintf("Current date and time: %s", now.Format("2006-01-02 15:04 MST"))
+	if ctx != nil && ctx.Location != nil {
+		now = now.In(ctx.Location)
+	}
+	dynamicCtx := fmt.Sprintf("Current date and time: %s (user's timezone — resolve relative dates and reminder times against it)", now.Format("2006-01-02 15:04 MST"))
 	if ctx != nil {
 		if ctx.ChatTitle != "" {
 			dynamicCtx += fmt.Sprintf("\nChat: %s", ctx.ChatTitle)

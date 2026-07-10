@@ -44,7 +44,11 @@ type Chat struct {
 	NextSessionID    int        `json:",omitempty"`
 	ImageGenNextTime time.Time
 	Title            string
-	Memory           []string
+
+	// Supermemory: layered long-term memory nodes over the raw transcript
+	// archive (see supermemory.go). Gated by Settings.Supermemory.
+	MemoryNodes      []*MemoryNode `json:",omitempty"`
+	NextMemoryNodeID int           `json:",omitempty"`
 
 	// Advisor: auto-captured notes grouped into model-named topics.
 	AdvisorTopics      []*AdvisorTopic `json:",omitempty"`
@@ -77,12 +81,33 @@ type ChatSettings struct {
 	CostLimitUSD      float64 // daily cost limit in USD, 0 = unlimited
 	SkipDeleteConfirm bool    // delete sessions immediately, without a confirmation step
 	Verbose           bool    // announce every tool invocation in the chat (admin toggle)
+	Timezone          string  // IANA zone name (e.g. "Europe/Berlin") for reminders and time display; empty = server local
+	Supermemory       bool    // layered long-term memory over the full transcript; off = don't archive, don't load index, don't expose tools
+}
+
+// Location resolves the chat's timezone setting into a *time.Location.
+// Falls back to the server's local zone when unset or invalid.
+func (c *Chat) Location() *time.Location {
+	if c.Settings.Timezone == "" {
+		return time.Local
+	}
+	loc, err := time.LoadLocation(c.Settings.Timezone)
+	if err != nil {
+		return time.Local
+	}
+	return loc
 }
 
 // ConversationEntry stores one prompt/response pair in the session history.
 type ConversationEntry struct {
 	Prompt   Message
 	Response Message
+
+	// Supermemory archive range [ArchiveFrom, ArchiveTo) covering this entry's
+	// raw lines. ArchiveTo == 0 means not archived yet. A compaction summary
+	// entry inherits the range of the entries it replaced.
+	ArchiveFrom int `json:",omitempty"`
+	ArchiveTo   int `json:",omitempty"`
 }
 
 // Message is a single chat message with a role and text content.

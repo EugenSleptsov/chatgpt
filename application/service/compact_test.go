@@ -166,7 +166,7 @@ func TestShouldCompact_CircuitBreaker(t *testing.T) {
 func TestCompact_TooFewEntries(t *testing.T) {
 	cs := &CompactService{}
 	session := makeSession(3) // 3 ≤ compactKeepRecent(4)
-	usage, err := cs.Compact(session, "")
+	usage, err := cs.Compact(&chatdomain.Chat{}, session, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestCompact_Success(t *testing.T) {
 	}
 	session := makeSession(8) // 8 entries: 4 oldest compacted, 4 kept
 
-	usage, err := cs.Compact(session, "")
+	usage, err := cs.Compact(&chatdomain.Chat{}, session, "")
 	if err != nil {
 		t.Fatalf("Compact error: %v", err)
 	}
@@ -219,6 +219,149 @@ func TestCompact_Success(t *testing.T) {
 	}
 }
 
+func TestCompact_SupermemoryCreatesNode(t *testing.T) {
+	client := &stubCompactClient{
+		response: makeSuccessResponse("Хук: обсуждение налогов\n\nПодробное саммари разговора о налогах."),
+	}
+	cs := &CompactService{
+		GptClient:       client,
+		ContextWindowFn: func(_ string) int { return 128_000 },
+	}
+	chat := &chatdomain.Chat{Settings: chatdomain.ChatSettings{Supermemory: true}}
+	session := makeSession(8)
+	// Simulate ingest-time archiving: entries 0..7 → lines 0..15.
+	for i, e := range session.History {
+		e.ArchiveFrom, e.ArchiveTo = i*2, i*2+2
+	}
+
+	if _, err := cs.Compact(chat, session, ""); err != nil {
+		t.Fatalf("Compact error: %v", err)
+	}
+
+	if len(chat.MemoryNodes) != 1 {
+		t.Fatalf("expected 1 memory node, got %d", len(chat.MemoryNodes))
+	}
+	n := chat.MemoryNodes[0]
+	if n.Hook != "Хук: обсуждение налогов" {
+		t.Errorf("hook = %q", n.Hook)
+	}
+	if !contains(n.Summary, "Подробное саммари") || contains(n.Summary, "Хук:") {
+		t.Errorf("summary must be the body without the hook line, got: %q", n.Summary)
+	}
+	// 4 oldest entries compacted → source lines [0, 8).
+	if n.From != 0 || n.To != 8 {
+		t.Errorf("source range = [%d, %d), want [0, 8)", n.From, n.To)
+	}
+	// Summary entry inherits the range so it is never re-archived.
+	if session.History[0].ArchiveFrom != 0 || session.History[0].ArchiveTo != 8 {
+		t.Errorf("summary entry range = [%d, %d), want [0, 8)", session.History[0].ArchiveFrom, session.History[0].ArchiveTo)
+	}
+}
+
+func TestCompact_SupermemoryDisabled_NoNode(t *testing.T) {
+	client := &stubCompactClient{
+		response: makeSuccessResponse("Hook line\n\nSummary body."),
+	}
+	cs := &CompactService{GptClient: client}
+	chat := &chatdomain.Chat{}
+	session := makeSession(8)
+
+	if _, err := cs.Compact(chat, session, ""); err != nil {
+		t.Fatalf("Compact error: %v", err)
+	}
+	if len(chat.MemoryNodes) != 0 {
+		t.Errorf("expected no memory nodes when supermemory is off, got %d", len(chat.MemoryNodes))
+	}
+}
+
+// --- MetaCompact ---
+
+func metaChatWithRoots(n int) *chatdomain.Chat {
+	chat := &chatdomain.Chat{Settings: chatdomain.ChatSettings{Supermemory: true}}
+	for i := 0; i < n; i++ {
+		chat.AddMemoryNode(fmt.Sprintf("hook %d", i+1), fmt.Sprintf("summary %d", i+1), i*2, i*2+2, 1)
+	}
+	return chat
+}
+
+func TestMetaCompact_FoldsOldestIntoParent(t *testing.T) {
+	client := &stubCompactClient{
+		response: makeSuccessResponse("Общий хук\n\nОбъединённое саммари."),
+	}
+	cs := &CompactService{GptClient: client}
+	chat := metaChatWithRoots(supermemoryIndexLimit + 1) // 41 roots — over budget
+
+	usage, err := cs.MetaCompact(chat, "basic")
+	if err != nil {
+		t.Fatalf("MetaCompact error: %v", err)
+	}
+	if usage == nil {
+		t.Fatal("expected usage for a performed merge")
+	}
+
+	parent := chat.MemoryNodes[len(chat.MemoryNodes)-1]
+	if parent.Hook != "Общий хук" || len(parent.Children) != metaCompactBatch {
+		t.Fatalf("parent = %+v, want hook 'Общий хук' with %d children", parent, metaCompactBatch)
+	}
+	// Children must be the oldest roots (#1..#10) and disappear from the index.
+	if parent.Children[0] != 1 || parent.Children[metaCompactBatch-1] != metaCompactBatch {
+		t.Fatalf("children = %v, want oldest IDs 1..%d", parent.Children, metaCompactBatch)
+	}
+	roots := chat.RootMemoryNodes()
+	want := supermemoryIndexLimit + 1 - metaCompactBatch + 1 // folded 10, added 1 parent
+	if len(roots) != want {
+		t.Fatalf("roots after merge = %d, want %d", len(roots), want)
+	}
+	// Bodies untouched.
+	if chat.FindMemoryNode(1).Summary != "summary 1" {
+		t.Fatal("child summaries must never be rewritten")
+	}
+}
+
+func TestMetaCompact_NoopUnderBudget(t *testing.T) {
+	client := &stubCompactClient{response: makeSuccessResponse("x\n\ny")}
+	cs := &CompactService{GptClient: client}
+	chat := metaChatWithRoots(supermemoryIndexLimit) // exactly at budget
+
+	usage, err := cs.MetaCompact(chat, "basic")
+	if err != nil || usage != nil {
+		t.Fatalf("expected noop, got usage=%v err=%v", usage, err)
+	}
+	if client.calls != 0 {
+		t.Fatal("no GPT call expected under budget")
+	}
+}
+
+func TestMetaCompact_SkipsPinned(t *testing.T) {
+	client := &stubCompactClient{
+		response: makeSuccessResponse("Хук\n\nСаммари."),
+	}
+	cs := &CompactService{GptClient: client}
+	chat := metaChatWithRoots(supermemoryIndexLimit + 1)
+	chat.FindMemoryNode(1).Pinned = true
+
+	if _, err := cs.MetaCompact(chat, "basic"); err != nil {
+		t.Fatal(err)
+	}
+	parent := chat.MemoryNodes[len(chat.MemoryNodes)-1]
+	for _, id := range parent.Children {
+		if id == 1 {
+			t.Fatal("pinned node must not be folded")
+		}
+	}
+}
+
+func TestMetaCompact_DisabledIsNoop(t *testing.T) {
+	client := &stubCompactClient{response: makeSuccessResponse("x\n\ny")}
+	cs := &CompactService{GptClient: client}
+	chat := metaChatWithRoots(supermemoryIndexLimit + 1)
+	chat.Settings.Supermemory = false
+
+	if usage, err := cs.MetaCompact(chat, "basic"); usage != nil || err != nil {
+		t.Fatalf("expected noop when disabled, got usage=%v err=%v", usage, err)
+	}
+}
+
 func TestCompact_EmptySummary(t *testing.T) {
 	client := &stubCompactClient{
 		response: makeSuccessResponse("   "), // whitespace only
@@ -227,7 +370,7 @@ func TestCompact_EmptySummary(t *testing.T) {
 	session := makeSession(8)
 	originalLen := len(session.History)
 
-	usage, err := cs.Compact(session, "")
+	usage, err := cs.Compact(&chatdomain.Chat{}, session, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -251,7 +394,7 @@ func TestCompact_GPTError_CircuitBreaker(t *testing.T) {
 
 	// Three consecutive failures should trip the circuit breaker
 	for i := 0; i < maxConsecutiveCompactFailures; i++ {
-		_, err := cs.Compact(session, "")
+		_, err := cs.Compact(&chatdomain.Chat{}, session, "")
 		if err == nil {
 			t.Fatalf("expected error on call %d", i+1)
 		}
@@ -272,7 +415,7 @@ func TestCompact_SuccessResetsCircuitBreaker(t *testing.T) {
 	}
 	session := makeSession(8)
 
-	_, err := cs.Compact(session, "")
+	_, err := cs.Compact(&chatdomain.Chat{}, session, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

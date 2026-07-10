@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"GPTBot/application/service"
 	"GPTBot/domain/chat"
 	"GPTBot/pipeline"
 	"GPTBot/pipeline/sender"
@@ -24,10 +25,7 @@ func (c *CommandContext) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []
 
 	// Estimate token counts per section (~4 chars per token).
 	systemTokens := len(session.SystemPrompt) / 4
-	memoryTokens := 0
-	for _, fact := range ch.Memory {
-		memoryTokens += len(fact) / 4
-	}
+	memoryTokens := (len(service.SupermemoryPrompt(ch)) + len(service.AdvisorPrompt(ch))) / 4
 
 	historyTokens := 0
 	historyMsgs := 0
@@ -55,7 +53,7 @@ func (c *CommandContext) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []
 
 	// Breakdown
 	sb.WriteString(fmt.Sprintf("Системный промпт: ~%d токенов\n", systemTokens))
-	sb.WriteString(fmt.Sprintf("Память: ~%d токенов (%d фактов)\n", memoryTokens, len(ch.Memory)))
+	sb.WriteString(fmt.Sprintf("Память (индексы): ~%d токенов\n", memoryTokens))
 	sb.WriteString(fmt.Sprintf("История: ~%d токенов (%d сообщений)\n", historyTokens, historyMsgs))
 	sb.WriteString(fmt.Sprintf("Итого: ~%d токенов\n\n", totalTokens))
 

@@ -4,7 +4,7 @@ import "testing"
 
 func TestResolveModel_KnownTier(t *testing.T) {
 	got := ResolveModel("premium")
-	want := "gpt-5.5"
+	want := "gpt-5.6-sol"
 	if got != want {
 		t.Fatalf("ResolveModel(premium) = %q, want %q", got, want)
 	}
@@ -12,7 +12,7 @@ func TestResolveModel_KnownTier(t *testing.T) {
 
 func TestResolveModel_Basic(t *testing.T) {
 	got := ResolveModel("basic")
-	want := "gpt-5.4-nano"
+	want := "gpt-5.6-luna"
 	if got != want {
 		t.Fatalf("ResolveModel(basic) = %q, want %q", got, want)
 	}
@@ -20,7 +20,7 @@ func TestResolveModel_Basic(t *testing.T) {
 
 func TestResolveModel_Fast(t *testing.T) {
 	got := ResolveModel("fast")
-	want := "gpt-5.4-mini"
+	want := "gpt-5.6-terra"
 	if got != want {
 		t.Fatalf("ResolveModel(fast) = %q, want %q", got, want)
 	}
@@ -28,7 +28,7 @@ func TestResolveModel_Fast(t *testing.T) {
 
 func TestResolveModel_ByLabel(t *testing.T) {
 	got := ResolveModel("ai-premium")
-	want := "gpt-5.5"
+	want := "gpt-5.6-sol"
 	if got != want {
 		t.Fatalf("ResolveModel(ai-premium) = %q, want %q", got, want)
 	}
@@ -36,7 +36,7 @@ func TestResolveModel_ByLabel(t *testing.T) {
 
 func TestResolveModel_UnknownFallsToDefault(t *testing.T) {
 	got := ResolveModel("nonexistent")
-	want := "gpt-5.4-nano" // default tier = basic
+	want := "gpt-5.6-luna" // default tier = basic
 	if got != want {
 		t.Fatalf("ResolveModel(nonexistent) = %q, want default %q", got, want)
 	}
@@ -46,7 +46,7 @@ func TestResolveModel_UnknownFallsToDefault(t *testing.T) {
 
 func TestCostForTokens_Basic(t *testing.T) {
 	cost := CostForTokens("basic", 1_000_000, 1_000_000)
-	expected := 0.20 + 1.25
+	expected := 1.00 + 6.00
 	if diff := cost - expected; diff > 0.0001 || diff < -0.0001 {
 		t.Fatalf("CostForTokens(basic, 1M, 1M) = %f, want %f", cost, expected)
 	}

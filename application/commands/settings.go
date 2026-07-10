@@ -6,7 +6,9 @@ import (
 	"GPTBot/domain/chat"
 	"GPTBot/pipeline"
 	"GPTBot/pipeline/sender"
+	"fmt"
 	"strings"
+	"time"
 )
 
 // CommandSettings is a self-contained button hub for per-chat settings.
@@ -22,7 +24,7 @@ import (
 //	"ar"            → toggle group auto-reply (admin), re-render hub
 //	"model"         → render model picker (back → hub)
 //	"model:<id>"    → set model tier, re-render picker
-//	"memory"        → show memory (back → hub)
+//	"sm"            → toggle supermemory, re-render hub
 //	"role"          → show auto-reply persona + edit hint (back → hub)
 //	"sprompt"       → show summarize prompt + edit hint (back → hub)
 type CommandSettings struct {
@@ -53,11 +55,21 @@ func (c *CommandSettings) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) [
 			ch.ActiveSession().Model = t.ID
 		}
 		return settingsModelView(ch)
-	case args == "memory":
-		return settingsMemoryView(ch)
-	case args == "memory:clear":
-		service.ClearMemory(ch)
-		return settingsMemoryView(ch)
+	case args == "sm":
+		ch.Settings.Supermemory = !ch.Settings.Supermemory
+
+	case args == "tz":
+		return settingsTimezoneView(ch)
+	case strings.HasPrefix(args, "tz:set:"):
+		if zone := args[len("tz:set:"):]; zone != "" {
+			if _, err := time.LoadLocation(zone); err == nil {
+				ch.Settings.Timezone = zone
+			}
+		}
+		return settingsTimezoneView(ch)
+	case args == "tz:edit":
+		ch.PendingInput = "timezone"
+		return forceReplyPrompt("Пришлите часовой пояс (IANA, напр. Europe/Berlin):")
 
 	case args == "system":
 		sp := ch.ActiveSession().SystemPrompt
@@ -115,7 +127,8 @@ func settingsHubView(ch *chat.Chat, isAdmin bool) []sender.Response {
 		{{Text: "Удалять сессии без подтверждения " + onOff(ch.Settings.SkipDeleteConfirm), Data: "settings:delconfirm"}},
 		{{Text: "📝 Системный промпт", Data: "settings:system"}},
 		{{Text: "Промпт суммаризации", Data: "settings:sprompt"}},
-		{{Text: "🧠 Память", Data: "settings:memory"}},
+		{{Text: "🧠 Суперпамять " + onOff(ch.Settings.Supermemory), Data: "settings:sm"}},
+		{{Text: "🌍 Часовой пояс: " + timezoneLabel(ch), Data: "settings:tz"}},
 	}
 	if isAdmin {
 		rows = append(rows,
@@ -146,14 +159,34 @@ func settingsModelView(ch *chat.Chat) []sender.Response {
 	}}
 }
 
-// settingsMemoryView shows the chat memory with a clear button.
-func settingsMemoryView(ch *chat.Chat) []sender.Response {
-	rows := [][]sender.Button{}
-	if len(ch.Memory) > 0 {
-		rows = append(rows, []sender.Button{{Text: "🗑 Очистить", Data: "settings:memory:clear"}})
+// settingsTimezonePresets are the one-tap zone choices in the timezone view.
+var settingsTimezonePresets = []struct{ Label, Zone string }{
+	{"Берлин", "Europe/Berlin"},
+	{"Москва", "Europe/Moscow"},
+	{"Киев", "Europe/Kyiv"},
+	{"UTC", "UTC"},
+}
+
+// settingsTimezoneView renders the timezone picker: current zone with local
+// time, preset buttons and a manual-input fallback.
+func settingsTimezoneView(ch *chat.Chat) []sender.Response {
+	rows := make([][]sender.Button, 0, len(settingsTimezonePresets)+2)
+	for _, p := range settingsTimezonePresets {
+		label := p.Label
+		if ch.Settings.Timezone == p.Zone {
+			label = "✅ " + label
+		}
+		rows = append(rows, []sender.Button{{Text: label, Data: "settings:tz:set:" + p.Zone}})
 	}
-	rows = append(rows, backRow())
-	return []sender.Response{{Text: service.FormatMemory(ch), Buttons: rows}}
+	rows = append(rows,
+		[]sender.Button{{Text: "✏️ Ввести вручную", Data: "settings:tz:edit"}},
+		backRow(),
+	)
+	return []sender.Response{{
+		Text: fmt.Sprintf("🌍 Часовой пояс: %s\nСейчас: %s\n\nИспользуется для напоминаний и отображения времени.",
+			timezoneLabel(ch), time.Now().In(ch.Location()).Format("02.01 15:04")),
+		Buttons: rows,
+	}}
 }
 
 // backRow is a single "back to settings hub" button row.

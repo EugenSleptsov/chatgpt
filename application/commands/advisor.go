@@ -144,12 +144,13 @@ func advisorTopicView(ch *chat.Chat, topicID int) []sender.Response {
 		return advisorTopicsView(ch, 0)
 	}
 
+	loc := ch.Location()
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("📒 %s (%d):\n\n", t.Name, len(t.Entries)))
 	for i, e := range t.Entries {
-		sb.WriteString(fmt.Sprintf("%d. %s — %s", i+1, e.Created.Format("02.01"), e.Text))
+		sb.WriteString(fmt.Sprintf("%d. %s", i+1, e.Text))
 		if e.RemindAt != nil {
-			sb.WriteString(" ⏰ " + e.RemindAt.Format("02.01 15:04"))
+			sb.WriteString(" ⏰ " + e.RemindAt.In(loc).Format("02.01 15:04"))
 		}
 		sb.WriteString("\n")
 	}
@@ -323,8 +324,10 @@ func advisorReminderDone(ch *chat.Chat, arg string) []sender.Response {
 }
 
 // advisorReminderSnooze handles "snooze:<tid>:<eid>:<code>": moves the
-// reminder forward ("1h" = +1 hour, "1d" = tomorrow morning) and rewrites the
-// fired reminder message with the new time.
+// reminder forward ("1h" = +1 hour, "1d" = tomorrow morning in the chat's
+// timezone) and rewrites the fired reminder message with the new time. The
+// confirmation carries no buttons — the reminder fires again with fresh
+// controls, and a live button row here allowed double taps.
 func advisorReminderSnooze(ch *chat.Chat, arg string) []sender.Response {
 	parts := strings.Split(arg, ":")
 	if len(parts) != 3 {
@@ -341,14 +344,15 @@ func advisorReminderSnooze(ch *chat.Chat, arg string) []sender.Response {
 		return []sender.Response{{Text: "Запись уже удалена."}}
 	}
 
-	now := time.Now()
+	loc := ch.Location()
+	now := time.Now().In(loc)
 	var at time.Time
 	switch parts[2] {
 	case "1h":
 		at = now.Add(time.Hour)
 	case "1d":
 		tomorrow := now.AddDate(0, 0, 1)
-		at = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), snoozeMorningHour, 0, 0, 0, now.Location())
+		at = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), snoozeMorningHour, 0, 0, 0, loc)
 	default:
 		return advisorTopicsView(ch, 0)
 	}
@@ -356,8 +360,7 @@ func advisorReminderSnooze(ch *chat.Chat, arg string) []sender.Response {
 	ch.SetAdvisorReminder(tid, eid, &at)
 	e := t.FindEntry(eid)
 	return []sender.Response{{
-		Text:    fmt.Sprintf("⏰ Перенесено на %s:\n%s", at.Format("02.01 15:04"), e.Text),
-		Buttons: reminderButtons(tid, eid),
+		Text: fmt.Sprintf("⏰ Перенесено на %s:\n%s", at.Format("02.01 15:04"), e.Text),
 	}}
 }
 

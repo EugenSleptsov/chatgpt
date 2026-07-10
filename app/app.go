@@ -79,6 +79,11 @@ func NewApp(configFile string) (*App, error) {
 	}
 	chatService := service.NewChatService(botStorage, chatDefaults, logSystem)
 
+	archive, err := storage.NewArchive(config.StorageType, config.DataDir)
+	if err != nil {
+		return nil, err
+	}
+
 	gptService := service.NewGPTService(
 		aiClient,
 		&service.CompactService{
@@ -89,6 +94,7 @@ func NewApp(configFile string) (*App, error) {
 		openai.CostForTokens,
 		openai.ImageGenerationCost,
 		bot,
+		archive,
 	)
 
 	registry := commands.NewRegistry()
@@ -101,6 +107,7 @@ func NewApp(configFile string) (*App, error) {
 		ConfigService:   configService,
 		ContextWindowFn: openai.ContextWindowForTier,
 		Progress:        bot,
+		Archive:         archive,
 	})
 
 	return &App{

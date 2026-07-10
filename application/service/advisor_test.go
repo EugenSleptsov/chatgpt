@@ -91,11 +91,13 @@ func TestMergeAdvisorTopics(t *testing.T) {
 }
 
 func TestParseRemindAt(t *testing.T) {
-	if at, err := ParseRemindAt(""); err != nil || at != nil {
+	now := time.Date(2026, 7, 10, 8, 0, 0, 0, time.Local)
+
+	if at, err := ParseRemindAt("", time.Local, now); err != nil || at != nil {
 		t.Fatalf("empty input: at=%v err=%v, want nil/nil", at, err)
 	}
 
-	at, err := ParseRemindAt("2026-07-10 15:30")
+	at, err := ParseRemindAt("2026-07-10 15:30", time.Local, now)
 	if err != nil || at == nil {
 		t.Fatalf("datetime parse failed: %v", err)
 	}
@@ -103,7 +105,7 @@ func TestParseRemindAt(t *testing.T) {
 		t.Fatalf("parsed wrong time: %v", at)
 	}
 
-	at, err = ParseRemindAt("2026-07-10")
+	at, err = ParseRemindAt("2026-07-10", time.Local, now)
 	if err != nil || at == nil {
 		t.Fatalf("date parse failed: %v", err)
 	}
@@ -111,8 +113,34 @@ func TestParseRemindAt(t *testing.T) {
 		t.Fatalf("bare date must default to %d:00, got %v", defaultRemindHour, at)
 	}
 
-	if _, err := ParseRemindAt("завтра"); err == nil {
+	if _, err := ParseRemindAt("завтра", time.Local, now); err == nil {
 		t.Fatal("expected error for unparseable input")
+	}
+}
+
+func TestParseRemindAt_RejectsPast(t *testing.T) {
+	now := time.Date(2026, 7, 10, 18, 0, 0, 0, time.Local)
+	if _, err := ParseRemindAt("2026-07-10 15:30", time.Local, now); err == nil {
+		t.Fatal("expected error for a time in the past")
+	}
+	// Bare date defaulting to 9:00 which already passed is rejected too.
+	if _, err := ParseRemindAt("2026-07-10", time.Local, now); err == nil {
+		t.Fatal("expected error for a bare date whose default hour passed")
+	}
+}
+
+func TestParseRemindAt_UsesLocation(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Skipf("tzdata unavailable: %v", err)
+	}
+	now := time.Date(2026, 7, 10, 8, 0, 0, 0, loc)
+	at, err := ParseRemindAt("2026-07-10 15:30", loc, now)
+	if err != nil || at == nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	if at.Location() != loc || at.Hour() != 15 {
+		t.Fatalf("time must be in the chat's zone, got %v", at)
 	}
 }
 
@@ -130,7 +158,7 @@ func TestAddAdvisorNote_WithReminder(t *testing.T) {
 	}
 
 	// read_notes output must expose the ID and the reminder.
-	out := AdvisorNotesForTool(topic)
+	out := AdvisorNotesForTool(topic, time.Local)
 	if !strings.Contains(out, "#1") || !strings.Contains(out, "2026-07-10 15:00") {
 		t.Fatalf("notes output must contain entry ID and reminder time, got: %s", out)
 	}

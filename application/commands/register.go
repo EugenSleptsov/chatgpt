@@ -2,6 +2,7 @@ package commands
 
 import (
 	"GPTBot/application/service"
+	"GPTBot/domain/chat"
 )
 
 // Deps bundles every dependency the command set needs. Using a struct instead
@@ -16,6 +17,7 @@ type Deps struct {
 	ConfigService   *service.ConfigService
 	ContextWindowFn func(string) int
 	Progress        service.ProgressReporter // transient "Идет…" statuses (may be nil)
+	Archive         chat.Archive             // supermemory raw transcript store (may be nil)
 }
 
 // AllCommands returns every bot command, ready to use.
@@ -26,6 +28,7 @@ func AllCommands(d Deps) []Command {
 		&CommandHelp{Registry: d.Registry, Auth: d.Auth},
 		&CommandMenu{},
 		&CommandAdvisor{},
+		&CommandMemory{Archive: d.Archive},
 		&CommandSettings{Auth: d.Auth},
 		&CommandStart{},
 		&CommandClear{},
@@ -34,6 +37,7 @@ func AllCommands(d Deps) []Command {
 		&CommandSystem{},
 		&CommandAutoRole{},
 		&CommandSummarizePrompt{},
+		&CommandTimezone{},
 		&CommandUsage{},
 		&CommandContext{ContextWindowFn: d.ContextWindowFn},
 		&CommandSessionList{},
