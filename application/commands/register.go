@@ -31,7 +31,7 @@ func AllCommands(d Deps) []Command {
 		&CommandMemory{Archive: d.Archive},
 		&CommandSettings{Auth: d.Auth},
 		&CommandStart{},
-		&CommandClear{},
+		&CommandClear{Commands: d.CmdService},
 		&CommandHistory{},
 		&CommandRollback{},
 		&CommandSystem{},
@@ -43,7 +43,7 @@ func AllCommands(d Deps) []Command {
 		&CommandSessionList{},
 		&CommandSessionNew{},
 		&CommandSessionRename{},
-		&CommandSessionRemove{},
+		&CommandSessionRemove{Commands: d.CmdService},
 
 		// --- GPT text commands ---
 		&CommandTranslate{Commands: d.CmdService, Notifier: d.Notifier},

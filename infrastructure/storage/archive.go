@@ -135,6 +135,13 @@ func (a *FileArchive) ReadRange(chatID int64, from, to int) ([]chat.ArchivedMess
 	return out, sc.Err()
 }
 
+// Count returns the total number of lines stored for the chat.
+func (a *FileArchive) Count(chatID int64) (int, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.lineCount(chatID)
+}
+
 // DeleteRange is the reserved privacy hook ("hard forget"). Tombstoning lines
 // in place is planned but not implemented yet.
 func (a *FileArchive) DeleteRange(chatID int64, from, to int) error {
@@ -178,6 +185,12 @@ func (a *MemoryArchive) ReadRange(chatID int64, from, to int) ([]chat.ArchivedMe
 	out := make([]chat.ArchivedMessage, to-from)
 	copy(out, all[from:to])
 	return out, nil
+}
+
+func (a *MemoryArchive) Count(chatID int64) (int, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.msgs[chatID]), nil
 }
 
 func (a *MemoryArchive) DeleteRange(chatID int64, from, to int) error {

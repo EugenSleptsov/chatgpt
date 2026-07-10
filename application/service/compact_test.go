@@ -3,8 +3,10 @@ package service
 import (
 	"GPTBot/domain/ai"
 	chatdomain "GPTBot/domain/chat"
+	"GPTBot/infrastructure/storage"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -219,9 +221,9 @@ func TestCompact_Success(t *testing.T) {
 	}
 }
 
-func TestCompact_SupermemoryCreatesNode(t *testing.T) {
+func TestCompact_SummaryEntryInheritsArchiveRange(t *testing.T) {
 	client := &stubCompactClient{
-		response: makeSuccessResponse("Хук: обсуждение налогов\n\nПодробное саммари разговора о налогах."),
+		response: makeSuccessResponse("Саммари разговора."),
 	}
 	cs := &CompactService{
 		GptClient:       client,
@@ -238,39 +240,98 @@ func TestCompact_SupermemoryCreatesNode(t *testing.T) {
 		t.Fatalf("Compact error: %v", err)
 	}
 
-	if len(chat.MemoryNodes) != 1 {
-		t.Fatalf("expected 1 memory node, got %d", len(chat.MemoryNodes))
+	// Compaction no longer creates nodes — snapshots do.
+	if len(chat.MemoryNodes) != 0 {
+		t.Fatalf("compaction must not create nodes, got %d", len(chat.MemoryNodes))
 	}
-	n := chat.MemoryNodes[0]
-	if n.Hook != "Хук: обсуждение налогов" {
-		t.Errorf("hook = %q", n.Hook)
-	}
-	if !contains(n.Summary, "Подробное саммари") || contains(n.Summary, "Хук:") {
-		t.Errorf("summary must be the body without the hook line, got: %q", n.Summary)
-	}
-	// 4 oldest entries compacted → source lines [0, 8).
-	if n.From != 0 || n.To != 8 {
-		t.Errorf("source range = [%d, %d), want [0, 8)", n.From, n.To)
-	}
-	// Summary entry inherits the range so it is never re-archived.
+	// Summary entry inherits the evicted range so it is never re-archived.
 	if session.History[0].ArchiveFrom != 0 || session.History[0].ArchiveTo != 8 {
 		t.Errorf("summary entry range = [%d, %d), want [0, 8)", session.History[0].ArchiveFrom, session.History[0].ArchiveTo)
 	}
 }
 
-func TestCompact_SupermemoryDisabled_NoNode(t *testing.T) {
-	client := &stubCompactClient{
-		response: makeSuccessResponse("Hook line\n\nSummary body."),
-	}
-	cs := &CompactService{GptClient: client}
-	chat := &chatdomain.Chat{}
-	session := makeSession(8)
+// --- Snapshot ---
 
-	if _, err := cs.Compact(chat, session, ""); err != nil {
-		t.Fatalf("Compact error: %v", err)
+func snapshotFixture(t *testing.T, lines int, contentSize int) (*CompactService, *chatdomain.Chat, *stubCompactClient) {
+	t.Helper()
+	client := &stubCompactClient{
+		response: makeSuccessResponse("Хук снапшота\n\nСаммари куска переписки."),
 	}
-	if len(chat.MemoryNodes) != 0 {
-		t.Errorf("expected no memory nodes when supermemory is off, got %d", len(chat.MemoryNodes))
+	archive := storage.NewMemoryArchive()
+	chat := &chatdomain.Chat{ChatID: 1, Settings: chatdomain.ChatSettings{Supermemory: true}}
+	filler := strings.Repeat("х", contentSize)
+	for i := 0; i < lines; i++ {
+		if _, err := archive.Append(1, []chatdomain.ArchivedMessage{{Role: "user", Content: filler}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return &CompactService{GptClient: client, Archive: archive}, chat, client
+}
+
+func TestSnapshot_BelowThresholdWaits(t *testing.T) {
+	cs, chat, client := snapshotFixture(t, 4, 100) // ~100 tokens total — far below threshold
+	usage, err := cs.Snapshot(chat, "basic", false)
+	if err != nil || usage != nil {
+		t.Fatalf("expected noop below threshold, usage=%v err=%v", usage, err)
+	}
+	if client.calls != 0 || len(chat.MemoryNodes) != 0 {
+		t.Fatal("no GPT call and no node expected below threshold")
+	}
+}
+
+func TestSnapshot_OverThresholdCreatesNode(t *testing.T) {
+	// 4 lines × 4000 chars ≈ 4000 tokens > 3000 threshold.
+	cs, chat, _ := snapshotFixture(t, 4, 4000)
+	usage, err := cs.Snapshot(chat, "basic", false)
+	if err != nil || usage == nil {
+		t.Fatalf("expected a snapshot, usage=%v err=%v", usage, err)
+	}
+	if len(chat.MemoryNodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(chat.MemoryNodes))
+	}
+	n := chat.MemoryNodes[0]
+	if n.Hook != "Хук снапшота" || n.From != 0 || n.To != 4 {
+		t.Fatalf("node = %+v, want hook 'Хук снапшота' range [0, 4)", n)
+	}
+	if chat.ArchiveSnapshotTo != 4 {
+		t.Fatalf("pointer = %d, want 4", chat.ArchiveSnapshotTo)
+	}
+
+	// Nothing uncovered left — force must be a noop too.
+	if usage, _ := cs.Snapshot(chat, "basic", true); usage != nil {
+		t.Fatal("covered archive must not be re-snapshotted")
+	}
+}
+
+func TestSnapshot_ForceIgnoresThreshold(t *testing.T) {
+	cs, chat, _ := snapshotFixture(t, 4, 100)
+	usage, err := cs.Snapshot(chat, "basic", true)
+	if err != nil || usage == nil {
+		t.Fatalf("force must snapshot below threshold, usage=%v err=%v", usage, err)
+	}
+	if len(chat.MemoryNodes) != 1 || chat.ArchiveSnapshotTo != 4 {
+		t.Fatalf("node/pointer wrong: nodes=%d pointer=%d", len(chat.MemoryNodes), chat.ArchiveSnapshotTo)
+	}
+}
+
+func TestSnapshot_ForceSkipsTrivialTail(t *testing.T) {
+	cs, chat, client := snapshotFixture(t, 1, 100) // single line — not worth a node
+	if usage, _ := cs.Snapshot(chat, "basic", true); usage != nil {
+		t.Fatal("a lone line must not become a node")
+	}
+	if client.calls != 0 {
+		t.Fatal("no GPT call expected for a trivial tail")
+	}
+}
+
+func TestSnapshot_DisabledIsNoop(t *testing.T) {
+	cs, chat, client := snapshotFixture(t, 4, 4000)
+	chat.Settings.Supermemory = false
+	if usage, _ := cs.Snapshot(chat, "basic", true); usage != nil {
+		t.Fatal("expected noop when disabled")
+	}
+	if client.calls != 0 {
+		t.Fatal("no GPT call expected when disabled")
 	}
 }
 

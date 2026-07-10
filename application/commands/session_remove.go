@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"GPTBot/application/service"
 	"GPTBot/domain/chat"
 	"GPTBot/pipeline"
 	"GPTBot/pipeline/sender"
@@ -9,7 +10,9 @@ import (
 	"strings"
 )
 
-type CommandSessionRemove struct{}
+type CommandSessionRemove struct {
+	Commands *service.GPTService // for the pre-delete supermemory snapshot (may be nil)
+}
 
 func (c *CommandSessionRemove) Name() string {
 	return "remove"
@@ -70,6 +73,13 @@ func (c *CommandSessionRemove) performRemove(chat *chat.Chat, id int) []sender.R
 	s := chat.FindSession(id)
 	if s == nil {
 		return reply(fmt.Sprintf("Сессия #%d не найдена.", id))
+	}
+	if len(chat.Sessions) <= 1 {
+		return reply("Нельзя удалить единственную сессию.")
+	}
+	// Supermemory: force-save the doomed session's not-yet-summarized tail.
+	if c.Commands != nil {
+		c.Commands.SnapshotMemory(chat, s)
 	}
 	if !chat.RemoveSession(id) {
 		return reply("Нельзя удалить единственную сессию.")

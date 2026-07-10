@@ -29,6 +29,8 @@ type Archive interface {
 	Append(chatID int64, msgs []ArchivedMessage) (from int, err error)
 	// ReadRange returns the lines [from, to).
 	ReadRange(chatID int64, from, to int) ([]ArchivedMessage, error)
+	// Count returns the total number of lines stored for the chat.
+	Count(chatID int64) (int, error)
 	// DeleteRange is the reserved hook for future privacy tooling ("hard
 	// forget"): implementations tombstone the lines in place. Not wired to any
 	// user-facing command yet.

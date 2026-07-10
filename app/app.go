@@ -90,6 +90,7 @@ func NewApp(configFile string) (*App, error) {
 			GptClient:       aiClient,
 			CostFn:          openai.CostForTokens,
 			ContextWindowFn: openai.ContextWindowForTier,
+			Archive:         archive,
 		},
 		openai.CostForTokens,
 		openai.ImageGenerationCost,

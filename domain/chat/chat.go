@@ -49,6 +49,10 @@ type Chat struct {
 	// archive (see supermemory.go). Gated by Settings.Supermemory.
 	MemoryNodes      []*MemoryNode `json:",omitempty"`
 	NextMemoryNodeID int           `json:",omitempty"`
+	// ArchiveSnapshotTo is the archive line index below which every line is
+	// already covered by a memory node; the snapshot mechanism summarizes
+	// [ArchiveSnapshotTo, end) and advances the pointer.
+	ArchiveSnapshotTo int `json:",omitempty"`
 
 	// Advisor: auto-captured notes grouped into model-named topics.
 	AdvisorTopics      []*AdvisorTopic `json:",omitempty"`

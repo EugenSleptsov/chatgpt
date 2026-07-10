@@ -159,8 +159,15 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 				session.LastInputTokens = 0
 			}
 		}
-		// Supermemory: fold the index into parent nodes when it outgrows the
-		// prompt budget (no-op unless enabled and over the limit).
+		// Supermemory: snapshot the archive's uncovered tail into a node once
+		// it exceeds the (deliberately low) snapshot threshold, then fold the
+		// index into parent nodes when it outgrows the prompt budget. Both
+		// no-op unless enabled and over their limits.
+		if snapUsage, snapErr := s.Compact.Snapshot(chat, session.Model, false); snapErr != nil {
+			log.Printf("[Complete] snapshot failed: %v (proceeding)", snapErr)
+		} else if snapUsage != nil {
+			chat.AccumulateCost(snapUsage.Cost, snapUsage.InputTokens, snapUsage.OutputTokens)
+		}
 		if metaUsage, metaErr := s.Compact.MetaCompact(chat, session.Model); metaErr != nil {
 			log.Printf("[Complete] meta-compact failed: %v (proceeding)", metaErr)
 		} else if metaUsage != nil {
@@ -195,6 +202,22 @@ func (s *GPTService) Complete(chat *chatdomain.Chat) (*ChatResult, error) {
 	// Archive the just-attached response line (extends the entry's range).
 	ArchiveHistory(s.Archive, chat, session)
 	return result, err
+}
+
+// SnapshotMemory force-saves every not-yet-summarized line of the session
+// into a supermemory node. Called before destructive actions (/clear, session
+// deletion) so no conversation is ever lost from memory. Best-effort: failures
+// are logged, the destructive action proceeds either way.
+func (s *GPTService) SnapshotMemory(chat *chatdomain.Chat, session *chatdomain.Session) {
+	if s.Compact == nil || chat == nil || session == nil || !chat.Settings.Supermemory {
+		return
+	}
+	ArchiveHistory(s.Archive, chat, session)
+	if usage, err := s.Compact.Snapshot(chat, session.Model, true); err != nil {
+		log.Printf("[SnapshotMemory] failed: %v", err)
+	} else if usage != nil {
+		chat.AccumulateCost(usage.Cost, usage.InputTokens, usage.OutputTokens)
+	}
 }
 
 // announceTools is kept as a small compatibility wrapper for package tests.

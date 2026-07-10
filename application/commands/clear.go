@@ -8,7 +8,9 @@ import (
 	"strings"
 )
 
-type CommandClear struct{}
+type CommandClear struct {
+	Commands *service.GPTService // for the pre-clear supermemory snapshot (may be nil)
+}
 
 func (c *CommandClear) Name() string {
 	return "clear"
@@ -28,6 +30,11 @@ func (c *CommandClear) IsAdmin() bool {
 func (c *CommandClear) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) []sender.Response {
 	switch strings.TrimSpace(ctx.CommandArgs) {
 	case "yes":
+		// Supermemory: the history is about to be destroyed — force-save the
+		// not-yet-summarized tail so the conversation stays in memory.
+		if c.Commands != nil {
+			c.Commands.SnapshotMemory(chat, chat.ActiveSession())
+		}
 		service.ClearHistory(chat.ActiveSession())
 		return reply("История разговоров была очищена.")
 	case "cancel":

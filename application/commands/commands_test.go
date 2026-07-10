@@ -699,6 +699,36 @@ func TestCommandMemory_DeleteSkipConfirm(t *testing.T) {
 	}
 }
 
+func TestCommandClear_ForceSnapshotsSupermemory(t *testing.T) {
+	// Wire a GPT service with a real archive + compact service (mock client) so
+	// /clear can force-snapshot the unsaved conversation tail.
+	mockClient := mock.NewClient()
+	archive := storage.NewMemoryArchive()
+	gptSvc := service.NewGPTService(mockClient, &service.CompactService{GptClient: mockClient, Archive: archive}, nil, 0, nil, archive)
+	cmd := &commands.CommandClear{Commands: gptSvc}
+
+	chat := newTestChat()
+	chat.Settings.Supermemory = true
+	session := chat.ActiveSession()
+	service.AppendHistory(session, domain.Message{Role: "user", Content: "важный разговор"})
+	service.AttachResponse(session, domain.Message{Role: "assistant", Content: "важный ответ"})
+
+	cmd.Execute(makeCmdCtx(1, 100, "/clear yes"), chat)
+
+	if len(session.History) != 0 {
+		t.Error("history must be cleared")
+	}
+	if len(chat.MemoryNodes) != 1 {
+		t.Fatalf("clear must force-snapshot the unsaved tail, nodes=%d", len(chat.MemoryNodes))
+	}
+	if chat.MemoryNodes[0].From != 0 || chat.MemoryNodes[0].To != 2 {
+		t.Errorf("node range = [%d, %d), want [0, 2)", chat.MemoryNodes[0].From, chat.MemoryNodes[0].To)
+	}
+	if chat.ArchiveSnapshotTo != 2 {
+		t.Errorf("snapshot pointer = %d, want 2", chat.ArchiveSnapshotTo)
+	}
+}
+
 // ======================== /imagine ========================
 
 func TestCommandImagine_NoArgs(t *testing.T) {
