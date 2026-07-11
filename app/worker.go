@@ -214,8 +214,12 @@ func (w *Worker) consumePendingInput(ctx *pipeline.RequestContext, chat *chat.Ch
 		ctx.IsCommand = true
 		ctx.CommandName = chat.PendingInput
 		ctx.CommandArgs = ctx.Text
+		if chat.PendingInputArgs != "" {
+			ctx.CommandArgs = chat.PendingInputArgs + "\n" + ctx.Text
+		}
 	}
 	chat.PendingInput = ""
+	chat.PendingInputArgs = ""
 }
 
 func (w *Worker) handleUnauthorizedAccess(ctx *pipeline.RequestContext, chat *chat.Chat) {

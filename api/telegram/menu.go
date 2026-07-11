@@ -2,63 +2,47 @@ package telegram
 
 import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
-// Command represents a slash-command name shown in the Telegram menu.
+// Command represents a slash-command shown in Telegram's quick menu.
 type Command string
 
 const (
-	CommandMenu      Command = "menu"
-	CommandSettings  Command = "settings"
-	CommandHelp      Command = "help"
-	CommandHistory   Command = "history"
-	CommandRollback  Command = "rollback"
-	CommandClear     Command = "clear"
-	CommandSummarize Command = "summarize"
+	CommandMenu Command = "menu"
+	CommandNew  Command = "new"
+	CommandList Command = "list"
+	CommandHelp Command = "help"
 )
 
-// CommandDescriptions maps each command to a human-readable description.
 var CommandDescriptions = map[Command]string{
-	CommandMenu:      "Главное меню (кнопки)",
-	CommandSettings:  "Настройки чата (кнопки)",
-	CommandHelp:      "Справка по командам",
-	CommandHistory:   "Показать историю переписки",
-	CommandRollback:  "Отменить последнее сообщение",
-	CommandClear:     "Очистить историю переписки",
-	CommandSummarize: "Суммаризировать историю переписки",
+	CommandMenu: "Главное меню с кнопками",
+	CommandNew:  "Создать новую сессию",
+	CommandList: "Открыть список сессий",
+	CommandHelp: "Интерактивная справка",
 }
 
-// DefaultCommandList is the fallback menu when config.CommandMenu is empty.
-var DefaultCommandList = []Command{
-	CommandMenu,
-	CommandSettings,
-	CommandHelp,
-	CommandHistory,
-	CommandRollback,
-	CommandClear,
-	CommandSummarize,
-}
+// Keep the quick menu intentionally small: all secondary actions live in
+// callback hubs opened from /menu.
+var DefaultCommandList = []Command{CommandMenu, CommandNew, CommandList, CommandHelp}
 
-// SetCommandList registers Telegram bot menu commands from raw config strings.
-func (botInstance *Bot) SetCommandList(rawCommandMenu []string) {
-	var commandMenu []Command
+// SetCommandList registers Telegram commands from config, falling back to the
+// callback-first default when no supported configured commands remain.
+func (botInstance *Bot) SetCommandList(rawCommandMenu []string) error {
+	commandMenu := make([]Command, 0, len(rawCommandMenu))
 	for _, command := range rawCommandMenu {
 		if _, ok := CommandDescriptions[Command(command)]; ok {
 			commandMenu = append(commandMenu, Command(command))
 		}
 	}
-
-	if len(commandMenu) > 0 {
-		_ = botInstance.setCommandList(commandMenu...)
-	} else {
-		_ = botInstance.setCommandList(DefaultCommandList...)
+	if len(commandMenu) == 0 {
+		commandMenu = DefaultCommandList
 	}
+	return botInstance.setCommandList(commandMenu...)
 }
 
 func (botInstance *Bot) setCommandList(commands ...Command) error {
-	var tgCommands []tgbotapi.BotCommand
+	tgCommands := make([]tgbotapi.BotCommand, 0, len(commands))
 	for _, command := range commands {
 		tgCommands = append(tgCommands, tgbotapi.BotCommand{Command: string(command), Description: CommandDescriptions[command]})
 	}
-
 	_, err := botInstance.transport.Request(tgbotapi.NewSetMyCommands(tgCommands...))
 	return err
 }

@@ -31,6 +31,7 @@ type Session struct {
 	Topic           string
 	History         []*ConversationEntry
 	SystemPrompt    string
+	TransferContext string `json:",omitempty"` // explicitly summarized context inherited from another session
 	Model           string
 	LastInputTokens int // real input_tokens from last API response (used by auto-compact)
 }
@@ -70,10 +71,10 @@ type Chat struct {
 	// previous one so stale menus don't pile up in the chat history.
 	LastHubMessageID int `json:",omitempty"`
 
-	// PendingInput holds the name of a command awaiting a free-text reply
-	// (button → ForceReply flow). The next text the user replies to the bot is
-	// routed to this command as its args. Transient — not persisted.
-	PendingInput string `json:"-"`
+	// PendingInput holds the command awaiting a ForceReply. PendingInputArgs
+	// carries callback-selected state for multi-step flows. Both are transient.
+	PendingInput     string `json:"-"`
+	PendingInputArgs string `json:"-"`
 
 	// Persisted across restarts so the admin can monitor per-chat spend.
 	TotalCostUSD      float64   // accumulated USD cost
@@ -183,24 +184,42 @@ func (c *Chat) RemoveSession(id int) bool {
 	return false
 }
 
-// AddSession creates a new session with the given topic, inheriting
-// Model from the currently active session.
+// AddSession creates an empty session inheriting the active model.
 func (c *Chat) AddSession(topic string) *Session {
-	active := c.ActiveSession()
-	model := DefaultSessionModel
-	if active != nil {
-		model = active.Model
-	}
+	return c.AddSessionFrom(topic, c.ActiveSession(), false)
+}
 
-	s := &Session{
-		ID:      c.NextSessionID,
-		Topic:   topic,
-		History: make([]*ConversationEntry, 0),
-		Model:   model,
+// AddSessionFrom creates a session inheriting model and system prompt from
+// source. When copyHistory is true, history is deep-copied so sessions remain
+// independent.
+func (c *Chat) AddSessionFrom(topic string, source *Session, copyHistory bool) *Session {
+	model := DefaultSessionModel
+	systemPrompt := ""
+	if source != nil {
+		model = source.Model
+		systemPrompt = source.SystemPrompt
+	}
+	s := &Session{ID: c.NextSessionID, Topic: topic, Model: model, SystemPrompt: systemPrompt, History: make([]*ConversationEntry, 0)}
+	if source != nil {
+		s.TransferContext = source.TransferContext
+	}
+	if copyHistory && source != nil {
+		s.History = cloneHistory(source.History)
 	}
 	c.NextSessionID++
 	c.Sessions = append(c.Sessions, s)
 	return s
+}
+
+func cloneHistory(entries []*ConversationEntry) []*ConversationEntry {
+	out := make([]*ConversationEntry, len(entries))
+	for i, entry := range entries {
+		if entry != nil {
+			copy := *entry
+			out[i] = &copy
+		}
+	}
+	return out
 }
 
 // AccumulateCost adds usage from a single request to the running totals.

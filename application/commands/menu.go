@@ -52,7 +52,7 @@ func (c *CommandMenu) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []sen
 				{{Text: "📊 Использование", Data: "usage:"}},
 				{{Text: "📐 Контекст", Data: "context:"}},
 				{{Text: "🕓 История", Data: "history:"}},
-				{{Text: "📖 Команды", Data: "help:list"}},
+				{{Text: "❓ Справка", Data: "help:"}},
 				{{Text: "⬅ Назад", Data: "menu:"}},
 			},
 		}}

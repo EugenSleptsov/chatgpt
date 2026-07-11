@@ -51,7 +51,7 @@ See [`config/bot.yaml.sample`](config/bot.yaml.sample) for the full list of opti
 ./gptbot
 ```
 
-The bot starts polling for Telegram updates. Send `/start` to begin.
+The bot starts polling for Telegram updates. Send `/start` to begin. The primary interface is callback-first: open `/menu` once, then use inline buttons instead of typing commands. Telegram's quick command menu intentionally contains only `/menu`, `/new`, `/list`, and `/help`.
 
 In group chats the bot responds when mentioned via `@BotName`, replied to, or called by name (e.g. "бот"). With auto-reply enabled, the bot can also proactively join conversations.
 
@@ -61,7 +61,7 @@ In group chats the bot responds when mentioned via `@BotName`, replied to, or ca
 | Command | Description |
 |---------|-------------|
 | `/start` | Sends a welcome message |
-| `/help` | Shows available commands |
+| `/help` | Opens interactive help categories |
 | `/clear` | Clears conversation history for the current session |
 | `/history [page]` | Shows conversation history (paginated) |
 | `/rollback [n]` | Removes last *n* messages from history (default 1) |
@@ -75,7 +75,7 @@ In group chats the bot responds when mentioned via `@BotName`, replied to, or ca
 |---------|-------------|
 | `/list` | Lists all sessions |
 | `/current` | Shows the active session |
-| `/new <topic>` | Creates a new session and switches to it |
+| `/new [topic]` | Opens button-based creation (clean, full copy, or compact context transfer); with a topic, creates a clean session immediately |
 | `/use <id>` | Switches to a session by ID |
 | `/update <id> <topic>` | Renames a session |
 | `/remove <id>` | Deletes a session (cannot delete the last one) |

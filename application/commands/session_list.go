@@ -49,8 +49,7 @@ func (c *CommandSessionList) Execute(ctx *pipeline.RequestContext, chat *chat.Ch
 		}
 		page = sessionPageOf(chat, chat.ActiveSessionID)
 	case args == "new":
-		chat.PendingInput = "new"
-		return forceReplyPrompt("Название новой сессии:")
+		return sessionNewModeView()
 	case args == "rename":
 		chat.PendingInput = "rename"
 		return forceReplyPrompt("Новое имя активной сессии:")

@@ -16,7 +16,8 @@ ignore_report_ids: []
 # Authorized user IDs (empty list = public bot)
 authorized_user_ids: []
 
-# Custom command menu (empty = default)
+# Telegram quick command menu. Empty uses the callback-first default:
+# menu, new, list, help. Secondary actions are available as inline buttons.
 command_menu: []
 
 # Summarize prompt

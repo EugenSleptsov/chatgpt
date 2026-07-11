@@ -350,16 +350,16 @@ func buildTestWorker(bot *fakeBot) (*Worker, *service.ChatService) {
 
 func TestWorker_ConsumePendingInput_Routes(t *testing.T) {
 	w := &Worker{BotUsername: "mybot"}
-	c := &chat.Chat{PendingInput: "autorole"}
-	ctx := &pipeline.RequestContext{Text: "new persona", ReplyToUsername: "mybot"}
+	c := &chat.Chat{PendingInput: "new", PendingInputArgs: "summary:4"}
+	ctx := &pipeline.RequestContext{Text: "physics", ReplyToUsername: "mybot"}
 
 	w.consumePendingInput(ctx, c)
 
-	if !ctx.IsCommand || ctx.CommandName != "autorole" || ctx.CommandArgs != "new persona" {
+	if !ctx.IsCommand || ctx.CommandName != "new" || ctx.CommandArgs != "summary:4\nphysics" {
 		t.Fatalf("pending input not routed to command: %+v", ctx)
 	}
-	if c.PendingInput != "" {
-		t.Error("pending input should be cleared after consumption")
+	if c.PendingInput != "" || c.PendingInputArgs != "" {
+		t.Error("pending state should be cleared after consumption")
 	}
 }
 

@@ -25,7 +25,7 @@ type Deps struct {
 func AllCommands(d Deps) []Command {
 	return []Command{
 		// --- zero-dep commands ---
-		&CommandHelp{Registry: d.Registry, Auth: d.Auth},
+		&CommandHelp{},
 		&CommandMenu{},
 		&CommandAdvisor{},
 		&CommandMemory{Archive: d.Archive},
@@ -42,7 +42,7 @@ func AllCommands(d Deps) []Command {
 		&CommandUsage{},
 		&CommandContext{ContextWindowFn: d.ContextWindowFn},
 		&CommandSessionList{},
-		&CommandSessionNew{},
+		&CommandSessionNew{Commands: d.CmdService, Notifier: d.Notifier, Progress: d.Progress},
 		&CommandSessionRename{},
 		&CommandSessionRemove{Commands: d.CmdService},
 

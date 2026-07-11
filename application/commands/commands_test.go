@@ -389,42 +389,23 @@ func TestCommandStart(t *testing.T) {
 
 // ======================== /help ========================
 
-func TestCommandHelp_DefaultShowsLauncher(t *testing.T) {
+func TestCommandHelp_DefaultShowsCategories(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("help")
 	rows := cmd.Execute(makeCmdCtx(1, 100, "/help"), newTestChat())[0].Buttons
-	if !hasButton(rows, "settings:") || !hasButton(rows, "list:") {
-		t.Error("/help should show the button launcher by default")
+	for _, data := range []string{"help:sessions", "help:memory", "help:tools", "help:settings", "help:chat"} {
+		if !hasButton(rows, data) {
+			t.Errorf("/help missing category %s", data)
+		}
 	}
 }
 
-func TestCommandHelp_ListsCommands(t *testing.T) {
+func TestCommandHelp_CategoryLinksToHub(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("help")
-	resp := assertSingleReply(t, cmd.Execute(makeCmdCtx(1, 100, "/help list"), newTestChat()))
-	if !strings.Contains(resp, "/start") {
-		t.Error("help list should contain /start")
-	}
-	if !strings.Contains(resp, "/clear") {
-		t.Error("help list should contain /clear")
-	}
-}
-
-func TestCommandHelp_AdminSeesAdminCommands(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("help")
-	resp := assertSingleReply(t, cmd.Execute(makeCmdCtx(1, 100, "/help list"), newTestChat())) // 100 = admin
-	if !strings.Contains(resp, "администратора") {
-		t.Error("admin should see admin commands section")
-	}
-}
-
-func TestCommandHelp_NonAdminHidesAdminCommands(t *testing.T) {
-	deps, _ := buildDeps(t)
-	cmd, _ := deps.Registry.Get("help")
-	resp := assertSingleReply(t, cmd.Execute(makeCmdCtx(1, 200, "/help list"), newTestChat())) // 200 = not admin
-	if strings.Contains(resp, "администратора") {
-		t.Error("non-admin should not see admin section")
+	resp := cmd.Execute(makeCmdCtx(1, 100, "/help sessions"), newTestChat())[0]
+	if !strings.Contains(resp.Text, "Сессии") || !hasButton(resp.Buttons, "list:") || !hasButton(resp.Buttons, "help:") {
+		t.Fatalf("unexpected sessions help: %+v", resp)
 	}
 }
 
@@ -859,22 +840,18 @@ func TestCommandSessionList_SelectButton(t *testing.T) {
 	}
 }
 
-func TestCommandSessionList_NewButtonStartsForceReply(t *testing.T) {
+func TestCommandSessionList_NewButtonShowsModes(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("list")
 	chat := newTestChat()
-	before := len(chat.Sessions)
-
-	// Tapping "list:new" arms pending input; no session created yet.
 	responses := cmd.Execute(makeCmdCtx(1, 100, "/list new"), chat)
-	if len(responses) != 1 || !responses[0].ForceReply {
-		t.Fatalf("expected a force-reply prompt, got %+v", responses)
+	for _, data := range []string{"new:ask:summary", "new:ask:copy", "new:ask:clean"} {
+		if !hasButton(responses[0].Buttons, data) {
+			t.Errorf("missing creation mode %s", data)
+		}
 	}
-	if chat.PendingInput != "new" {
-		t.Errorf("PendingInput = %q, want new", chat.PendingInput)
-	}
-	if len(chat.Sessions) != before {
-		t.Error("session must not be created before the topic reply")
+	if len(chat.Sessions) != 1 {
+		t.Error("mode picker must not create a session")
 	}
 }
 
@@ -912,14 +889,54 @@ func TestCommandSessionNew(t *testing.T) {
 	}
 }
 
-func TestCommandSessionNew_DefaultTopic(t *testing.T) {
+func TestCommandSessionNew_EmptyShowsModes(t *testing.T) {
 	deps, _ := buildDeps(t)
 	cmd, _ := deps.Registry.Get("new")
 	chat := newTestChat()
-	ctx := makeCmdCtx(1, 100, "/new")
-	cmd.Execute(ctx, chat)
-	if chat.Sessions[1].Topic != "untitled" {
-		t.Errorf("default topic = %q, want 'untitled'", chat.Sessions[1].Topic)
+	resp := cmd.Execute(makeCmdCtx(1, 100, "/new"), chat)
+	if len(chat.Sessions) != 1 || !hasButton(resp[0].Buttons, "new:ask:summary") {
+		t.Fatalf("empty /new should show mode picker: %+v", resp)
+	}
+}
+
+func TestCommandSessionNew_CallbackArmsModeAndSource(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("new")
+	chat := newTestChat()
+	ctx := makeCmdCtx(1, 100, "/new ask:copy")
+	ctx.IsCallback = true
+	resp := cmd.Execute(ctx, chat)
+	if !resp[0].ForceReply || chat.PendingInput != "new" || chat.PendingInputArgs != "copy:1" {
+		t.Fatalf("unexpected pending state: %+v %+v", chat, resp)
+	}
+}
+
+func TestCommandSessionNew_SummarySeedsTransferContext(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("new")
+	chat := newTestChat()
+	chat.ActiveSession().History = []*domain.ConversationEntry{{Prompt: domain.Message{Role: "user", Content: "formula"}}}
+	cmd.Execute(makeCmdCtx(1, 100, "/new summary:1\nphysics"), chat)
+	created := chat.ActiveSession()
+	if created.Topic != "physics" || created.TransferContext == "" || len(created.History) != 0 {
+		t.Fatalf("summary transfer was not seeded separately: %+v", created)
+	}
+}
+
+func TestCommandSessionNew_CopyIsIndependent(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("new")
+	chat := newTestChat()
+	chat.ActiveSession().SystemPrompt = "rules"
+	chat.ActiveSession().History = []*domain.ConversationEntry{{Prompt: domain.Message{Role: "user", Content: "formula"}}}
+	cmd.Execute(makeCmdCtx(1, 100, "/new copy:1\nphysics"), chat)
+	copy := chat.ActiveSession()
+	if copy.SystemPrompt != "rules" || len(copy.History) != 1 {
+		t.Fatalf("copy lost context: %+v", copy)
+	}
+	copy.History[0].Prompt.Content = "changed"
+	if chat.Sessions[0].History[0].Prompt.Content != "formula" {
+		t.Error("session histories share pointers")
 	}
 }
 

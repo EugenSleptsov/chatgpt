@@ -60,7 +60,9 @@ func NewInstance(token string, commandMenu []string, logClient logger.Log) (*Bot
 		transport: transport,
 	}
 
-	bot.SetCommandList(commandMenu)
+	if err := bot.SetCommandList(commandMenu); err != nil {
+		return nil, err
+	}
 
 	bot.LogClient.Logf("Authorized on account %s", bot.Username)
 

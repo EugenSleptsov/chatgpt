@@ -147,15 +147,20 @@ func BuildInstructions(session *chatdomain.Session, memoryPrompt string, ctx *Pr
 	if session.SystemPrompt != "" {
 		parts = append(parts, session.SystemPrompt)
 	}
+	if session.TransferContext != "" {
+		parts = append(parts, "Transferred context from a previous session (a summary, not a new user message):\n"+session.TransferContext)
+	}
 
 	// Section 2: Capabilities (static per chat, cacheable)
 	caps := `Capabilities:
 - You can search the internet for up-to-date information
 - You can generate images from text descriptions
 - You can create voice/audio messages
-- You can save the user's notes into topical lists (advisor), read them back, and set/move reminders on them`
+- You can save the user's notes into topical lists (advisor), read them back, and set/move reminders on them
+- This bot supports separate conversation sessions. When the user wants to move a topic into a separate conversation, tell them to open Sessions in /menu or use /new; they can create a clean session, a full copy, or a compact context transfer
+- Never claim that a session, note, reminder, memory, image, audio, or other action was created, saved, moved, or completed unless the corresponding tool or UI operation actually succeeded. Offering a capability is not the same as executing it`
 	if ctx != nil && ctx.Supermemory {
-		caps += "\n- You have layered long-term memory of all past conversations (supermemory): an index of hooks is in this prompt; drill down with search_memory, read_memory and read_memory_source when the user refers to something outside the current context; call save_memory to persist the not-yet-saved conversation into a node immediately when the user asks to remember something or an important result must not be lost"
+		caps += "\n- You have layered long-term memory (supermemory): an index of saved hooks is in this prompt; drill down with search_memory, read_memory and read_memory_source when the user refers to something outside the current context; call save_memory when the user asks to remember something. Say it was saved only after save_memory returns success; never imply that all past conversations are already saved"
 	}
 	parts = append(parts, caps)
 
