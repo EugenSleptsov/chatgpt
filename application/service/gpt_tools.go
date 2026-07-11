@@ -102,6 +102,15 @@ var supermemoryTools = []ai.Tool{
 	},
 	{
 		Type:        "function",
+		Name:        "save_memory",
+		Description: "Force-save the conversation into long-term memory right now: everything not yet covered by a memory node is summarized into a new node immediately, without waiting for the automatic threshold. Call when the user asks to remember or memorize something from the conversation ('запомни это', 'сохрани в память'), or when an important conclusion/decision was just reached and must not be lost.",
+		Parameters: &ai.FunctionParameters{
+			Type:       "object",
+			Properties: map[string]ai.ParameterProperty{},
+		},
+	},
+	{
+		Type:        "function",
 		Name:        "read_memory_source",
 		Description: "Read the raw archived transcript behind a supermemory node, verbatim. Use after read_memory when the summary is not detailed enough (exact wording, numbers, code). Output is capped; prefer summaries when they suffice.",
 		Parameters: &ai.FunctionParameters{
@@ -147,6 +156,7 @@ type ToolRunner struct {
 	ImageCost float64
 	Progress  ProgressReporter
 	Archive   chatdomain.Archive // raw transcript store for read_memory_source (may be nil)
+	Compact   *CompactService    // snapshot machinery for save_memory (may be nil)
 }
 
 const maxToolIterations = 5
@@ -229,6 +239,8 @@ func (r ToolRunner) executeSingleToolCall(tc ai.ToolCall, result *ChatResult, ch
 		return r.executeReadMemory(tc, chat)
 	case "read_memory_source":
 		return r.executeReadMemorySource(tc, chat)
+	case "save_memory":
+		return r.executeSaveMemory(chat)
 	case "save_note":
 		return r.executeSaveNote(tc, chat)
 	case "read_notes":
@@ -308,6 +320,34 @@ func (r ToolRunner) executeReadMemorySource(tc ai.ToolCall, chat *chatdomain.Cha
 		return marshalToolResult(toolResult{Status: "error", Error: "failed to read the archive"})
 	}
 	return marshalToolResult(toolResult{Status: "success", Text: MemorySourceForTool(chat, msgs)})
+}
+
+// executeSaveMemory force-snapshots the archive's uncovered tail into a memory
+// node, ignoring the accumulation threshold — the model's way to persist the
+// conversation on demand.
+func (r ToolRunner) executeSaveMemory(chat *chatdomain.Chat) string {
+	if !chat.Settings.Supermemory {
+		return marshalToolResult(toolResult{Status: "error", Error: "supermemory is disabled in this chat"})
+	}
+	if r.Compact == nil {
+		return marshalToolResult(toolResult{Status: "error", Error: "memory snapshots are not available"})
+	}
+	session := chat.ActiveSession()
+	ArchiveHistory(r.Archive, chat, session)
+	before := len(chat.MemoryNodes)
+	usage, err := r.Compact.Snapshot(chat, session.Model, true)
+	if err != nil {
+		log.Printf("[ToolCall] save_memory error: %v", err)
+		return marshalToolResult(toolResult{Status: "error", Error: "failed to save memory, try again later"})
+	}
+	if usage != nil {
+		chat.AccumulateCost(usage.Cost, usage.InputTokens, usage.OutputTokens)
+	}
+	if len(chat.MemoryNodes) == before {
+		return marshalToolResult(toolResult{Status: "success", Text: "Nothing new to save — the conversation is already covered by memory nodes."})
+	}
+	n := chat.MemoryNodes[len(chat.MemoryNodes)-1]
+	return marshalToolResult(toolResult{Status: "success", Text: fmt.Sprintf("Saved memory node #%d — %s", n.ID, n.Hook)})
 }
 
 // findMemoryNodeArg resolves a "#N" / "N" tool argument into a node.

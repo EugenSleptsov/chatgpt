@@ -30,6 +30,7 @@ type Worker struct {
 	ChatService    *service.ChatService
 	Decoder        *decoder.Decoder
 	ResponseSender *sender.ResponseSender
+	Commands       *service.GPTService // nightly auto-dream (may be nil)
 }
 
 func NewWorker(
@@ -40,6 +41,7 @@ func NewWorker(
 	chatService *service.ChatService,
 	dec *decoder.Decoder,
 	sender *sender.ResponseSender,
+	commands *service.GPTService,
 ) *Worker {
 	return &Worker{
 		Auth:           auth,
@@ -49,6 +51,7 @@ func NewWorker(
 		ChatService:    chatService,
 		Decoder:        dec,
 		ResponseSender: sender,
+		Commands:       commands,
 	}
 }
 
@@ -58,6 +61,7 @@ func (w *Worker) Start(jobs <-chan Job) {
 			w.ProcessUpdate(*job.Update)
 		} else {
 			w.ProcessReminders(job.ReminderChat)
+			w.ProcessAutoDream(job.ReminderChat)
 		}
 		w.ChatService.Save()
 	}
@@ -84,6 +88,50 @@ func (w *Worker) ProcessReminders(chatID int64) {
 		}
 	}
 	w.ChatService.MarkDirty(chatID)
+}
+
+// autoDreamHour is the chat-local hour when a nightly auto-dream may fire.
+const autoDreamHour = 4
+
+// ProcessAutoDream runs the nightly supermemory reorganization for one chat.
+// Piggybacks on the reminder tick, so it fires on the chat's own worker
+// goroutine. Guards keep it from burning tokens in vain: enabled settings,
+// once per local day around autoDreamHour, and only when new memory nodes
+// appeared since the last dream (same index would yield the same plan). A
+// report is sent only when something was actually regrouped.
+func (w *Worker) ProcessAutoDream(chatID int64) {
+	c, ok := w.ChatService.GetChat(chatID)
+	if !ok || w.Commands == nil {
+		return
+	}
+	if !c.Settings.Supermemory || !c.Settings.AutoDream {
+		return
+	}
+	now := time.Now().In(c.Location())
+	if now.Hour() != autoDreamHour {
+		return
+	}
+	last := c.LastDreamAt.In(c.Location())
+	if last.Year() == now.Year() && last.YearDay() == now.YearDay() {
+		return // already dreamt today
+	}
+	// Stamp the attempt first so a bad night doesn't retry every 30 seconds.
+	c.LastDreamAt = time.Now()
+	w.ChatService.MarkDirty(chatID)
+	if c.NextMemoryNodeID <= c.LastDreamNodeID {
+		return // nothing new in memory since the last dream
+	}
+
+	report, created := w.Commands.Dream(c)
+	if created == 0 {
+		return
+	}
+	w.ResponseSender.Send(chatID, 0, []sender.Response{{
+		Text: "💤 Ночной сон: бот перебрал память.\n\n" + report,
+		Buttons: [][]sender.Button{{
+			{Text: "🧠 Память", Data: "memory:"},
+		}},
+	}})
 }
 
 func (w *Worker) ProcessUpdate(update telegram.Update) {

@@ -153,3 +153,44 @@ func TestArchiveRangeOfEntries(t *testing.T) {
 		t.Fatalf("unarchived entries must yield zero range, got [%d, %d)", f, tt)
 	}
 }
+
+func TestExecuteSaveMemory_CreatesNodeOnDemand(t *testing.T) {
+	archive := storage.NewMemoryArchive()
+	chat := supermemoryChat()
+	session := chat.ActiveSession()
+	AppendHistory(session, chatdomain.Message{Role: "user", Content: "важное решение"})
+	AttachResponse(session, chatdomain.Message{Role: "assistant", Content: "зафиксировано"})
+
+	client := &stubCompactClient{response: makeSuccessResponse("Хук решения\n\nПодробное саммари.")}
+	runner := ToolRunner{
+		Client:  client,
+		Archive: archive,
+		Compact: &CompactService{GptClient: client, Archive: archive},
+	}
+
+	out := runner.executeSaveMemory(chat)
+	if !strings.Contains(out, "success") || !strings.Contains(out, "#1") {
+		t.Fatalf("save_memory output = %s", out)
+	}
+	if len(chat.MemoryNodes) != 1 || chat.MemoryNodes[0].Hook != "Хук решения" {
+		t.Fatalf("nodes = %+v", chat.MemoryNodes)
+	}
+	if chat.ArchiveSnapshotTo != 2 {
+		t.Errorf("ArchiveSnapshotTo = %d, want 2", chat.ArchiveSnapshotTo)
+	}
+
+	// Second call with nothing new must not create another node.
+	out = runner.executeSaveMemory(chat)
+	if !strings.Contains(out, "Nothing new") || len(chat.MemoryNodes) != 1 {
+		t.Errorf("repeat save_memory output = %s, nodes = %d", out, len(chat.MemoryNodes))
+	}
+}
+
+func TestExecuteSaveMemory_DisabledReturnsError(t *testing.T) {
+	chat := supermemoryChat()
+	chat.Settings.Supermemory = false
+	runner := ToolRunner{}
+	if out := runner.executeSaveMemory(chat); !strings.Contains(out, "disabled") {
+		t.Errorf("save_memory output = %s, want disabled error", out)
+	}
+}

@@ -159,6 +159,27 @@ func MemorySourceForTool(chat *chatdomain.Chat, msgs []chatdomain.ArchivedMessag
 	return sb.String()
 }
 
+// SnapshotProgress reports how full the snapshot buffer is: the estimated
+// token size of the archive tail not yet covered by memory nodes, and the
+// threshold at which the next snapshot fires. Zeros when unavailable.
+func SnapshotProgress(archive chatdomain.Archive, chat *chatdomain.Chat) (tokens, threshold int) {
+	if archive == nil {
+		return 0, snapshotThresholdTokens
+	}
+	end, err := archive.Count(chat.ChatID)
+	if err != nil || end <= chat.ArchiveSnapshotTo {
+		return 0, snapshotThresholdTokens
+	}
+	msgs, err := archive.ReadRange(chat.ChatID, chat.ArchiveSnapshotTo, end)
+	if err != nil {
+		return 0, snapshotThresholdTokens
+	}
+	for _, m := range msgs {
+		tokens += estimateTokens(m.Content)
+	}
+	return tokens, snapshotThresholdTokens
+}
+
 // splitHookSummary splits a compaction reply into the one-line hook requested
 // by the compact prompt and the summary body. Falls back to a truncated first
 // line when the model ignored the format.

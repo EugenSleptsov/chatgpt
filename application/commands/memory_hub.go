@@ -45,7 +45,7 @@ func (c *CommandMemory) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []s
 	switch {
 	case strings.HasPrefix(args, "node:"):
 		if id, err := strconv.Atoi(args[len("node:"):]); err == nil {
-			return memoryNodeView(ch, id)
+			return c.memoryNodeView(ch, id)
 		}
 	case strings.HasPrefix(args, "src:"):
 		if id, err := strconv.Atoi(args[len("src:"):]); err == nil {
@@ -56,27 +56,52 @@ func (c *CommandMemory) Execute(ctx *pipeline.RequestContext, ch *chat.Chat) []s
 			if n := ch.FindMemoryNode(id); n != nil {
 				n.Pinned = !n.Pinned
 			}
-			return memoryNodeView(ch, id)
+			return c.memoryNodeView(ch, id)
 		}
 	case strings.HasPrefix(args, "del:yes:"):
 		if id, err := strconv.Atoi(args[len("del:yes:"):]); err == nil {
 			ch.RemoveMemoryNode(id)
 		}
-		return memoryIndexView(ch, 0)
+		return c.memoryIndexView(ch, 0)
 	case strings.HasPrefix(args, "del:"):
 		if id, err := strconv.Atoi(args[len("del:"):]); err == nil {
-			return memoryNodeDeleteConfirm(ch, id)
+			return c.memoryNodeDeleteConfirm(ch, id)
 		}
 	case args == "toggle":
 		ch.Settings.Supermemory = !ch.Settings.Supermemory
-		return memoryIndexView(ch, 0)
+		return c.memoryIndexView(ch, 0)
+	case args == "autodream":
+		ch.Settings.AutoDream = !ch.Settings.AutoDream
+		return c.memoryIndexView(ch, 0)
 	case args != "":
 		if page, err := strconv.Atoi(args); err == nil {
-			return memoryIndexView(ch, page)
+			return c.memoryIndexView(ch, page)
 		}
 	}
 
-	return memoryIndexView(ch, 0)
+	return c.memoryIndexView(ch, 0)
+}
+
+// memoryStatusLine renders the header of the index view: the setting state
+// plus the snapshot buffer fill, so it is visible that memory is accumulating
+// even before the first node appears.
+func (c *CommandMemory) memoryStatusLine(ch *chat.Chat) string {
+	if !ch.Settings.Supermemory {
+		return "🧠 Суперпамять: выключена (модель память не видит, данные сохранены)"
+	}
+	line := "🧠 Суперпамять: включена"
+	if tokens, threshold := service.SnapshotProgress(c.Archive, ch); tokens > 0 {
+		line += fmt.Sprintf("\nНакоплено к следующему узлу: ~%d/%d ток.", tokens, threshold)
+	}
+	return line
+}
+
+// autoDreamLabel renders the nightly auto-dream toggle label.
+func autoDreamLabel(ch *chat.Chat) string {
+	if ch.Settings.AutoDream {
+		return "🌙 Автосон ✅"
+	}
+	return "🌙 Автосон ❌"
 }
 
 // memoryToggleButton renders the enable/disable control for the index view.
@@ -88,12 +113,7 @@ func memoryToggleButton(ch *chat.Chat) sender.Button {
 }
 
 // memoryIndexView renders one page of root nodes, newest first.
-func memoryIndexView(ch *chat.Chat, page int) []sender.Response {
-	status := "выключена (модель память не видит, данные сохранены)"
-	if ch.Settings.Supermemory {
-		status = "включена"
-	}
-
+func (c *CommandMemory) memoryIndexView(ch *chat.Chat, page int) []sender.Response {
 	roots := ch.RootMemoryNodes()
 	// Newest first: reverse the append-ordered roots.
 	for i, j := 0, len(roots)-1; i < j; i, j = i+1, j-1 {
@@ -102,7 +122,7 @@ func memoryIndexView(ch *chat.Chat, page int) []sender.Response {
 
 	if len(roots) == 0 {
 		return []sender.Response{{
-			Text: fmt.Sprintf("🧠 Суперпамять: %s\n\nУзлов пока нет — они появляются автоматически, когда старая переписка сжимается из контекста.", status),
+			Text: c.memoryStatusLine(ch) + "\n\nУзлов пока нет — узел сохраняется автоматически, как только накапливается достаточно новой переписки, а также при очистке истории и удалении сессии.",
 			Buttons: [][]sender.Button{
 				{memoryToggleButton(ch)},
 				{{Text: "⬅ Меню", Data: "menu:"}},
@@ -150,20 +170,26 @@ func memoryIndexView(ch *chat.Chat, page int) []sender.Response {
 		rows = append(rows, nav)
 	}
 
+	if ch.Settings.Supermemory {
+		rows = append(rows, []sender.Button{
+			{Text: "💤 Сон — реорганизация", Data: "dream:"},
+			{Text: autoDreamLabel(ch), Data: "memory:autodream"},
+		})
+	}
 	rows = append(rows, []sender.Button{memoryToggleButton(ch)})
 	rows = append(rows, []sender.Button{{Text: "⬅ Меню", Data: "menu:"}})
 
 	return []sender.Response{{
-		Text:    fmt.Sprintf("🧠 Суперпамять: %s\nУзлов: %d (в индексе: %d)\n\n↓ — есть вложенные узлы, 📌 — закреплён.", status, len(ch.MemoryNodes), len(roots)),
+		Text:    fmt.Sprintf("%s\nУзлов: %d (в индексе: %d)\n\n↓ — есть вложенные узлы, 📌 — закреплён.", c.memoryStatusLine(ch), len(ch.MemoryNodes), len(roots)),
 		Buttons: rows,
 	}}
 }
 
 // memoryNodeView renders one node: summary, children and controls.
-func memoryNodeView(ch *chat.Chat, id int) []sender.Response {
+func (c *CommandMemory) memoryNodeView(ch *chat.Chat, id int) []sender.Response {
 	n := ch.FindMemoryNode(id)
 	if n == nil {
-		return memoryIndexView(ch, 0)
+		return c.memoryIndexView(ch, 0)
 	}
 
 	var sb strings.Builder
@@ -203,14 +229,14 @@ func memoryNodeView(ch *chat.Chat, id int) []sender.Response {
 // memoryNodeDeleteConfirm asks for confirmation before deleting a node
 // (skipped when the chat opted out of delete confirmations). Deleting removes
 // the summary from memory; children become roots, the raw archive stays.
-func memoryNodeDeleteConfirm(ch *chat.Chat, id int) []sender.Response {
+func (c *CommandMemory) memoryNodeDeleteConfirm(ch *chat.Chat, id int) []sender.Response {
 	n := ch.FindMemoryNode(id)
 	if n == nil {
-		return memoryIndexView(ch, 0)
+		return c.memoryIndexView(ch, 0)
 	}
 	if ch.Settings.SkipDeleteConfirm {
 		ch.RemoveMemoryNode(id)
-		return memoryIndexView(ch, 0)
+		return c.memoryIndexView(ch, 0)
 	}
 	note := ""
 	if len(n.Children) > 0 {
@@ -229,7 +255,7 @@ func memoryNodeDeleteConfirm(ch *chat.Chat, id int) []sender.Response {
 func (c *CommandMemory) memorySourceView(ch *chat.Chat, id int) []sender.Response {
 	n := ch.FindMemoryNode(id)
 	if n == nil {
-		return memoryIndexView(ch, 0)
+		return c.memoryIndexView(ch, 0)
 	}
 	back := [][]sender.Button{{{Text: "⬅ Назад", Data: fmt.Sprintf("memory:node:%d", n.ID)}}}
 

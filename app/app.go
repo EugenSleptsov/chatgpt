@@ -35,6 +35,7 @@ type App struct {
 	sender        *sender.ResponseSender
 	auth          *service.Auth
 	notifier      *service.Notifier
+	gpt           *service.GPTService
 	updateTimeout int
 }
 
@@ -129,6 +130,7 @@ func NewApp(configFile string) (*App, error) {
 		sender:   buildResponseSender(bot, notifier),
 		auth:     auth,
 		notifier: notifier,
+		gpt:      gptService,
 	}, nil
 }
 
@@ -156,7 +158,7 @@ func (a *App) Run() {
 	for i := 0; i < numWorkers; i++ {
 		workerChans[i] = make(chan Job, updateBufferSize)
 		wg.Add(1)
-		w := NewWorker(a.auth, a.bot, a.bot.GetUsername(), a.notifier, a.chatService, a.decoder, a.sender)
+		w := NewWorker(a.auth, a.bot, a.bot.GetUsername(), a.notifier, a.chatService, a.decoder, a.sender, a.gpt)
 		go func(ch <-chan Job) {
 			defer wg.Done()
 			w.Start(ch)

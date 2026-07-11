@@ -29,6 +29,7 @@ func AllCommands(d Deps) []Command {
 		&CommandMenu{},
 		&CommandAdvisor{},
 		&CommandMemory{Archive: d.Archive},
+		&CommandDream{Commands: d.CmdService, Progress: d.Progress},
 		&CommandSettings{Auth: d.Auth},
 		&CommandStart{},
 		&CommandClear{Commands: d.CmdService},

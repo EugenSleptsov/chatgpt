@@ -73,6 +73,7 @@ func (s *GPTService) toolRunner() ToolRunner {
 		ImageCost: s.ImageCost,
 		Progress:  s.Progress,
 		Archive:   s.Archive,
+		Compact:   s.Compact,
 	}
 }
 

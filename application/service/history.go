@@ -155,7 +155,7 @@ func BuildInstructions(session *chatdomain.Session, memoryPrompt string, ctx *Pr
 - You can create voice/audio messages
 - You can save the user's notes into topical lists (advisor), read them back, and set/move reminders on them`
 	if ctx != nil && ctx.Supermemory {
-		caps += "\n- You have layered long-term memory of all past conversations (supermemory): an index of hooks is in this prompt; drill down with search_memory, read_memory and read_memory_source when the user refers to something outside the current context"
+		caps += "\n- You have layered long-term memory of all past conversations (supermemory): an index of hooks is in this prompt; drill down with search_memory, read_memory and read_memory_source when the user refers to something outside the current context; call save_memory to persist the not-yet-saved conversation into a node immediately when the user asks to remember something or an important result must not be lost"
 	}
 	parts = append(parts, caps)
 

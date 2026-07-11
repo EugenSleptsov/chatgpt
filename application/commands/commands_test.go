@@ -1496,3 +1496,56 @@ func TestCommandSummarize_WithLogFile(t *testing.T) {
 		t.Error("expected non-empty summarize response")
 	}
 }
+
+func TestCommandDream_DisabledSupermemory(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("dream")
+	chat := newTestChat()
+
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/dream"), chat)
+	if !strings.Contains(responses[0].Text, "выключена") {
+		t.Errorf("dream on disabled supermemory: %q", responses[0].Text)
+	}
+}
+
+func TestCommandDream_TooFewNodes(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("dream")
+	chat := newTestChat()
+	chat.Settings.Supermemory = true
+	chat.AddMemoryNode("хук", "саммари", 0, 2, 1)
+
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/dream"), chat)
+	if !strings.Contains(responses[0].Text, "проснулся") || !strings.Contains(responses[0].Text, "мало") {
+		t.Errorf("dream with 1 node: %q", responses[0].Text)
+	}
+}
+
+func TestCommandMemory_IndexOffersDream(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("memory")
+	chat := newTestChat()
+	chat.Settings.Supermemory = true
+	chat.AddMemoryNode("хук", "саммари", 0, 2, 1)
+
+	responses := cmd.Execute(makeCmdCtx(1, 100, "/memory"), chat)
+	if !hasButton(responses[0].Buttons, "dream:") {
+		t.Error("index view must offer the dream button when supermemory is on")
+	}
+}
+
+func TestCommandMemory_AutoDreamToggle(t *testing.T) {
+	deps, _ := buildDeps(t)
+	cmd, _ := deps.Registry.Get("memory")
+	chat := newTestChat()
+	chat.Settings.Supermemory = true
+
+	cmd.Execute(makeCmdCtx(1, 100, "/memory autodream"), chat)
+	if !chat.Settings.AutoDream {
+		t.Error("autodream toggle must enable the setting")
+	}
+	cmd.Execute(makeCmdCtx(1, 100, "/memory autodream"), chat)
+	if chat.Settings.AutoDream {
+		t.Error("second toggle must disable the setting")
+	}
+}

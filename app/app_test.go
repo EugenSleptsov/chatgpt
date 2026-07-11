@@ -344,7 +344,7 @@ func buildTestWorker(bot *fakeBot) (*Worker, *service.ChatService) {
 	dec.Register(&fakeExecutor{responses: []sender.Response{{Text: "ai-reply", Markdown: true}}})
 
 	sender := &sender.ResponseSender{Bot: bot}
-	w := NewWorker(auth, bot, "test_bot", notifier, cs, dec, sender)
+	w := NewWorker(auth, bot, "test_bot", notifier, cs, dec, sender, nil)
 	return w, cs
 }
 

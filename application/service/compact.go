@@ -233,8 +233,9 @@ func (cs *CompactService) Compact(chat *chatdomain.Chat, session *chatdomain.Ses
 // snapshotThresholdTokens is how much un-summarized archived conversation
 // accumulates before a snapshot node is created. Deliberately low compared to
 // the context-eviction threshold: nodes should appear while the conversation
-// is still in context, so memory visibly fills up as you chat.
-const snapshotThresholdTokens = 3000
+// is still in context, so memory visibly fills up as you chat (~a screen or
+// two of dialogue).
+const snapshotThresholdTokens = 1000
 
 // snapshotPrompt summarizes a raw transcript chunk into a memory node,
 // hook-first like metaCompactPrompt.

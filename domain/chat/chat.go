@@ -53,6 +53,13 @@ type Chat struct {
 	// already covered by a memory node; the snapshot mechanism summarizes
 	// [ArchiveSnapshotTo, end) and advances the pointer.
 	ArchiveSnapshotTo int `json:",omitempty"`
+	// LastDreamAt is when the last dream (memory reorganization) ran; the
+	// nightly auto-dream fires at most once per local day.
+	LastDreamAt time.Time `json:",omitempty"`
+	// LastDreamNodeID is NextMemoryNodeID at the end of the last dream. When
+	// no nodes were added since (NextMemoryNodeID unchanged), an auto-dream
+	// would re-read the same index for the same answer — it is skipped.
+	LastDreamNodeID int `json:",omitempty"`
 
 	// Advisor: auto-captured notes grouped into model-named topics.
 	AdvisorTopics      []*AdvisorTopic `json:",omitempty"`
@@ -87,6 +94,7 @@ type ChatSettings struct {
 	Verbose           bool    // announce every tool invocation in the chat (admin toggle)
 	Timezone          string  // IANA zone name (e.g. "Europe/Berlin") for reminders and time display; empty = server local
 	Supermemory       bool    // layered long-term memory over the full transcript; off = don't archive, don't load index, don't expose tools
+	AutoDream         bool    // nightly automatic memory reorganization (requires Supermemory)
 }
 
 // Location resolves the chat's timezone setting into a *time.Location.
