@@ -89,24 +89,26 @@ func (a *FileArchive) Append(chatID int64, msgs []chat.ArchivedMessage) (int, er
 	}
 	defer f.Close()
 
+	// Any failure below may leave a partial append on disk (bufio can flush
+	// earlier lines before the error), so the cached count is dropped and
+	// recounted lazily on the next call.
 	w := bufio.NewWriter(f)
-	written := 0
 	for _, m := range msgs {
 		line, err := json.Marshal(m)
 		if err != nil {
+			delete(a.count, chatID)
 			return 0, err
 		}
 		if _, err := w.Write(append(line, '\n')); err != nil {
-			break
+			delete(a.count, chatID)
+			return 0, err
 		}
-		written++
 	}
 	if err := w.Flush(); err != nil {
-		// Partial writes still advance the count conservatively: recount lazily.
 		delete(a.count, chatID)
 		return 0, err
 	}
-	a.count[chatID] = from + written
+	a.count[chatID] = from + len(msgs)
 	return from, nil
 }
 

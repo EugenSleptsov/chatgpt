@@ -83,11 +83,13 @@ func (s *FileStorage) Save() bool {
 	for chatID := range s.dirty {
 		if c, ok := s.chats[chatID]; ok {
 			if err := s.saveChatToFile(chatID, c); err != nil {
+				// Keep the entry dirty so the next Save retries it.
 				success = false
+				continue
 			}
 		}
+		delete(s.dirty, chatID)
 	}
-	s.dirty = make(map[int64]bool)
 	return success
 }
 
@@ -131,7 +133,13 @@ func (s *FileStorage) saveChatToFile(chatID int64, c *chat.Chat) error {
 		return err
 	}
 
-	return os.WriteFile(filePath, data, 0644)
+	// Write-then-rename keeps the previous file intact if the process dies
+	// mid-write, so the chat never ends up as truncated JSON.
+	tmpPath := filePath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, filePath)
 }
 
 // IDs returns the ID of every known chat: loaded ones plus .chat files on

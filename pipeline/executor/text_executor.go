@@ -98,6 +98,10 @@ func (e *TextExecutor) groupChat(ctx *pipeline.RequestContext, c *chat.Chat, tex
 	}
 
 	if botAddressed {
+		if !e.Auth.IsAuthorized(ctx.SenderID) {
+			e.Notifier.Logf("[Group] %s → бот упомянут, но пользователь не авторизован", ctx.SenderName)
+			return nil
+		}
 		e.Notifier.Logf("[Group] %s → бот упомянут, отвечаю", ctx.SenderName)
 		return e.completeGroup(ctx, c, "Group reply")
 	}

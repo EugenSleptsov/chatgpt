@@ -310,7 +310,7 @@ func buildDecoder(d decoderDeps) *decoder.Decoder {
 
 	dec.Register(&executor.CommandExecutor{Registry: d.registry, Auth: d.auth, Notifier: d.notifier})
 	dec.Register(&executor.VoiceExecutor{Files: d.files, AIClient: d.aiClient, Notifier: d.notifier, TextExecutor: textExec, Progress: d.progress})
-	dec.Register(&executor.ImageExecutor{Files: d.files, BotUsername: d.botUsername, GPT: d.gpt, Notifier: d.notifier})
+	dec.Register(&executor.ImageExecutor{Files: d.files, BotUsername: d.botUsername, GPT: d.gpt, Notifier: d.notifier, Auth: d.auth})
 	dec.Register(&executor.StickerExecutor{Notifier: d.notifier})
 	dec.Register(textExec) // catch-all — must be last
 

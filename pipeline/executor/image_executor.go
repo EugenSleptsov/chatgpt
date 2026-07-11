@@ -16,6 +16,7 @@ type ImageExecutor struct {
 	BotUsername string
 	GPT         *service.GPTService
 	Notifier    *service.Notifier
+	Auth        *service.Auth
 }
 
 func (e *ImageExecutor) Match(ctx *pipeline.RequestContext) bool {
@@ -45,6 +46,10 @@ func (e *ImageExecutor) Execute(ctx *pipeline.RequestContext, chat *chat.Chat) [
 		e.Notifier.Logf("[Group] %s → фото, botAddressed=%v", ctx.SenderName, botAddressed)
 
 		if !botAddressed {
+			return nil
+		}
+		if !e.Auth.IsAuthorized(ctx.SenderID) {
+			e.Notifier.Logf("[Group] %s → фото адресовано боту, но пользователь не авторизован", ctx.SenderName)
 			return nil
 		}
 	}
