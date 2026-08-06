@@ -135,8 +135,12 @@ func (s OneShotService) ShouldAutoReply(chat *chatdomain.Chat, persona string) (
 		return false, "история пуста", nil
 	}
 
+	// Deliberately NOT session.Model: this is a one-word YES/NO gate that runs
+	// on every single group message. On the top tier it burns premium tokens
+	// and seconds of the chat's goroutine for a binary decision, so it runs on
+	// the cheapest tier regardless of what the chat answers with.
 	systemPrompt := buildAutoReplyPrompt(persona)
-	payload, err := s.Client.CallGPT(messages, session.Model, systemPrompt)
+	payload, err := s.Client.CallGPT(messages, ai.DefaultTierID, systemPrompt)
 	if err != nil {
 		return false, "ошибка GPT", err
 	}

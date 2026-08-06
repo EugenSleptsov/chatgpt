@@ -16,14 +16,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
-)
-
-const (
-	numWorkers       = 10
-	updateBufferSize = 100
 )
 
 // App is the top-level application object. It owns every dependency and
@@ -139,12 +133,13 @@ func NewApp(configFile string) (*App, error) {
 // After this deadline the process exits regardless of pending work.
 const shutdownTimeout = 30 * time.Second
 
-// Run starts the update polling, worker pool and blocks until a shutdown
+// Run starts the update polling, per-chat dispatch and blocks until a shutdown
 // signal is received or the update channel is closed.
 //
-// Updates are hash-partitioned by chat ID: every message from the same
-// Telegram chat always lands on the same worker goroutine. This eliminates
-// data races on *storage.Chat without per-chat mutexes.
+// Every job for a chat runs on that chat's own goroutine, in order. This
+// eliminates data races on *storage.Chat without per-chat mutexes, and keeps a
+// chat that is stuck in a long API call from affecting any other chat or the
+// dispatch loop itself (see dispatcher).
 //
 // - First SIGINT/SIGTERM: stop accepting updates, drain workers with timeout
 // - Second SIGINT: force-quit immediately (double Ctrl+C pattern)
@@ -152,25 +147,16 @@ const shutdownTimeout = 30 * time.Second
 func (a *App) Run() {
 	updates := a.bot.GetUpdateChannel(a.updateTimeout)
 
-	// Per-worker channels — hash-partitioned by chatID.
-	workerChans := make([]chan Job, numWorkers)
-	var wg sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
-		workerChans[i] = make(chan Job, updateBufferSize)
-		wg.Add(1)
-		w := NewWorker(a.auth, a.bot, a.bot.GetUsername(), a.notifier, a.chatService, a.decoder, a.sender, a.gpt)
-		go func(ch <-chan Job) {
-			defer wg.Done()
-			w.Start(ch)
-		}(workerChans[i])
-	}
+	disp := newDispatcher(func() *Worker {
+		return NewWorker(a.auth, a.bot, a.bot.GetUsername(), a.notifier, a.chatService, a.decoder, a.sender, a.gpt)
+	})
 
-	// Reminder scheduler: fans reminder ticks into the same partitioned
-	// channels so due reminders fire on the chat's own worker goroutine.
-	// Must be stopped BEFORE the worker channels are closed.
+	// Reminder scheduler: fans reminder ticks through the same dispatcher so
+	// due reminders fire on the chat's own goroutine. Must be stopped BEFORE
+	// the mailboxes are closed.
 	schedStop := make(chan struct{})
 	schedDone := make(chan struct{})
-	go a.runReminderScheduler(workerChans, schedStop, schedDone)
+	go a.runReminderScheduler(disp, schedStop, schedDone)
 	stopScheduler := func() {
 		close(schedStop)
 		<-schedDone
@@ -184,22 +170,25 @@ func (a *App) Run() {
 		case update, ok := <-updates:
 			if !ok {
 				stopScheduler()
-				closeAll(workerChans)
-				wg.Wait()
+				disp.Close()
+				disp.Wait()
 				a.chatService.Save()
 				return
 			}
 			u := update
-			workerChans[partitionFor(updateChatID(update), numWorkers)] <- Job{Update: &u}
+			chatID := updateChatID(update)
+			if !disp.Send(chatID, Job{Update: &u}) {
+				logDrop(chatID)
+			}
 		case sig := <-sigChan:
 			log.Printf("Получен сигнал %v, начинаю graceful shutdown...", sig)
 			stopScheduler()
-			closeAll(workerChans)
+			disp.Close()
 
 			// Drain workers with a timeout failsafe.
 			done := make(chan struct{})
 			go func() {
-				wg.Wait()
+				disp.Wait()
 				close(done)
 			}()
 
@@ -226,12 +215,14 @@ func (a *App) Run() {
 // reminderPollInterval is how often due advisor reminders are checked.
 const reminderPollInterval = 30 * time.Second
 
-// runReminderScheduler periodically dispatches a reminder tick for every
-// known chat into that chat's worker partition. The scheduler itself never
-// touches chat data — all reads and mutations happen on the worker goroutine,
-// preserving the no-mutex partitioning invariant. Exits when stop is closed;
-// done is closed on exit so shutdown can wait before closing worker channels.
-func (a *App) runReminderScheduler(chans []chan Job, stop <-chan struct{}, done chan<- struct{}) {
+// runReminderScheduler periodically dispatches a reminder tick for every known
+// chat to that chat's mailbox. The scheduler itself never touches chat data —
+// all reads and mutations happen on the chat's goroutine, preserving the
+// no-mutex invariant. Ticks for a busy chat are dropped rather than queued:
+// the next tick is 30 seconds away, and a reminder that missed its slot fires
+// on the following pass anyway. Exits when stop is closed; done is closed on
+// exit so shutdown can wait before the mailboxes are closed.
+func (a *App) runReminderScheduler(disp *dispatcher, stop <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
 	ticker := time.NewTicker(reminderPollInterval)
 	defer ticker.Stop()
@@ -241,11 +232,7 @@ func (a *App) runReminderScheduler(chans []chan Job, stop <-chan struct{}, done 
 			return
 		case <-ticker.C:
 			for _, chatID := range a.chatService.ChatIDs() {
-				select {
-				case chans[partitionFor(chatID, len(chans))] <- Job{ReminderChat: chatID}:
-				case <-stop:
-					return
-				}
+				disp.Send(chatID, Job{ReminderChat: chatID})
 			}
 		}
 	}
@@ -260,21 +247,6 @@ func updateChatID(update telegram.Update) int64 {
 		return update.CallbackQuery.Message.Chat.ID
 	default:
 		return 0
-	}
-}
-
-// partitionFor maps a chat ID to a stable worker index in [0, n).
-func partitionFor(chatID int64, n int) int {
-	if chatID < 0 {
-		chatID = -chatID
-	}
-	return int(chatID % int64(n))
-}
-
-// closeAll closes every channel in the slice.
-func closeAll(chans []chan Job) {
-	for _, ch := range chans {
-		close(ch)
 	}
 }
 

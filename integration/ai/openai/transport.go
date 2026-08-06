@@ -2,10 +2,13 @@ package openai
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"log"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -24,6 +27,12 @@ const (
 	retryJitter    = 500 * time.Millisecond
 )
 
+// requestTimeout bounds a single API call. Reasoning models with server-side
+// tools (web_search, image_generation) can legitimately run for minutes, so
+// this is generous — but it must stay bounded: the caller is the chat's worker
+// goroutine, and everything queued for that chat waits behind it.
+const requestTimeout = 300 * time.Second
+
 // HTTPTransport is the production Transport: adds auth header and retries
 type HTTPTransport struct {
 	ApiKey  string
@@ -35,8 +44,25 @@ func NewHTTPTransport(apiKey string) *HTTPTransport {
 	return &HTTPTransport{
 		ApiKey:  apiKey,
 		Retries: 5,
-		client:  &http.Client{Timeout: 120 * time.Second},
+		client:  &http.Client{Timeout: requestTimeout},
 	}
+}
+
+// isTimeout reports whether err is our own client-side deadline firing, as
+// opposed to a transport failure. Retrying one of these is counter-productive:
+// the request did not fail, it was abandoned while the model was still working,
+// so a retry starts the same expensive run from scratch — and OpenAI bills every
+// abandoned attempt. Retrying multiplies both the time the chat's goroutine is
+// held and the cost, without ever making the slow call finish any sooner.
+func isTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 // backoffDelay calculates exponential backoff with jitter:
@@ -84,6 +110,13 @@ func (t *HTTPTransport) Post(url, contentType string, payload []byte) (*http.Res
 		resp, err = t.client.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			return resp, nil
+		}
+
+		// Our own deadline fired: return immediately instead of re-running the
+		// same long call up to Retries times (see isTimeout).
+		if isTimeout(err) {
+			log.Printf("[Transport] request exceeded %v, giving up without retry: %v", t.client.Timeout, err)
+			return nil, err
 		}
 
 		// Client errors (4xx except 429): our request is wrong, retrying won't help.

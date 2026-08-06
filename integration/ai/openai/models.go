@@ -19,7 +19,7 @@ type modelSpec struct {
 var models = map[string]modelSpec{
 	"basic":   {APIModel: "gpt-5.6-luna", PriceIn: 1.00, PriceOut: 6.00, ContextWindow: 200_000, Effort: "high"},
 	"fast":    {APIModel: "gpt-5.6-terra", PriceIn: 2.50, PriceOut: 15.00, ContextWindow: 200_000, Effort: "xhigh"},
-	"premium": {APIModel: "gpt-5.6-sol", PriceIn: 5.00, PriceOut: 30.00, ContextWindow: 200_000, Effort: "max"},
+	"premium": {APIModel: "gpt-5.6-sol", PriceIn: 5.00, PriceOut: 30.00, ContextWindow: 200_000, Effort: "xhigh"},
 }
 
 // ImageGenerationCost is the approximate per-image cost for DALL-E 3 1024×1024.

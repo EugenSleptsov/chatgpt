@@ -55,6 +55,9 @@ func NewWorker(
 	}
 }
 
+// Start drains one chat's mailbox, running its jobs strictly one after another.
+// Nothing in ProcessUpdate is safe to run twice for the same chat at once,
+// which is exactly why the dispatcher gives every chat its own goroutine.
 func (w *Worker) Start(jobs <-chan Job) {
 	for job := range jobs {
 		if job.Update != nil {
